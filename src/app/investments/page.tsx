@@ -64,6 +64,7 @@ interface FormState {
   // Property
   purchasePrice: string;
   rentalIncome: string;
+  liability: string;
   // Cash
   amount: string;
   interestRate: string;
@@ -79,7 +80,7 @@ interface FormState {
 const EMPTY_FORM: FormState = {
   name: '', type: INVESTMENT_TYPES[0],
   units: '', buyPricePerUnit: '', currentValue: '',
-  purchasePrice: '', rentalIncome: '',
+  purchasePrice: '', rentalIncome: '', liability: '',
   amount: '', interestRate: '',
   faceValue: '', couponRate: '', maturityDate: '',
   balance: '', employerContribution: '',
@@ -95,7 +96,7 @@ function buildInvestment(form: FormState): Investment {
   }
   if (form.type === 'Property') {
     const pp = parseFloat(form.purchasePrice);
-    return { ...base, costBasis: pp, currentValue: parseFloat(form.currentValue), rentalIncomeAnnual: parseFloat(form.rentalIncome) || 0 };
+    return { ...base, costBasis: pp, currentValue: parseFloat(form.currentValue), rentalIncomeAnnual: parseFloat(form.rentalIncome) || 0, liability: parseFloat(form.liability) || 0 };
   }
   if (form.type === 'Cash / Term Deposit') {
     const amt = parseFloat(form.amount);
@@ -163,6 +164,10 @@ function TypeSpecificFields({ form, setForm }: { form: FormState; setForm: (f: F
         <div className="col-12">
           <label className="form-label text-muted small mb-1">Current value</label>
           <CurrencyInput placeholder="0.00" value={form.currentValue} onChange={v => setForm({ ...form, currentValue: v })} required step="1" />
+        </div>
+        <div className="col-12">
+          <label className="form-label text-muted small mb-1">Mortgage / liability</label>
+          <CurrencyInput placeholder="0.00" value={form.liability} onChange={v => setForm({ ...form, liability: v })} step="1" />
         </div>
         <div className="col-12">
           <label className="form-label text-muted small mb-1">Rental income per year</label>
@@ -238,7 +243,12 @@ function TypeSpecificFields({ form, setForm }: { form: FormState; setForm: (f: F
 
 function formatDetail(inv: Investment): string {
   if (TRADED_TYPES.includes(inv.type) && inv.units) return `${inv.units} units @ $${inv.buyPricePerUnit?.toFixed(2)}`;
-  if (inv.type === 'Property' && inv.rentalIncomeAnnual) return `Rental: $${inv.rentalIncomeAnnual.toLocaleString()}/yr`;
+  if (inv.type === 'Property') {
+    const parts: string[] = [];
+    if (inv.liability) parts.push(`Mortgage: $${inv.liability.toLocaleString()}`);
+    if (inv.rentalIncomeAnnual) parts.push(`Rental: $${inv.rentalIncomeAnnual.toLocaleString()}/yr`);
+    return parts.join(' | ');
+  }
   if (inv.type === 'Cash / Term Deposit' && inv.interestRate) return `${inv.interestRate}% p.a.`;
   if (inv.type === 'Bonds' && inv.couponRate) return `${inv.couponRate}% coupon`;
   if (inv.type === 'Superannuation' && inv.employerContribution) return `${inv.employerContribution}% employer`;
@@ -306,6 +316,7 @@ export default function InvestmentsPage() {
     } else if (inv.type === 'Property') {
       f.purchasePrice = String(inv.costBasis);
       f.currentValue = String(inv.currentValue);
+      f.liability = String(inv.liability || '');
       f.rentalIncome = String(inv.rentalIncomeAnnual || '');
     } else if (inv.type === 'Cash / Term Deposit') {
       f.amount = String(inv.currentValue);
@@ -358,13 +369,15 @@ export default function InvestmentsPage() {
     setAdviceLoading(false);
   };
 
-  const totalValue = investments.reduce((sum, i) => sum + i.currentValue, 0);
+  const totalLiabilities = investments.reduce((sum, i) => sum + (i.liability || 0), 0);
+  const totalValue = investments.reduce((sum, i) => sum + i.currentValue, 0) - totalLiabilities;
   const totalCost = investments.reduce((sum, i) => sum + i.costBasis, 0);
   const totalGainLoss = totalValue - totalCost;
   const totalReturnPct = totalCost > 0 ? ((totalGainLoss / totalCost) * 100) : 0;
 
   const allocationByType = investments.reduce((acc, i) => {
-    acc[i.type] = (acc[i.type] || 0) + i.currentValue;
+    const netValue = i.currentValue - (i.liability || 0);
+    acc[i.type] = (acc[i.type] || 0) + netValue;
     return acc;
   }, {} as Record<string, number>);
 
@@ -536,7 +549,8 @@ export default function InvestmentsPage() {
                     </thead>
                     <tbody>
                       {investments.map(inv => {
-                        const gainLoss = inv.currentValue - inv.costBasis;
+                        const netValue = inv.currentValue - (inv.liability || 0);
+                        const gainLoss = netValue - inv.costBasis;
                         const returnPct = inv.costBasis > 0 ? ((gainLoss / inv.costBasis) * 100) : 0;
                         return (
                           <tr key={inv.id}>
@@ -549,7 +563,10 @@ export default function InvestmentsPage() {
                             </td>
                             <td className="text-muted small">{formatDetail(inv)}</td>
                             <td className="text-end">${inv.costBasis.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</td>
-                            <td className="text-end">${inv.currentValue.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</td>
+                            <td className="text-end">
+                              ${netValue.toLocaleString('en-AU', { minimumFractionDigits: 2 })}
+                              {inv.liability ? <div className="text-muted small">less ${inv.liability.toLocaleString('en-AU')} liability</div> : null}
+                            </td>
                             <td className={`text-end fw-bold ${gainLoss >= 0 ? 'text-success' : 'text-danger'}`}>
                               {gainLoss >= 0 ? '+' : ''}{gainLoss.toLocaleString('en-AU', { minimumFractionDigits: 2 })}
                               <small className="ms-1">({returnPct >= 0 ? '+' : ''}{returnPct.toFixed(1)}%)</small>

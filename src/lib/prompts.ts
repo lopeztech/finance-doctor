@@ -93,6 +93,7 @@ interface InvestmentInput {
   interestRate?: number;
   employerContribution?: number;
   rentalIncomeAnnual?: number;
+  liability?: number;
 }
 
 export function buildInvestmentPrompt(investments: InvestmentInput[]): string {
@@ -105,6 +106,7 @@ export function buildInvestmentPrompt(investments: InvestmentInput[]): string {
     const gl = i.currentValue - i.costBasis;
     const pct = i.costBasis > 0 ? ((gl / i.costBasis) * 100).toFixed(1) : '0.0';
     let detail = `- ${i.name} (${i.type}): Value $${i.currentValue.toLocaleString()}, Cost $${i.costBasis.toLocaleString()}, Return ${gl >= 0 ? '+' : ''}${pct}%`;
+    if (i.liability) detail += `, Mortgage $${i.liability.toLocaleString()}`;
     if (i.rentalIncomeAnnual) detail += `, Rental $${i.rentalIncomeAnnual.toLocaleString()}/yr`;
     if (i.interestRate) detail += `, Rate ${i.interestRate}%`;
     if (i.employerContribution) detail += `, Employer ${i.employerContribution}%`;

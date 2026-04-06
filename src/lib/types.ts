@@ -16,6 +16,7 @@ export interface Investment {
   units?: number;
   buyPricePerUnit?: number;
   rentalIncomeAnnual?: number;
+  liability?: number;
   interestRate?: number;
   employerContribution?: number;
   couponRate?: number;
