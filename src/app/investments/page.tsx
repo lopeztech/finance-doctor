@@ -370,14 +370,13 @@ export default function InvestmentsPage() {
   };
 
   const totalLiabilities = investments.reduce((sum, i) => sum + (i.liability || 0), 0);
-  const totalValue = investments.reduce((sum, i) => sum + i.currentValue, 0) - totalLiabilities;
+  const totalValue = investments.reduce((sum, i) => sum + i.currentValue, 0);
   const totalCost = investments.reduce((sum, i) => sum + i.costBasis, 0);
-  const totalGainLoss = totalValue - totalCost;
+  const totalGainLoss = totalValue - totalCost - totalLiabilities;
   const totalReturnPct = totalCost > 0 ? ((totalGainLoss / totalCost) * 100) : 0;
 
   const allocationByType = investments.reduce((acc, i) => {
-    const netValue = i.currentValue - (i.liability || 0);
-    acc[i.type] = (acc[i.type] || 0) + netValue;
+    acc[i.type] = (acc[i.type] || 0) + i.currentValue;
     return acc;
   }, {} as Record<string, number>);
 
@@ -549,8 +548,7 @@ export default function InvestmentsPage() {
                     </thead>
                     <tbody>
                       {investments.map(inv => {
-                        const netValue = inv.currentValue - (inv.liability || 0);
-                        const gainLoss = netValue - inv.costBasis;
+                        const gainLoss = inv.currentValue - inv.costBasis - (inv.liability || 0);
                         const returnPct = inv.costBasis > 0 ? ((gainLoss / inv.costBasis) * 100) : 0;
                         return (
                           <tr key={inv.id}>
@@ -563,10 +561,7 @@ export default function InvestmentsPage() {
                             </td>
                             <td className="text-muted small">{formatDetail(inv)}</td>
                             <td className="text-end">${inv.costBasis.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</td>
-                            <td className="text-end">
-                              ${netValue.toLocaleString('en-AU', { minimumFractionDigits: 2 })}
-                              {inv.liability ? <div className="text-muted small">less ${inv.liability.toLocaleString('en-AU')} liability</div> : null}
-                            </td>
+                            <td className="text-end">${inv.currentValue.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</td>
                             <td className={`text-end fw-bold ${gainLoss >= 0 ? 'text-success' : 'text-danger'}`}>
                               {gainLoss >= 0 ? '+' : ''}{gainLoss.toLocaleString('en-AU', { minimumFractionDigits: 2 })}
                               <small className="ms-1">({returnPct >= 0 ? '+' : ''}{returnPct.toFixed(1)}%)</small>
