@@ -3,7 +3,6 @@
 import { useEffect } from 'react';
 import PerfectScrollbar from 'react-perfect-scrollbar';
 import SidebarNav from '@/components/sidebar/sidebar-nav';
-import SidebarProfile from '@/components/sidebar/sidebar-profile';
 import SidebarMinifyBtn from '@/components/sidebar/sidebar-minify-btn';
 import 'react-perfect-scrollbar/dist/css/styles.css';
 import { useAppSettings } from '@/config/app-settings';
@@ -290,7 +289,6 @@ export default function Sidebar() {
     <>
       <div id="sidebar" className={'app-sidebar ' + (settings.appSidebarGrid ? 'app-sidebar-grid ' : '') + (settings.appSidebarTransparent ? 'app-sidebar-transparent ' : '')}  data-bs-theme={!settings.appSidebarLight ? 'dark' : ''}>
         <PerfectScrollbar className="app-sidebar-content" options={{ suppressScrollX: true }}>
-        	{!settings.appSidebarSearch && <SidebarProfile />}
           <SidebarNav />
           <SidebarMinifyBtn />
         </PerfectScrollbar>

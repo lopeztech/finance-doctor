@@ -111,7 +111,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
 	return (
     <html lang="en" className={openSans.className}>
     	<head>
-    		<title>Color Admin | Nextjs Version</title>
+    		<title>Finance Doctor</title>
     	</head>
       <body>
       	<SessionProvider>
