@@ -86,7 +86,8 @@ export default function TaxPage() {
       body: JSON.stringify({ financialYear }),
     });
     if (!res.ok || !res.body) {
-      setAdvice('Unable to generate advice. Please add more expenses and try again.');
+      const errText = await res.text().catch(() => '');
+      setAdvice(`Unable to generate advice: ${errText || res.statusText}`);
       setAdviceLoading(false);
       return;
     }

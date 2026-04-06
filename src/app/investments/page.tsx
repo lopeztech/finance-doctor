@@ -353,7 +353,8 @@ export default function InvestmentsPage() {
     setAdviceLoading(true);
     const res = await fetch('/api/investments/advice', { method: 'POST' });
     if (!res.ok || !res.body) {
-      setAdvice('Unable to generate advice. Please add more investments and try again.');
+      const errText = await res.text().catch(() => '');
+      setAdvice(`Unable to generate advice: ${errText || res.statusText}`);
       setAdviceLoading(false);
       return;
     }
