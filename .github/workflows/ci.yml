@@ -18,6 +18,12 @@ jobs:
 
       - run: npm ci
 
+      - name: Create SCSS symlinks
+        run: |
+          for dir in src/styles/default src/styles/apple src/styles/facebook src/styles/google src/styles/material src/styles/transparent; do
+            ln -s "$PWD/node_modules" "$dir/node_modules" 2>/dev/null || true
+          done
+
       - run: npm run build
 
       - run: npm test -- --coverage --passWithNoTests
