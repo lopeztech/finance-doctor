@@ -279,11 +279,11 @@ export default function TaxPage() {
           </Panel>
 
           {expenses.length > 0 && (
-            <Panel theme="success">
+            <Panel>
               <PanelHeader noButton>
                 <div className="d-flex align-items-center">
                   <i className="fa fa-stethoscope me-2"></i>Tax Health Assessment
-                  <button className="btn btn-sm btn-outline-white ms-auto" onClick={getAdvice} disabled={adviceLoading}>
+                  <button className="btn btn-sm btn-success ms-auto" onClick={getAdvice} disabled={adviceLoading}>
                     {adviceLoading ? <><i className="fa fa-spinner fa-spin me-1"></i>Analysing...</> : <><i className="fa fa-robot me-1"></i>Get AI Advice</>}
                   </button>
                 </div>
