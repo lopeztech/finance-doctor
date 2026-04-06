@@ -8,21 +8,30 @@ interface Investment {
   name: string;
   type: string;
   currentValue: number;
-  purchasePrice: number;
-  units: number;
+  costBasis: number;
+  // Type-specific fields
+  units?: number;
+  buyPricePerUnit?: number;
+  rentalIncomeAnnual?: number;
+  interestRate?: number;
+  employerContribution?: number;
+  couponRate?: number;
+  maturityDate?: string;
 }
 
 const INVESTMENT_TYPES = [
   'Australian Shares',
   'International Shares',
   'ETFs',
-  'Bonds',
   'Property',
   'Cryptocurrency',
   'Cash / Term Deposit',
+  'Bonds',
   'Superannuation',
   'Other',
 ];
+
+const TRADED_TYPES = ['Australian Shares', 'International Shares', 'ETFs', 'Cryptocurrency'];
 
 const TYPE_ICONS: Record<string, string> = {
   'Australian Shares': 'fa-chart-bar',
@@ -48,23 +57,185 @@ const TYPE_COLORS: Record<string, string> = {
   'Other': 'bg-secondary',
 };
 
+const NAME_PLACEHOLDERS: Record<string, string> = {
+  'Australian Shares': 'e.g. CBA, BHP',
+  'International Shares': 'e.g. AAPL, MSFT',
+  'ETFs': 'e.g. VAS, VGS, VDHG',
+  'Bonds': 'e.g. Aus Gov 2030',
+  'Property': 'e.g. 42 Smith St, Brisbane',
+  'Cryptocurrency': 'e.g. BTC, ETH',
+  'Cash / Term Deposit': 'e.g. ING Savings, CBA TD',
+  'Superannuation': 'e.g. AustralianSuper',
+  'Other': 'Description',
+};
+
+interface FormState {
+  name: string;
+  type: string;
+  // Traded assets
+  units: string;
+  buyPricePerUnit: string;
+  currentValue: string;
+  // Property
+  purchasePrice: string;
+  rentalIncome: string;
+  // Cash
+  amount: string;
+  interestRate: string;
+  // Bonds
+  faceValue: string;
+  couponRate: string;
+  maturityDate: string;
+  // Super
+  balance: string;
+  employerContribution: string;
+}
+
+const EMPTY_FORM: FormState = {
+  name: '', type: INVESTMENT_TYPES[0],
+  units: '', buyPricePerUnit: '', currentValue: '',
+  purchasePrice: '', rentalIncome: '',
+  amount: '', interestRate: '',
+  faceValue: '', couponRate: '', maturityDate: '',
+  balance: '', employerContribution: '',
+};
+
+function buildInvestment(form: FormState): Investment {
+  const base = { id: crypto.randomUUID(), name: form.name, type: form.type };
+
+  if (TRADED_TYPES.includes(form.type)) {
+    const units = parseFloat(form.units);
+    const buyPrice = parseFloat(form.buyPricePerUnit);
+    return { ...base, units, buyPricePerUnit: buyPrice, costBasis: units * buyPrice, currentValue: parseFloat(form.currentValue) };
+  }
+  if (form.type === 'Property') {
+    const pp = parseFloat(form.purchasePrice);
+    return { ...base, costBasis: pp, currentValue: parseFloat(form.currentValue), rentalIncomeAnnual: parseFloat(form.rentalIncome) || 0 };
+  }
+  if (form.type === 'Cash / Term Deposit') {
+    const amt = parseFloat(form.amount);
+    return { ...base, costBasis: amt, currentValue: amt, interestRate: parseFloat(form.interestRate) || 0 };
+  }
+  if (form.type === 'Bonds') {
+    const fv = parseFloat(form.faceValue);
+    return { ...base, costBasis: fv, currentValue: fv, couponRate: parseFloat(form.couponRate) || 0, maturityDate: form.maturityDate };
+  }
+  if (form.type === 'Superannuation') {
+    const bal = parseFloat(form.balance);
+    return { ...base, costBasis: bal, currentValue: bal, employerContribution: parseFloat(form.employerContribution) || 0 };
+  }
+  // Other
+  return { ...base, costBasis: parseFloat(form.purchasePrice) || 0, currentValue: parseFloat(form.currentValue) };
+}
+
+function TypeSpecificFields({ form, setForm }: { form: FormState; setForm: (f: FormState) => void }) {
+  const { type } = form;
+
+  if (TRADED_TYPES.includes(type)) {
+    return (
+      <>
+        <div className="col-md-2">
+          <input type="number" className="form-control" placeholder="Units" step="any" min="0" value={form.units} onChange={e => setForm({ ...form, units: e.target.value })} required />
+        </div>
+        <div className="col-md-2">
+          <input type="number" className="form-control" placeholder="Buy price/unit" step="0.01" min="0" value={form.buyPricePerUnit} onChange={e => setForm({ ...form, buyPricePerUnit: e.target.value })} required />
+        </div>
+        <div className="col-md-2">
+          <input type="number" className="form-control" placeholder="Current total value" step="0.01" min="0" value={form.currentValue} onChange={e => setForm({ ...form, currentValue: e.target.value })} required />
+        </div>
+      </>
+    );
+  }
+
+  if (type === 'Property') {
+    return (
+      <>
+        <div className="col-md-2">
+          <input type="number" className="form-control" placeholder="Purchase price" step="1" min="0" value={form.purchasePrice} onChange={e => setForm({ ...form, purchasePrice: e.target.value })} required />
+        </div>
+        <div className="col-md-2">
+          <input type="number" className="form-control" placeholder="Current value" step="1" min="0" value={form.currentValue} onChange={e => setForm({ ...form, currentValue: e.target.value })} required />
+        </div>
+        <div className="col-md-2">
+          <input type="number" className="form-control" placeholder="Rental income/yr" step="1" min="0" value={form.rentalIncome} onChange={e => setForm({ ...form, rentalIncome: e.target.value })} />
+        </div>
+      </>
+    );
+  }
+
+  if (type === 'Cash / Term Deposit') {
+    return (
+      <>
+        <div className="col-md-3">
+          <input type="number" className="form-control" placeholder="Amount" step="0.01" min="0" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} required />
+        </div>
+        <div className="col-md-3">
+          <input type="number" className="form-control" placeholder="Interest rate %" step="0.01" min="0" value={form.interestRate} onChange={e => setForm({ ...form, interestRate: e.target.value })} />
+        </div>
+      </>
+    );
+  }
+
+  if (type === 'Bonds') {
+    return (
+      <>
+        <div className="col-md-2">
+          <input type="number" className="form-control" placeholder="Face value" step="0.01" min="0" value={form.faceValue} onChange={e => setForm({ ...form, faceValue: e.target.value })} required />
+        </div>
+        <div className="col-md-2">
+          <input type="number" className="form-control" placeholder="Coupon rate %" step="0.01" min="0" value={form.couponRate} onChange={e => setForm({ ...form, couponRate: e.target.value })} />
+        </div>
+        <div className="col-md-2">
+          <input type="date" className="form-control" placeholder="Maturity date" value={form.maturityDate} onChange={e => setForm({ ...form, maturityDate: e.target.value })} />
+        </div>
+      </>
+    );
+  }
+
+  if (type === 'Superannuation') {
+    return (
+      <>
+        <div className="col-md-3">
+          <input type="number" className="form-control" placeholder="Current balance" step="0.01" min="0" value={form.balance} onChange={e => setForm({ ...form, balance: e.target.value })} required />
+        </div>
+        <div className="col-md-3">
+          <input type="number" className="form-control" placeholder="Employer contrib %" step="0.5" min="0" value={form.employerContribution} onChange={e => setForm({ ...form, employerContribution: e.target.value })} />
+        </div>
+      </>
+    );
+  }
+
+  // Other
+  return (
+    <>
+      <div className="col-md-3">
+        <input type="number" className="form-control" placeholder="Purchase price" step="0.01" min="0" value={form.purchasePrice} onChange={e => setForm({ ...form, purchasePrice: e.target.value })} required />
+      </div>
+      <div className="col-md-3">
+        <input type="number" className="form-control" placeholder="Current value" step="0.01" min="0" value={form.currentValue} onChange={e => setForm({ ...form, currentValue: e.target.value })} required />
+      </div>
+    </>
+  );
+}
+
+function formatDetail(inv: Investment): string {
+  if (TRADED_TYPES.includes(inv.type) && inv.units) return `${inv.units} units @ $${inv.buyPricePerUnit?.toFixed(2)}`;
+  if (inv.type === 'Property' && inv.rentalIncomeAnnual) return `Rental: $${inv.rentalIncomeAnnual.toLocaleString()}/yr`;
+  if (inv.type === 'Cash / Term Deposit' && inv.interestRate) return `${inv.interestRate}% p.a.`;
+  if (inv.type === 'Bonds' && inv.couponRate) return `${inv.couponRate}% coupon`;
+  if (inv.type === 'Superannuation' && inv.employerContribution) return `${inv.employerContribution}% employer`;
+  return '';
+}
+
 export default function InvestmentsPage() {
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: '', type: INVESTMENT_TYPES[0], currentValue: '', purchasePrice: '', units: '' });
+  const [form, setForm] = useState<FormState>({ ...EMPTY_FORM });
 
   const addInvestment = (e: React.FormEvent) => {
     e.preventDefault();
-    const investment: Investment = {
-      id: crypto.randomUUID(),
-      name: form.name,
-      type: form.type,
-      currentValue: parseFloat(form.currentValue),
-      purchasePrice: parseFloat(form.purchasePrice),
-      units: parseFloat(form.units) || 1,
-    };
-    setInvestments([...investments, investment]);
-    setForm({ name: '', type: INVESTMENT_TYPES[0], currentValue: '', purchasePrice: '', units: '' });
+    setInvestments([...investments, buildInvestment(form)]);
+    setForm({ ...EMPTY_FORM });
     setShowForm(false);
   };
 
@@ -73,7 +244,7 @@ export default function InvestmentsPage() {
   };
 
   const totalValue = investments.reduce((sum, i) => sum + i.currentValue, 0);
-  const totalCost = investments.reduce((sum, i) => sum + i.purchasePrice * i.units, 0);
+  const totalCost = investments.reduce((sum, i) => sum + i.costBasis, 0);
   const totalGainLoss = totalValue - totalCost;
   const totalReturnPct = totalCost > 0 ? ((totalGainLoss / totalCost) * 100) : 0;
 
@@ -84,7 +255,6 @@ export default function InvestmentsPage() {
 
   const sortedAllocations = Object.entries(allocationByType).sort(([, a], [, b]) => b - a);
 
-  // Diversification score: how many asset classes, and how balanced
   const typeCount = Object.keys(allocationByType).length;
   const maxAllocationPct = totalValue > 0
     ? Math.max(...Object.values(allocationByType).map(v => (v / totalValue) * 100))
@@ -167,61 +337,15 @@ export default function InvestmentsPage() {
             <PanelBody>
               {showForm && (
                 <form onSubmit={addInvestment} className="row g-2 mb-3 p-3 bg-light rounded">
-                  <div className="col-md-3">
-                    <input
-                      type="text"
-                      className="form-control"
-                      placeholder="Name (e.g. VAS, CBA)"
-                      value={form.name}
-                      onChange={(e) => setForm({ ...form, name: e.target.value })}
-                      required
-                    />
-                  </div>
                   <div className="col-md-2">
-                    <select
-                      className="form-select"
-                      value={form.type}
-                      onChange={(e) => setForm({ ...form, type: e.target.value })}
-                    >
+                    <select className="form-select" value={form.type} onChange={e => setForm({ ...EMPTY_FORM, type: e.target.value })}>
                       {INVESTMENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                   </div>
                   <div className="col-md-2">
-                    <input
-                      type="number"
-                      className="form-control"
-                      placeholder="Units"
-                      step="any"
-                      min="0"
-                      value={form.units}
-                      onChange={(e) => setForm({ ...form, units: e.target.value })}
-                      required
-                    />
+                    <input type="text" className="form-control" placeholder={NAME_PLACEHOLDERS[form.type] || 'Name'} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required />
                   </div>
-                  <div className="col-md-2">
-                    <input
-                      type="number"
-                      className="form-control"
-                      placeholder="Buy price/unit"
-                      step="0.01"
-                      min="0"
-                      value={form.purchasePrice}
-                      onChange={(e) => setForm({ ...form, purchasePrice: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="col-md-2">
-                    <input
-                      type="number"
-                      className="form-control"
-                      placeholder="Current value"
-                      step="0.01"
-                      min="0"
-                      value={form.currentValue}
-                      onChange={(e) => setForm({ ...form, currentValue: e.target.value })}
-                      required
-                    />
-                  </div>
+                  <TypeSpecificFields form={form} setForm={setForm} />
                   <div className="col-md-1">
                     <button type="submit" className="btn btn-success w-100">Add</button>
                   </div>
@@ -240,7 +364,7 @@ export default function InvestmentsPage() {
                       <tr>
                         <th>Name</th>
                         <th>Type</th>
-                        <th className="text-end">Units</th>
+                        <th>Details</th>
                         <th className="text-end">Cost Basis</th>
                         <th className="text-end">Current Value</th>
                         <th className="text-end">Gain / Loss</th>
@@ -249,9 +373,8 @@ export default function InvestmentsPage() {
                     </thead>
                     <tbody>
                       {investments.map(inv => {
-                        const cost = inv.purchasePrice * inv.units;
-                        const gainLoss = inv.currentValue - cost;
-                        const returnPct = cost > 0 ? ((gainLoss / cost) * 100) : 0;
+                        const gainLoss = inv.currentValue - inv.costBasis;
+                        const returnPct = inv.costBasis > 0 ? ((gainLoss / inv.costBasis) * 100) : 0;
                         return (
                           <tr key={inv.id}>
                             <td className="fw-bold">{inv.name}</td>
@@ -261,11 +384,11 @@ export default function InvestmentsPage() {
                                 {inv.type}
                               </span>
                             </td>
-                            <td className="text-end">{inv.units}</td>
-                            <td className="text-end">${cost.toFixed(2)}</td>
-                            <td className="text-end">${inv.currentValue.toFixed(2)}</td>
+                            <td className="text-muted small">{formatDetail(inv)}</td>
+                            <td className="text-end">${inv.costBasis.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</td>
+                            <td className="text-end">${inv.currentValue.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</td>
                             <td className={`text-end fw-bold ${gainLoss >= 0 ? 'text-success' : 'text-danger'}`}>
-                              {gainLoss >= 0 ? '+' : ''}{gainLoss.toFixed(2)}
+                              {gainLoss >= 0 ? '+' : ''}{gainLoss.toLocaleString('en-AU', { minimumFractionDigits: 2 })}
                               <small className="ms-1">({returnPct >= 0 ? '+' : ''}{returnPct.toFixed(1)}%)</small>
                             </td>
                             <td>
@@ -280,9 +403,9 @@ export default function InvestmentsPage() {
                     <tfoot>
                       <tr className="fw-bold">
                         <td colSpan={4}>Total</td>
-                        <td className="text-end">${totalValue.toFixed(2)}</td>
+                        <td className="text-end">${totalValue.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</td>
                         <td className={`text-end ${totalGainLoss >= 0 ? 'text-success' : 'text-danger'}`}>
-                          {totalGainLoss >= 0 ? '+' : ''}{totalGainLoss.toFixed(2)}
+                          {totalGainLoss >= 0 ? '+' : ''}{totalGainLoss.toLocaleString('en-AU', { minimumFractionDigits: 2 })}
                         </td>
                         <td></td>
                       </tr>
@@ -314,10 +437,7 @@ export default function InvestmentsPage() {
                           <span className="fw-bold">{pct.toFixed(1)}%</span>
                         </div>
                         <div className="progress" style={{ height: '4px' }}>
-                          <div
-                            className={`progress-bar ${TYPE_COLORS[type] || 'bg-secondary'}`}
-                            style={{ width: `${pct}%` }}
-                          ></div>
+                          <div className={`progress-bar ${TYPE_COLORS[type] || 'bg-secondary'}`} style={{ width: `${pct}%` }}></div>
                         </div>
                       </div>
                     );
@@ -376,6 +496,12 @@ export default function InvestmentsPage() {
                     )}
                     {totalGainLoss > 0 && allocationByType['Cryptocurrency'] && (
                       <li>Remember crypto gains are taxable — plan for CGT on any realised gains.</li>
+                    )}
+                    {allocationByType['Property'] && !allocationByType['Cash / Term Deposit'] && (
+                      <li>With property exposure, ensure you have a cash buffer for maintenance and vacancies.</li>
+                    )}
+                    {investments.some(i => i.type === 'Superannuation' && i.employerContribution && i.employerContribution < 11.5) && (
+                      <li>Your employer contribution appears below the 11.5% SG rate — verify with your employer.</li>
                     )}
                   </ul>
                 </div>
