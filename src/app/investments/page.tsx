@@ -1,23 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
-
-interface Investment {
-  id: string;
-  name: string;
-  type: string;
-  currentValue: number;
-  costBasis: number;
-  // Type-specific fields
-  units?: number;
-  buyPricePerUnit?: number;
-  rentalIncomeAnnual?: number;
-  interestRate?: number;
-  employerContribution?: number;
-  couponRate?: number;
-  maturityDate?: string;
-}
+import type { Investment } from '@/lib/types';
 
 const INVESTMENT_TYPES = [
   'Australian Shares',
@@ -229,18 +214,65 @@ function formatDetail(inv: Investment): string {
 
 export default function InvestmentsPage() {
   const [investments, setInvestments] = useState<Investment[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<FormState>({ ...EMPTY_FORM });
+  const [advice, setAdvice] = useState('');
+  const [adviceLoading, setAdviceLoading] = useState(false);
 
-  const addInvestment = (e: React.FormEvent) => {
+  const fetchInvestments = useCallback(async () => {
+    setLoading(true);
+    const res = await fetch('/api/investments');
+    if (res.ok) setInvestments(await res.json());
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchInvestments(); }, [fetchInvestments]);
+
+  const addInvestment = async (e: React.FormEvent) => {
     e.preventDefault();
-    setInvestments([...investments, buildInvestment(form)]);
-    setForm({ ...EMPTY_FORM });
-    setShowForm(false);
+    setSaving(true);
+    const inv = buildInvestment(form);
+    const { id, ...data } = inv;
+    const res = await fetch('/api/investments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (res.ok) {
+      const saved = await res.json();
+      setInvestments(prev => [...prev, saved]);
+      setForm({ ...EMPTY_FORM });
+      setShowForm(false);
+    }
+    setSaving(false);
   };
 
-  const removeInvestment = (id: string) => {
-    setInvestments(investments.filter(i => i.id !== id));
+  const removeInvestment = async (id: string) => {
+    await fetch(`/api/investments?id=${id}`, { method: 'DELETE' });
+    setInvestments(prev => prev.filter(i => i.id !== id));
+  };
+
+  const getAdvice = async () => {
+    setAdvice('');
+    setAdviceLoading(true);
+    const res = await fetch('/api/investments/advice', { method: 'POST' });
+    if (!res.ok || !res.body) {
+      setAdvice('Unable to generate advice. Please add more investments and try again.');
+      setAdviceLoading(false);
+      return;
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let text = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      text += decoder.decode(value, { stream: true });
+      setAdvice(text);
+    }
+    setAdviceLoading(false);
   };
 
   const totalValue = investments.reduce((sum, i) => sum + i.currentValue, 0);
@@ -347,12 +379,16 @@ export default function InvestmentsPage() {
                   </div>
                   <TypeSpecificFields form={form} setForm={setForm} />
                   <div className="col-md-1">
-                    <button type="submit" className="btn btn-success w-100">Add</button>
+                    <button type="submit" className="btn btn-success w-100" disabled={saving}>
+                      {saving ? <i className="fa fa-spinner fa-spin"></i> : 'Add'}
+                    </button>
                   </div>
                 </form>
               )}
 
-              {investments.length === 0 ? (
+              {loading ? (
+                <div className="text-center py-5"><i className="fa fa-spinner fa-spin fa-2x"></i></div>
+              ) : investments.length === 0 ? (
                 <div className="text-center py-5 text-muted">
                   <i className="fa fa-chart-line fa-3x mb-3 d-block"></i>
                   <p>No investments yet. Add your first investment to get started.</p>
@@ -450,61 +486,21 @@ export default function InvestmentsPage() {
           {investments.length > 0 && (
             <Panel theme="success">
               <PanelHeader noButton>
-                <i className="fa fa-stethoscope me-2"></i>Investment Health Assessment
+                <div className="d-flex align-items-center">
+                  <i className="fa fa-stethoscope me-2"></i>Investment Health Assessment
+                  <button className="btn btn-sm btn-outline-white ms-auto" onClick={getAdvice} disabled={adviceLoading}>
+                    {adviceLoading ? <><i className="fa fa-spinner fa-spin me-1"></i>Analysing...</> : <><i className="fa fa-robot me-1"></i>Get AI Advice</>}
+                  </button>
+                </div>
               </PanelHeader>
               <PanelBody>
-                <div className="mb-3">
-                  <div className="d-flex align-items-center mb-2">
-                    <i className="fa fa-heartbeat text-danger me-2"></i>
-                    <strong>Diagnosis</strong>
+                {advice ? (
+                  <div className="advice-content" style={{ whiteSpace: 'pre-wrap', fontSize: '0.9rem' }}>{advice}</div>
+                ) : (
+                  <div className="text-muted text-center py-3">
+                    <p className="mb-0">Click "Get AI Advice" for a personalised portfolio assessment powered by Gemini.</p>
                   </div>
-                  <ul className="text-muted mb-0 ps-3">
-                    {typeCount < 3 && (
-                      <li>Low diversification — your portfolio is concentrated in {typeCount} asset class{typeCount > 1 ? 'es' : ''}.</li>
-                    )}
-                    {maxAllocationPct > 60 && (
-                      <li>Over {maxAllocationPct.toFixed(0)}% of your portfolio is in a single asset class. Consider rebalancing.</li>
-                    )}
-                    {typeCount >= 4 && maxAllocationPct < 40 && (
-                      <li>Well diversified across {typeCount} asset classes with no single class dominating.</li>
-                    )}
-                    {!allocationByType['Superannuation'] && (
-                      <li>No superannuation recorded. Consider salary sacrifice for tax-effective growth.</li>
-                    )}
-                    {!allocationByType['International Shares'] && !allocationByType['ETFs'] && (
-                      <li>No international exposure. Consider global ETFs to reduce home-country bias.</li>
-                    )}
-                  </ul>
-                </div>
-                <div>
-                  <div className="d-flex align-items-center mb-2">
-                    <i className="fa fa-prescription text-success me-2"></i>
-                    <strong>Prescription</strong>
-                  </div>
-                  <ul className="text-muted mb-0 ps-3">
-                    {maxAllocationPct > 50 && (
-                      <li>Rebalance to reduce concentration risk — aim for no single class above 40%.</li>
-                    )}
-                    {typeCount < 3 && (
-                      <li>Add 2-3 more asset classes for better diversification.</li>
-                    )}
-                    {!allocationByType['Bonds'] && !allocationByType['Cash / Term Deposit'] && (
-                      <li>Consider adding defensive assets (bonds or cash) for stability.</li>
-                    )}
-                    {totalGainLoss < 0 && (
-                      <li>Review underperforming holdings — consider tax-loss harvesting before EOFY.</li>
-                    )}
-                    {totalGainLoss > 0 && allocationByType['Cryptocurrency'] && (
-                      <li>Remember crypto gains are taxable — plan for CGT on any realised gains.</li>
-                    )}
-                    {allocationByType['Property'] && !allocationByType['Cash / Term Deposit'] && (
-                      <li>With property exposure, ensure you have a cash buffer for maintenance and vacancies.</li>
-                    )}
-                    {investments.some(i => i.type === 'Superannuation' && i.employerContribution && i.employerContribution < 11.5) && (
-                      <li>Your employer contribution appears below the 11.5% SG rate — verify with your employer.</li>
-                    )}
-                  </ul>
-                </div>
+                )}
               </PanelBody>
             </Panel>
           )}

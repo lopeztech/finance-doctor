@@ -1,15 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
-
-interface Expense {
-  id: string;
-  date: string;
-  description: string;
-  amount: number;
-  category: string;
-}
+import type { Expense } from '@/lib/types';
 
 const CATEGORIES = [
   'Work from Home',
@@ -39,35 +32,81 @@ const CATEGORY_ICONS: Record<string, string> = {
 
 export default function TaxPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ date: '', description: '', amount: '', category: CATEGORIES[0] });
   const [financialYear, setFinancialYear] = useState('2025-2026');
+  const [advice, setAdvice] = useState('');
+  const [adviceLoading, setAdviceLoading] = useState(false);
 
-  const addExpense = (e: React.FormEvent) => {
+  const fetchExpenses = useCallback(async () => {
+    setLoading(true);
+    const res = await fetch(`/api/expenses?fy=${financialYear}`);
+    if (res.ok) setExpenses(await res.json());
+    setLoading(false);
+  }, [financialYear]);
+
+  useEffect(() => { fetchExpenses(); }, [fetchExpenses]);
+
+  const addExpense = async (e: React.FormEvent) => {
     e.preventDefault();
-    const expense: Expense = {
-      id: crypto.randomUUID(),
-      date: form.date,
-      description: form.description,
-      amount: parseFloat(form.amount),
-      category: form.category,
-    };
-    setExpenses([...expenses, expense]);
-    setForm({ date: '', description: '', amount: '', category: CATEGORIES[0] });
-    setShowForm(false);
+    setSaving(true);
+    const res = await fetch('/api/expenses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        date: form.date,
+        description: form.description,
+        amount: parseFloat(form.amount),
+        category: form.category,
+        financialYear,
+      }),
+    });
+    if (res.ok) {
+      const expense = await res.json();
+      setExpenses(prev => [expense, ...prev]);
+      setForm({ date: '', description: '', amount: '', category: CATEGORIES[0] });
+      setShowForm(false);
+    }
+    setSaving(false);
   };
 
-  const removeExpense = (id: string) => {
-    setExpenses(expenses.filter(e => e.id !== id));
+  const removeExpense = async (id: string) => {
+    await fetch(`/api/expenses?id=${id}`, { method: 'DELETE' });
+    setExpenses(prev => prev.filter(e => e.id !== id));
+  };
+
+  const getAdvice = async () => {
+    setAdvice('');
+    setAdviceLoading(true);
+    const res = await fetch('/api/tax/advice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ financialYear }),
+    });
+    if (!res.ok || !res.body) {
+      setAdvice('Unable to generate advice. Please add more expenses and try again.');
+      setAdviceLoading(false);
+      return;
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let text = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      text += decoder.decode(value, { stream: true });
+      setAdvice(text);
+    }
+    setAdviceLoading(false);
   };
 
   const totalDeductions = expenses.reduce((sum, e) => sum + e.amount, 0);
-
   const categoryTotals = expenses.reduce((acc, e) => {
     acc[e.category] = (acc[e.category] || 0) + e.amount;
     return acc;
   }, {} as Record<string, number>);
-
   const sortedCategories = Object.entries(categoryTotals).sort(([, a], [, b]) => b - a);
 
   return (
@@ -75,11 +114,7 @@ export default function TaxPage() {
       <div className="d-flex align-items-center mb-3">
         <h1 className="page-header mb-0">Tax Health Check</h1>
         <div className="ms-auto">
-          <select
-            className="form-select"
-            value={financialYear}
-            onChange={(e) => setFinancialYear(e.target.value)}
-          >
+          <select className="form-select" value={financialYear} onChange={(e) => setFinancialYear(e.target.value)}>
             <option value="2025-2026">FY 2025-2026</option>
             <option value="2024-2025">FY 2024-2025</option>
             <option value="2023-2024">FY 2023-2024</option>
@@ -96,9 +131,7 @@ export default function TaxPage() {
                   <div className="text-white text-opacity-75 mb-1">Total Deductions</div>
                   <h2 className="text-white mb-0">${totalDeductions.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</h2>
                 </div>
-                <div className="ms-auto">
-                  <i className="fa fa-receipt fa-3x text-white text-opacity-25"></i>
-                </div>
+                <div className="ms-auto"><i className="fa fa-receipt fa-3x text-white text-opacity-25"></i></div>
               </div>
             </div>
           </div>
@@ -111,9 +144,7 @@ export default function TaxPage() {
                   <div className="text-white text-opacity-75 mb-1">Categories Used</div>
                   <h2 className="text-white mb-0">{Object.keys(categoryTotals).length} / {CATEGORIES.length}</h2>
                 </div>
-                <div className="ms-auto">
-                  <i className="fa fa-layer-group fa-3x text-white text-opacity-25"></i>
-                </div>
+                <div className="ms-auto"><i className="fa fa-layer-group fa-3x text-white text-opacity-25"></i></div>
               </div>
             </div>
           </div>
@@ -126,9 +157,7 @@ export default function TaxPage() {
                   <div className="text-white text-opacity-75 mb-1">Expenses Logged</div>
                   <h2 className="text-white mb-0">{expenses.length}</h2>
                 </div>
-                <div className="ms-auto">
-                  <i className="fa fa-file-alt fa-3x text-white text-opacity-25"></i>
-                </div>
+                <div className="ms-auto"><i className="fa fa-file-alt fa-3x text-white text-opacity-25"></i></div>
               </div>
             </div>
           </div>
@@ -150,52 +179,30 @@ export default function TaxPage() {
               {showForm && (
                 <form onSubmit={addExpense} className="row g-2 mb-3 p-3 bg-light rounded">
                   <div className="col-md-2">
-                    <input
-                      type="date"
-                      className="form-control"
-                      value={form.date}
-                      onChange={(e) => setForm({ ...form, date: e.target.value })}
-                      required
-                    />
+                    <input type="date" className="form-control" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} required />
                   </div>
                   <div className="col-md-3">
-                    <input
-                      type="text"
-                      className="form-control"
-                      placeholder="Description"
-                      value={form.description}
-                      onChange={(e) => setForm({ ...form, description: e.target.value })}
-                      required
-                    />
+                    <input type="text" className="form-control" placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} required />
                   </div>
                   <div className="col-md-2">
-                    <input
-                      type="number"
-                      className="form-control"
-                      placeholder="Amount"
-                      step="0.01"
-                      min="0"
-                      value={form.amount}
-                      onChange={(e) => setForm({ ...form, amount: e.target.value })}
-                      required
-                    />
+                    <input type="number" className="form-control" placeholder="Amount" step="0.01" min="0" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} required />
                   </div>
                   <div className="col-md-3">
-                    <select
-                      className="form-select"
-                      value={form.category}
-                      onChange={(e) => setForm({ ...form, category: e.target.value })}
-                    >
+                    <select className="form-select" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
                       {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                   </div>
                   <div className="col-md-2">
-                    <button type="submit" className="btn btn-success w-100">Add</button>
+                    <button type="submit" className="btn btn-success w-100" disabled={saving}>
+                      {saving ? <i className="fa fa-spinner fa-spin"></i> : 'Add'}
+                    </button>
                   </div>
                 </form>
               )}
 
-              {expenses.length === 0 ? (
+              {loading ? (
+                <div className="text-center py-5"><i className="fa fa-spinner fa-spin fa-2x"></i></div>
+              ) : expenses.length === 0 ? (
                 <div className="text-center py-5 text-muted">
                   <i className="fa fa-file-invoice-dollar fa-3x mb-3 d-block"></i>
                   <p>No expenses yet. Add your first expense to get started.</p>
@@ -251,9 +258,7 @@ export default function TaxPage() {
             <PanelHeader noButton>Deductions by Category</PanelHeader>
             <PanelBody>
               {sortedCategories.length === 0 ? (
-                <div className="text-center py-4 text-muted">
-                  <p className="mb-0">Add expenses to see the breakdown</p>
-                </div>
+                <div className="text-center py-4 text-muted"><p className="mb-0">Add expenses to see the breakdown</p></div>
               ) : (
                 <div>
                   {sortedCategories.map(([category, total]) => (
@@ -264,10 +269,7 @@ export default function TaxPage() {
                         <span className="fw-bold">${total.toFixed(2)}</span>
                       </div>
                       <div className="progress" style={{ height: '4px' }}>
-                        <div
-                          className="progress-bar bg-teal"
-                          style={{ width: `${(total / totalDeductions) * 100}%` }}
-                        ></div>
+                        <div className="progress-bar bg-teal" style={{ width: `${(total / totalDeductions) * 100}%` }}></div>
                       </div>
                     </div>
                   ))}
@@ -279,45 +281,21 @@ export default function TaxPage() {
           {expenses.length > 0 && (
             <Panel theme="success">
               <PanelHeader noButton>
-                <i className="fa fa-stethoscope me-2"></i>Tax Health Assessment
+                <div className="d-flex align-items-center">
+                  <i className="fa fa-stethoscope me-2"></i>Tax Health Assessment
+                  <button className="btn btn-sm btn-outline-white ms-auto" onClick={getAdvice} disabled={adviceLoading}>
+                    {adviceLoading ? <><i className="fa fa-spinner fa-spin me-1"></i>Analysing...</> : <><i className="fa fa-robot me-1"></i>Get AI Advice</>}
+                  </button>
+                </div>
               </PanelHeader>
               <PanelBody>
-                <div className="mb-3">
-                  <div className="d-flex align-items-center mb-2">
-                    <i className="fa fa-heartbeat text-danger me-2"></i>
-                    <strong>Diagnosis</strong>
+                {advice ? (
+                  <div className="advice-content" style={{ whiteSpace: 'pre-wrap', fontSize: '0.9rem' }}>{advice}</div>
+                ) : (
+                  <div className="text-muted text-center py-3">
+                    <p className="mb-0">Click "Get AI Advice" for a personalised tax health assessment powered by Gemini.</p>
                   </div>
-                  <p className="text-muted mb-0">
-                    {Object.keys(categoryTotals).length < 4
-                      ? "You're only claiming in a few categories. There may be deductions you're missing."
-                      : Object.keys(categoryTotals).length < 7
-                      ? "Good coverage across categories. Review any areas you might have overlooked."
-                      : "Excellent coverage. You're claiming across most deduction categories."}
-                  </p>
-                </div>
-                <div>
-                  <div className="d-flex align-items-center mb-2">
-                    <i className="fa fa-prescription text-success me-2"></i>
-                    <strong>Prescription</strong>
-                  </div>
-                  <ul className="text-muted mb-0 ps-3">
-                    {!categoryTotals['Work from Home'] && (
-                      <li>Consider claiming work from home expenses (electricity, internet, furniture)</li>
-                    )}
-                    {!categoryTotals['Self-Education'] && (
-                      <li>Training and courses related to your current role are deductible</li>
-                    )}
-                    {!categoryTotals['Phone & Internet'] && (
-                      <li>You can claim the work-related portion of phone and internet bills</li>
-                    )}
-                    {!categoryTotals['Professional Memberships'] && (
-                      <li>Union fees and professional association memberships are deductible</li>
-                    )}
-                    {Object.keys(categoryTotals).length >= 7 && (
-                      <li>Keep all receipts and records for 5 years in case of audit</li>
-                    )}
-                  </ul>
-                </div>
+                )}
               </PanelBody>
             </Panel>
           )}

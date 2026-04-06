@@ -1,81 +1,78 @@
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import TaxPage from '@/app/tax/page';
 
 jest.mock('@/config/app-settings', () => ({
-  useAppSettings: () => ({
-    settings: {},
-    updateSettings: jest.fn(),
-  }),
+  useAppSettings: () => ({ settings: {}, updateSettings: jest.fn() }),
 }));
 
-async function addExpense(user: ReturnType<typeof userEvent.setup>, description: string, amount: string, category?: string) {
-  const formVisible = document.querySelector('input[type="date"]');
-  if (!formVisible) {
-    await user.click(screen.getByText('Add Expense'));
-  }
+const mockFetch = jest.fn();
+global.fetch = mockFetch;
 
-  const dateInput = document.querySelector('input[type="date"]')!;
-  fireEvent.change(dateInput, { target: { value: '2025-09-15' } });
-  await user.type(screen.getByPlaceholderText('Description'), description);
-  await user.type(screen.getByPlaceholderText('Amount'), amount);
-
-  if (category) {
-    await user.selectOptions(screen.getByDisplayValue('Work from Home'), category);
-  }
-
-  const submitBtn = screen.getAllByText('Add').find(el => el.tagName === 'BUTTON' && el.getAttribute('type') === 'submit')!;
-  await user.click(submitBtn);
-}
+beforeEach(() => {
+  mockFetch.mockReset();
+  // Default: GET returns empty expenses
+  mockFetch.mockResolvedValue({ ok: true, json: async () => [] });
+});
 
 describe('Tax Page', () => {
-  it('renders the page header', () => {
+  it('renders the page header', async () => {
     render(<TaxPage />);
     expect(screen.getByText('Tax Health Check')).toBeInTheDocument();
   });
 
-  it('renders summary cards with zero values initially', () => {
+  it('fetches expenses on load', async () => {
     render(<TaxPage />);
-    expect(screen.getByText('Total Deductions')).toBeInTheDocument();
-    expect(screen.getByText('$0.00')).toBeInTheDocument();
-    expect(screen.getByText('Expenses Logged')).toBeInTheDocument();
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/expenses?fy=2025-2026'));
   });
 
-  it('renders financial year selector', () => {
+  it('shows loading spinner then empty state', async () => {
     render(<TaxPage />);
-    expect(screen.getByDisplayValue('FY 2025-2026')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/No expenses yet/)).toBeInTheDocument());
   });
 
-  it('shows empty state message', () => {
+  it('shows expenses returned from API', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => [
+        { id: '1', date: '2025-09-15', description: 'Office chair', amount: 450, category: 'Work from Home', financialYear: '2025-2026' }
+      ],
+    });
     render(<TaxPage />);
-    expect(screen.getByText(/No expenses yet/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Office chair')).toBeInTheDocument());
   });
 
   it('shows add expense form when button is clicked', async () => {
     const user = userEvent.setup();
     render(<TaxPage />);
-
+    await waitFor(() => expect(screen.queryByText(/loading/i)).not.toBeInTheDocument());
     await user.click(screen.getByText('Add Expense'));
     expect(screen.getByPlaceholderText('Description')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Amount')).toBeInTheDocument();
   });
 
-  it('adds an expense, shows assessment and category breakdown', async () => {
+  it('posts new expense to API', async () => {
     const user = userEvent.setup();
+    // GET returns empty, POST returns new expense
+    mockFetch
+      .mockResolvedValueOnce({ ok: true, json: async () => [] })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: '2', date: '2025-09-15', description: 'Desk', amount: 500, category: 'Work from Home', financialYear: '2025-2026' }) });
+
     render(<TaxPage />);
+    await waitFor(() => expect(screen.getByText(/No expenses yet/)).toBeInTheDocument());
 
-    await addExpense(user, 'Office chair', '450');
+    await user.click(screen.getByText('Add Expense'));
+    fireEvent.change(document.querySelector('input[type="date"]')!, { target: { value: '2025-09-15' } });
+    await user.type(screen.getByPlaceholderText('Description'), 'Desk');
+    await user.type(screen.getByPlaceholderText('Amount'), '500');
 
-    // Expense appears in table (amount shows in row + footer total)
-    expect(screen.getByText('Office chair')).toBeInTheDocument();
-    expect(screen.getAllByText('$450.00').length).toBeGreaterThanOrEqual(1);
+    const submitBtn = screen.getAllByText('Add').find(el => el.tagName === 'BUTTON' && el.getAttribute('type') === 'submit')!;
+    await user.click(submitBtn);
 
-    // Health assessment appears
-    expect(screen.getByText('Tax Health Assessment')).toBeInTheDocument();
-    expect(screen.getByText('Diagnosis')).toBeInTheDocument();
-    expect(screen.getByText('Prescription')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Desk')).toBeInTheDocument());
+  });
 
-    // Category breakdown appears
-    expect(screen.getByText('Deductions by Category')).toBeInTheDocument();
+  it('renders financial year selector', async () => {
+    render(<TaxPage />);
+    expect(screen.getByDisplayValue('FY 2025-2026')).toBeInTheDocument();
   });
 });

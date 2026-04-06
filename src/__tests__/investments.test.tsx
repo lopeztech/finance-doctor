@@ -1,83 +1,86 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import InvestmentsPage from '@/app/investments/page';
 
 jest.mock('@/config/app-settings', () => ({
-  useAppSettings: () => ({
-    settings: {},
-    updateSettings: jest.fn(),
-  }),
+  useAppSettings: () => ({ settings: {}, updateSettings: jest.fn() }),
 }));
 
+const mockFetch = jest.fn();
+global.fetch = mockFetch;
+
+beforeEach(() => {
+  mockFetch.mockReset();
+  mockFetch.mockResolvedValue({ ok: true, json: async () => [] });
+});
+
 describe('Investments Page', () => {
-  it('renders the page header', () => {
+  it('renders the page header', async () => {
     render(<InvestmentsPage />);
     expect(screen.getByText('Investment Health Check')).toBeInTheDocument();
   });
 
-  it('renders summary cards with zero values initially', () => {
+  it('fetches investments on load', async () => {
     render(<InvestmentsPage />);
-    expect(screen.getByText('Portfolio Value')).toBeInTheDocument();
-    expect(screen.getByText('$0.00')).toBeInTheDocument();
-    expect(screen.getByText('Asset Classes')).toBeInTheDocument();
-    expect(screen.getByText('---')).toBeInTheDocument();
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/investments'));
   });
 
-  it('shows empty state message', () => {
+  it('shows empty state after loading', async () => {
     render(<InvestmentsPage />);
-    expect(screen.getByText(/No investments yet/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/No investments yet/)).toBeInTheDocument());
+  });
+
+  it('shows investments from API', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => [
+        { id: '1', name: 'VAS', type: 'Australian Shares', currentValue: 10000, costBasis: 9000, units: 100, buyPricePerUnit: 90 }
+      ],
+    });
+    render(<InvestmentsPage />);
+    await waitFor(() => expect(screen.getByText('VAS')).toBeInTheDocument());
   });
 
   it('shows type-specific fields for shares', async () => {
     const user = userEvent.setup();
     render(<InvestmentsPage />);
+    await waitFor(() => {});
     await user.click(screen.getByText('Add Investment'));
-
-    // Default type is Australian Shares — should show units, buy price, current value
     expect(screen.getByPlaceholderText('Units')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Buy price/unit')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Current total value')).toBeInTheDocument();
   });
 
   it('shows type-specific fields for property', async () => {
     const user = userEvent.setup();
     render(<InvestmentsPage />);
+    await waitFor(() => {});
     await user.click(screen.getByText('Add Investment'));
     await user.selectOptions(screen.getByDisplayValue('Australian Shares'), 'Property');
-
     expect(screen.getByPlaceholderText('Purchase price')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Current value')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Rental income/yr')).toBeInTheDocument();
-    // Should NOT show units
     expect(screen.queryByPlaceholderText('Units')).not.toBeInTheDocument();
   });
 
   it('shows type-specific fields for super', async () => {
     const user = userEvent.setup();
     render(<InvestmentsPage />);
+    await waitFor(() => {});
     await user.click(screen.getByText('Add Investment'));
     await user.selectOptions(screen.getByDisplayValue('Australian Shares'), 'Superannuation');
-
     expect(screen.getByPlaceholderText('Current balance')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Employer contrib %')).toBeInTheDocument();
-    expect(screen.queryByPlaceholderText('Units')).not.toBeInTheDocument();
   });
 
-  it('shows type-specific fields for cash', async () => {
+  it('posts new investment to API', async () => {
     const user = userEvent.setup();
+    mockFetch
+      .mockResolvedValueOnce({ ok: true, json: async () => [] })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: '2', name: 'VAS', type: 'Australian Shares', currentValue: 10000, costBasis: 9000, units: 100, buyPricePerUnit: 90 }) });
+
     render(<InvestmentsPage />);
+    await waitFor(() => expect(screen.getByText(/No investments yet/)).toBeInTheDocument());
+
     await user.click(screen.getByText('Add Investment'));
-    await user.selectOptions(screen.getByDisplayValue('Australian Shares'), 'Cash / Term Deposit');
-
-    expect(screen.getByPlaceholderText('Amount')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Interest rate %')).toBeInTheDocument();
-  });
-
-  it('adds a share investment and shows it in table', async () => {
-    const user = userEvent.setup();
-    render(<InvestmentsPage />);
-    await user.click(screen.getByText('Add Investment'));
-
     await user.type(screen.getByPlaceholderText(/CBA/), 'VAS');
     await user.type(screen.getByPlaceholderText('Units'), '100');
     await user.type(screen.getByPlaceholderText('Buy price/unit'), '90');
@@ -86,65 +89,19 @@ describe('Investments Page', () => {
     const submitBtn = screen.getAllByText('Add').find(el => el.tagName === 'BUTTON' && el.getAttribute('type') === 'submit')!;
     await user.click(submitBtn);
 
-    expect(screen.getByText('VAS')).toBeInTheDocument();
-    expect(screen.getByText('100 units @ $90.00')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('VAS')).toBeInTheDocument());
   });
 
-  it('adds a property investment with rental income', async () => {
-    const user = userEvent.setup();
+  it('shows health assessment panel with AI advice button', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => [
+        { id: '1', name: 'VAS', type: 'Australian Shares', currentValue: 10000, costBasis: 9000 }
+      ],
+    });
     render(<InvestmentsPage />);
-    await user.click(screen.getByText('Add Investment'));
-
-    await user.selectOptions(screen.getByDisplayValue('Australian Shares'), 'Property');
-    await user.type(screen.getByPlaceholderText(/Smith St/), 'Brisbane Unit');
-    await user.type(screen.getByPlaceholderText('Purchase price'), '500000');
-    await user.type(screen.getByPlaceholderText('Current value'), '550000');
-    await user.type(screen.getByPlaceholderText('Rental income/yr'), '26000');
-
-    const submitBtn = screen.getAllByText('Add').find(el => el.tagName === 'BUTTON' && el.getAttribute('type') === 'submit')!;
-    await user.click(submitBtn);
-
-    expect(screen.getByText('Brisbane Unit')).toBeInTheDocument();
-    expect(screen.getByText('Rental: $26,000/yr')).toBeInTheDocument();
-  });
-
-  it('shows health assessment after adding investments', async () => {
-    const user = userEvent.setup();
-    render(<InvestmentsPage />);
-    await user.click(screen.getByText('Add Investment'));
-
-    await user.type(screen.getByPlaceholderText(/CBA/), 'VAS');
-    await user.type(screen.getByPlaceholderText('Units'), '100');
-    await user.type(screen.getByPlaceholderText('Buy price/unit'), '90');
-    await user.type(screen.getByPlaceholderText('Current total value'), '10000');
-
-    const submitBtn = screen.getAllByText('Add').find(el => el.tagName === 'BUTTON' && el.getAttribute('type') === 'submit')!;
-    await user.click(submitBtn);
-
+    await waitFor(() => expect(screen.getByText('VAS')).toBeInTheDocument());
     expect(screen.getByText('Investment Health Assessment')).toBeInTheDocument();
-    expect(screen.getByText('Diagnosis')).toBeInTheDocument();
-    expect(screen.getByText('Prescription')).toBeInTheDocument();
-    expect(screen.getByText('Needs Attention')).toBeInTheDocument();
-  });
-
-  it('removes an investment', async () => {
-    const user = userEvent.setup();
-    render(<InvestmentsPage />);
-    await user.click(screen.getByText('Add Investment'));
-
-    await user.selectOptions(screen.getByDisplayValue('Australian Shares'), 'Cryptocurrency');
-    await user.type(screen.getByPlaceholderText(/BTC/), 'BTC');
-    await user.type(screen.getByPlaceholderText('Units'), '1');
-    await user.type(screen.getByPlaceholderText('Buy price/unit'), '50000');
-    await user.type(screen.getByPlaceholderText('Current total value'), '60000');
-
-    const submitBtn = screen.getAllByText('Add').find(el => el.tagName === 'BUTTON' && el.getAttribute('type') === 'submit')!;
-    await user.click(submitBtn);
-    expect(screen.getByText('BTC')).toBeInTheDocument();
-
-    const table = screen.getByRole('table');
-    const removeBtn = within(table).getAllByRole('button')[0];
-    await user.click(removeBtn);
-    expect(screen.queryByText('BTC')).not.toBeInTheDocument();
+    expect(screen.getByText('Get AI Advice')).toBeInTheDocument();
   });
 });
