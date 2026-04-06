@@ -22,7 +22,7 @@ async function getProjectId(): Promise<string> {
 
 async function getGeminiModel() {
   const projectId = await getProjectId();
-  const region = process.env.GOOGLE_CLOUD_REGION || 'australia-southeast1';
+  const region = process.env.GEMINI_REGION || 'us-central1';
   const modelName = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
 
   const vertexAI = new VertexAI({ project: projectId, location: region });
