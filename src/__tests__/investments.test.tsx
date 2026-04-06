@@ -46,8 +46,8 @@ describe('Investments Page', () => {
     render(<InvestmentsPage />);
     await waitFor(() => {});
     await user.click(screen.getByText('Add Investment'));
-    expect(screen.getByPlaceholderText('Units')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Buy price/unit')).toBeInTheDocument();
+    expect(screen.getByText('Units')).toBeInTheDocument();
+    expect(screen.getByText('Buy price per unit')).toBeInTheDocument();
   });
 
   it('shows type-specific fields for property', async () => {
@@ -56,8 +56,8 @@ describe('Investments Page', () => {
     await waitFor(() => {});
     await user.click(screen.getByText('Add Investment'));
     await user.selectOptions(screen.getByDisplayValue('Australian Shares'), 'Property');
-    expect(screen.getByPlaceholderText('Purchase price')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Rental income/yr')).toBeInTheDocument();
+    expect(screen.getByText('Purchase price')).toBeInTheDocument();
+    expect(screen.getByText('Rental income per year')).toBeInTheDocument();
     expect(screen.queryByPlaceholderText('Units')).not.toBeInTheDocument();
   });
 
@@ -67,8 +67,8 @@ describe('Investments Page', () => {
     await waitFor(() => {});
     await user.click(screen.getByText('Add Investment'));
     await user.selectOptions(screen.getByDisplayValue('Australian Shares'), 'Superannuation');
-    expect(screen.getByPlaceholderText('Current balance')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Employer contrib %')).toBeInTheDocument();
+    expect(screen.getByText('Current balance')).toBeInTheDocument();
+    expect(screen.getByText('Employer contribution')).toBeInTheDocument();
   });
 
   it('posts new investment to API', async () => {
@@ -82,9 +82,10 @@ describe('Investments Page', () => {
 
     await user.click(screen.getByText('Add Investment'));
     await user.type(screen.getByPlaceholderText(/CBA/), 'VAS');
-    await user.type(screen.getByPlaceholderText('Units'), '100');
-    await user.type(screen.getByPlaceholderText('Buy price/unit'), '90');
-    await user.type(screen.getByPlaceholderText('Current total value'), '10000');
+    await user.type(screen.getByPlaceholderText('e.g. 100'), '100');
+    const dollarInputs = screen.getAllByPlaceholderText('0.00');
+    await user.type(dollarInputs[0], '90');
+    await user.type(dollarInputs[1], '10000');
 
     const submitBtn = screen.getAllByText('Add').find(el => el.tagName === 'BUTTON' && el.getAttribute('type') === 'submit')!;
     await user.click(submitBtn);

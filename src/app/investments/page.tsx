@@ -113,20 +113,41 @@ function buildInvestment(form: FormState): Investment {
   return { ...base, costBasis: parseFloat(form.purchasePrice) || 0, currentValue: parseFloat(form.currentValue) };
 }
 
+function CurrencyInput({ placeholder, value, onChange, required = false, step = '0.01' }: { placeholder: string; value: string; onChange: (v: string) => void; required?: boolean; step?: string }) {
+  return (
+    <div className="input-group">
+      <span className="input-group-text">$</span>
+      <input type="number" className="form-control" placeholder={placeholder} step={step} min="0" value={value} onChange={e => onChange(e.target.value)} required={required} />
+    </div>
+  );
+}
+
+function PercentInput({ placeholder, value, onChange, step = '0.01' }: { placeholder: string; value: string; onChange: (v: string) => void; step?: string }) {
+  return (
+    <div className="input-group">
+      <input type="number" className="form-control" placeholder={placeholder} step={step} min="0" value={value} onChange={e => onChange(e.target.value)} />
+      <span className="input-group-text">%</span>
+    </div>
+  );
+}
+
 function TypeSpecificFields({ form, setForm }: { form: FormState; setForm: (f: FormState) => void }) {
   const { type } = form;
 
   if (TRADED_TYPES.includes(type)) {
     return (
       <>
-        <div className="col-md-2">
-          <input type="number" className="form-control" placeholder="Units" step="any" min="0" value={form.units} onChange={e => setForm({ ...form, units: e.target.value })} required />
+        <div className="col-12">
+          <label className="form-label text-muted small mb-1">Units</label>
+          <input type="number" className="form-control" placeholder="e.g. 100" step="any" min="0" value={form.units} onChange={e => setForm({ ...form, units: e.target.value })} required />
         </div>
-        <div className="col-md-2">
-          <input type="number" className="form-control" placeholder="Buy price/unit" step="0.01" min="0" value={form.buyPricePerUnit} onChange={e => setForm({ ...form, buyPricePerUnit: e.target.value })} required />
+        <div className="col-12">
+          <label className="form-label text-muted small mb-1">Buy price per unit</label>
+          <CurrencyInput placeholder="0.00" value={form.buyPricePerUnit} onChange={v => setForm({ ...form, buyPricePerUnit: v })} required />
         </div>
-        <div className="col-md-2">
-          <input type="number" className="form-control" placeholder="Current total value" step="0.01" min="0" value={form.currentValue} onChange={e => setForm({ ...form, currentValue: e.target.value })} required />
+        <div className="col-12">
+          <label className="form-label text-muted small mb-1">Current total value</label>
+          <CurrencyInput placeholder="0.00" value={form.currentValue} onChange={v => setForm({ ...form, currentValue: v })} required />
         </div>
       </>
     );
@@ -135,14 +156,17 @@ function TypeSpecificFields({ form, setForm }: { form: FormState; setForm: (f: F
   if (type === 'Property') {
     return (
       <>
-        <div className="col-md-2">
-          <input type="number" className="form-control" placeholder="Purchase price" step="1" min="0" value={form.purchasePrice} onChange={e => setForm({ ...form, purchasePrice: e.target.value })} required />
+        <div className="col-12">
+          <label className="form-label text-muted small mb-1">Purchase price</label>
+          <CurrencyInput placeholder="0.00" value={form.purchasePrice} onChange={v => setForm({ ...form, purchasePrice: v })} required step="1" />
         </div>
-        <div className="col-md-2">
-          <input type="number" className="form-control" placeholder="Current value" step="1" min="0" value={form.currentValue} onChange={e => setForm({ ...form, currentValue: e.target.value })} required />
+        <div className="col-12">
+          <label className="form-label text-muted small mb-1">Current value</label>
+          <CurrencyInput placeholder="0.00" value={form.currentValue} onChange={v => setForm({ ...form, currentValue: v })} required step="1" />
         </div>
-        <div className="col-md-2">
-          <input type="number" className="form-control" placeholder="Rental income/yr" step="1" min="0" value={form.rentalIncome} onChange={e => setForm({ ...form, rentalIncome: e.target.value })} />
+        <div className="col-12">
+          <label className="form-label text-muted small mb-1">Rental income per year</label>
+          <CurrencyInput placeholder="0.00" value={form.rentalIncome} onChange={v => setForm({ ...form, rentalIncome: v })} step="1" />
         </div>
       </>
     );
@@ -151,11 +175,13 @@ function TypeSpecificFields({ form, setForm }: { form: FormState; setForm: (f: F
   if (type === 'Cash / Term Deposit') {
     return (
       <>
-        <div className="col-md-3">
-          <input type="number" className="form-control" placeholder="Amount" step="0.01" min="0" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} required />
+        <div className="col-12">
+          <label className="form-label text-muted small mb-1">Amount</label>
+          <CurrencyInput placeholder="0.00" value={form.amount} onChange={v => setForm({ ...form, amount: v })} required />
         </div>
-        <div className="col-md-3">
-          <input type="number" className="form-control" placeholder="Interest rate %" step="0.01" min="0" value={form.interestRate} onChange={e => setForm({ ...form, interestRate: e.target.value })} />
+        <div className="col-12">
+          <label className="form-label text-muted small mb-1">Interest rate</label>
+          <PercentInput placeholder="0.00" value={form.interestRate} onChange={v => setForm({ ...form, interestRate: v })} />
         </div>
       </>
     );
@@ -164,14 +190,17 @@ function TypeSpecificFields({ form, setForm }: { form: FormState; setForm: (f: F
   if (type === 'Bonds') {
     return (
       <>
-        <div className="col-md-2">
-          <input type="number" className="form-control" placeholder="Face value" step="0.01" min="0" value={form.faceValue} onChange={e => setForm({ ...form, faceValue: e.target.value })} required />
+        <div className="col-12">
+          <label className="form-label text-muted small mb-1">Face value</label>
+          <CurrencyInput placeholder="0.00" value={form.faceValue} onChange={v => setForm({ ...form, faceValue: v })} required />
         </div>
-        <div className="col-md-2">
-          <input type="number" className="form-control" placeholder="Coupon rate %" step="0.01" min="0" value={form.couponRate} onChange={e => setForm({ ...form, couponRate: e.target.value })} />
+        <div className="col-12">
+          <label className="form-label text-muted small mb-1">Coupon rate</label>
+          <PercentInput placeholder="0.00" value={form.couponRate} onChange={v => setForm({ ...form, couponRate: v })} />
         </div>
-        <div className="col-md-2">
-          <input type="date" className="form-control" placeholder="Maturity date" value={form.maturityDate} onChange={e => setForm({ ...form, maturityDate: e.target.value })} />
+        <div className="col-12">
+          <label className="form-label text-muted small mb-1">Maturity date</label>
+          <input type="date" className="form-control" value={form.maturityDate} onChange={e => setForm({ ...form, maturityDate: e.target.value })} />
         </div>
       </>
     );
@@ -180,11 +209,13 @@ function TypeSpecificFields({ form, setForm }: { form: FormState; setForm: (f: F
   if (type === 'Superannuation') {
     return (
       <>
-        <div className="col-md-3">
-          <input type="number" className="form-control" placeholder="Current balance" step="0.01" min="0" value={form.balance} onChange={e => setForm({ ...form, balance: e.target.value })} required />
+        <div className="col-12">
+          <label className="form-label text-muted small mb-1">Current balance</label>
+          <CurrencyInput placeholder="0.00" value={form.balance} onChange={v => setForm({ ...form, balance: v })} required />
         </div>
-        <div className="col-md-3">
-          <input type="number" className="form-control" placeholder="Employer contrib %" step="0.5" min="0" value={form.employerContribution} onChange={e => setForm({ ...form, employerContribution: e.target.value })} />
+        <div className="col-12">
+          <label className="form-label text-muted small mb-1">Employer contribution</label>
+          <PercentInput placeholder="0.0" value={form.employerContribution} onChange={v => setForm({ ...form, employerContribution: v })} step="0.5" />
         </div>
       </>
     );
@@ -193,11 +224,13 @@ function TypeSpecificFields({ form, setForm }: { form: FormState; setForm: (f: F
   // Other
   return (
     <>
-      <div className="col-md-3">
-        <input type="number" className="form-control" placeholder="Purchase price" step="0.01" min="0" value={form.purchasePrice} onChange={e => setForm({ ...form, purchasePrice: e.target.value })} required />
+      <div className="col-12">
+        <label className="form-label text-muted small mb-1">Purchase price</label>
+        <CurrencyInput placeholder="0.00" value={form.purchasePrice} onChange={v => setForm({ ...form, purchasePrice: v })} required />
       </div>
-      <div className="col-md-3">
-        <input type="number" className="form-control" placeholder="Current value" step="0.01" min="0" value={form.currentValue} onChange={e => setForm({ ...form, currentValue: e.target.value })} required />
+      <div className="col-12">
+        <label className="form-label text-muted small mb-1">Current value</label>
+        <CurrencyInput placeholder="0.00" value={form.currentValue} onChange={v => setForm({ ...form, currentValue: v })} required />
       </div>
     </>
   );
@@ -368,21 +401,23 @@ export default function InvestmentsPage() {
             </PanelHeader>
             <PanelBody>
               {showForm && (
-                <form onSubmit={addInvestment} className="row g-2 mb-3 p-3 bg-light rounded">
-                  <div className="col-md-2">
+                <form onSubmit={addInvestment} className="mb-3 p-3 bg-light rounded" style={{ maxWidth: '400px' }}>
+                  <div className="mb-3">
+                    <label className="form-label text-muted small mb-1">Investment type</label>
                     <select className="form-select" value={form.type} onChange={e => setForm({ ...EMPTY_FORM, type: e.target.value })}>
                       {INVESTMENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                   </div>
-                  <div className="col-md-2">
+                  <div className="mb-3">
+                    <label className="form-label text-muted small mb-1">Name</label>
                     <input type="text" className="form-control" placeholder={NAME_PLACEHOLDERS[form.type] || 'Name'} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required />
                   </div>
-                  <TypeSpecificFields form={form} setForm={setForm} />
-                  <div className="col-md-1">
-                    <button type="submit" className="btn btn-success w-100" disabled={saving}>
-                      {saving ? <i className="fa fa-spinner fa-spin"></i> : 'Add'}
-                    </button>
+                  <div className="row g-3 mb-3">
+                    <TypeSpecificFields form={form} setForm={setForm} />
                   </div>
+                  <button type="submit" className="btn btn-success w-100" disabled={saving}>
+                    {saving ? <><i className="fa fa-spinner fa-spin me-1"></i>Saving...</> : <><i className="fa fa-plus me-1"></i>Add Investment</>}
+                  </button>
                 </form>
               )}
 
