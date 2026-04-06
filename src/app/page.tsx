@@ -65,10 +65,11 @@ export default function Dashboard() {
   }, {} as Record<string, number>);
   const sortedCategories = Object.entries(categoryTotals).sort(([, a], [, b]) => b - a);
 
-  const totalLiabilities = investments.reduce((sum, i) => sum + ((i as any).liability || 0), 0);
   const totalPortfolio = investments.reduce((sum, i) => sum + i.currentValue, 0);
   const totalCost = investments.reduce((sum, i) => sum + i.costBasis, 0);
-  const totalGainLoss = totalPortfolio - totalCost - totalLiabilities;
+  const totalGainLoss = investments.reduce((sum, i) => {
+    return sum + ((i as any).liability ? i.currentValue - (i as any).liability : i.currentValue - i.costBasis);
+  }, 0);
   const totalReturnPct = totalCost > 0 ? ((totalGainLoss / totalCost) * 100) : 0;
 
   const allocationByType = investments.reduce((acc, i) => {

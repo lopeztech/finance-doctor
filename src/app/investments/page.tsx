@@ -369,10 +369,11 @@ export default function InvestmentsPage() {
     setAdviceLoading(false);
   };
 
-  const totalLiabilities = investments.reduce((sum, i) => sum + (i.liability || 0), 0);
   const totalValue = investments.reduce((sum, i) => sum + i.currentValue, 0);
   const totalCost = investments.reduce((sum, i) => sum + i.costBasis, 0);
-  const totalGainLoss = totalValue - totalCost - totalLiabilities;
+  const totalGainLoss = investments.reduce((sum, i) => {
+    return sum + (i.liability ? i.currentValue - i.liability : i.currentValue - i.costBasis);
+  }, 0);
   const totalReturnPct = totalCost > 0 ? ((totalGainLoss / totalCost) * 100) : 0;
 
   const allocationByType = investments.reduce((acc, i) => {
@@ -548,7 +549,9 @@ export default function InvestmentsPage() {
                     </thead>
                     <tbody>
                       {investments.map(inv => {
-                        const gainLoss = inv.currentValue - inv.costBasis - (inv.liability || 0);
+                        const gainLoss = inv.liability
+                          ? inv.currentValue - inv.liability  // Property equity
+                          : inv.currentValue - inv.costBasis;
                         const returnPct = inv.costBasis > 0 ? ((gainLoss / inv.costBasis) * 100) : 0;
                         return (
                           <tr key={inv.id}>
