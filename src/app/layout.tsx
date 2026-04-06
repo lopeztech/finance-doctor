@@ -12,7 +12,6 @@ import Header from '@/components/header/header';
 import TopMenu from '@/components/top-menu/top-menu';
 import Sidebar from '@/components/sidebar/sidebar';
 import SidebarRight from '@/components/sidebar-right/sidebar-right';
-import ThemePanel from '@/components/theme-panel/theme-panel';
 import { AppSettingsProvider, useAppSettings } from '@/config/app-settings';
 import { Open_Sans } from 'next/font/google';
 
@@ -78,8 +77,7 @@ function Layout({ children }: { children: React.ReactNode }) {
 			{!settings.appContentNone && (<div className={'app-content '+ settings.appContentClass }>{children}</div>)}
 			{settings.appSidebarTwo && (<SidebarRight />)}
 			{settings.appContentNone && (<>{children}</>)}
-			<ThemePanel />
-    </div>
+			    </div>
   );
 }
 
