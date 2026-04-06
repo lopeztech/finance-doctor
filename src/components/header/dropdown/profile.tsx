@@ -29,8 +29,6 @@ export default function DropdownProfile() {
         </span>
       </a>
       <div className="dropdown-menu dropdown-menu-end me-1">
-        <a href="#" className="dropdown-item">Settings</a>
-        <div className="dropdown-divider"></div>
         <a
           href="#"
           className="dropdown-item"

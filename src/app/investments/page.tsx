@@ -369,8 +369,28 @@ export default function InvestmentsPage() {
         <div className="col-lg-3">
           <div className="card border-0 bg-indigo text-white mb-3">
             <div className="card-body">
-              <div className="text-white text-opacity-75 mb-1">Asset Classes</div>
-              <h3 className="text-white mb-0">{typeCount}</h3>
+              <div className="text-white text-opacity-75 mb-1">Asset Allocation</div>
+              {sortedAllocations.length === 0 ? (
+                <h3 className="text-white mb-0">---</h3>
+              ) : (
+                <div className="mt-2">
+                  {sortedAllocations.map(([type, value]) => {
+                    const pct = (value / totalValue) * 100;
+                    return (
+                      <div key={type} className="mb-2">
+                        <div className="d-flex align-items-center mb-1">
+                          <i className={`fa ${TYPE_ICONS[type] || 'fa-wallet'} me-2 text-white text-opacity-50`} style={{ fontSize: '0.75rem' }}></i>
+                          <span className="flex-grow-1 small">{type}</span>
+                          <span className="fw-bold small">{pct.toFixed(1)}%</span>
+                        </div>
+                        <div className="progress" style={{ height: '3px' }}>
+                          <div className="progress-bar bg-white bg-opacity-50" style={{ width: `${pct}%` }}></div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -388,8 +408,30 @@ export default function InvestmentsPage() {
         </div>
       </div>
 
+      {investments.length > 0 && (
+        <Panel theme="success" className="mb-3">
+          <PanelHeader noButton>
+            <div className="d-flex align-items-center">
+              <i className="fa fa-stethoscope me-2"></i>Investment Health Assessment
+              <button className="btn btn-sm btn-outline-white ms-auto" onClick={getAdvice} disabled={adviceLoading}>
+                {adviceLoading ? <><i className="fa fa-spinner fa-spin me-1"></i>Analysing...</> : <><i className="fa fa-robot me-1"></i>Get AI Advice</>}
+              </button>
+            </div>
+          </PanelHeader>
+          <PanelBody>
+            {advice ? (
+              <div className="advice-content" style={{ whiteSpace: 'pre-wrap', fontSize: '0.9rem' }}>{advice}</div>
+            ) : (
+              <div className="text-muted text-center py-3">
+                <p className="mb-0">Click "Get AI Advice" for a personalised portfolio assessment powered by Gemini.</p>
+              </div>
+            )}
+          </PanelBody>
+        </Panel>
+      )}
+
       <div className="row">
-        <div className="col-xl-8">
+        <div className="col-12">
           <Panel>
             <PanelHeader noButton>
               <div className="d-flex align-items-center">
@@ -486,59 +528,6 @@ export default function InvestmentsPage() {
               )}
             </PanelBody>
           </Panel>
-        </div>
-
-        <div className="col-xl-4">
-          <Panel>
-            <PanelHeader noButton>Asset Allocation</PanelHeader>
-            <PanelBody>
-              {sortedAllocations.length === 0 ? (
-                <div className="text-center py-4 text-muted">
-                  <p className="mb-0">Add investments to see your allocation</p>
-                </div>
-              ) : (
-                <div>
-                  {sortedAllocations.map(([type, value]) => {
-                    const pct = (value / totalValue) * 100;
-                    return (
-                      <div key={type} className="mb-3">
-                        <div className="d-flex align-items-center mb-1">
-                          <i className={`fa ${TYPE_ICONS[type] || 'fa-wallet'} me-2 text-muted`}></i>
-                          <span className="flex-grow-1">{type}</span>
-                          <span className="fw-bold">{pct.toFixed(1)}%</span>
-                        </div>
-                        <div className="progress" style={{ height: '4px' }}>
-                          <div className={`progress-bar ${TYPE_COLORS[type] || 'bg-secondary'}`} style={{ width: `${pct}%` }}></div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </PanelBody>
-          </Panel>
-
-          {investments.length > 0 && (
-            <Panel theme="success">
-              <PanelHeader noButton>
-                <div className="d-flex align-items-center">
-                  <i className="fa fa-stethoscope me-2"></i>Investment Health Assessment
-                  <button className="btn btn-sm btn-outline-white ms-auto" onClick={getAdvice} disabled={adviceLoading}>
-                    {adviceLoading ? <><i className="fa fa-spinner fa-spin me-1"></i>Analysing...</> : <><i className="fa fa-robot me-1"></i>Get AI Advice</>}
-                  </button>
-                </div>
-              </PanelHeader>
-              <PanelBody>
-                {advice ? (
-                  <div className="advice-content" style={{ whiteSpace: 'pre-wrap', fontSize: '0.9rem' }}>{advice}</div>
-                ) : (
-                  <div className="text-muted text-center py-3">
-                    <p className="mb-0">Click "Get AI Advice" for a personalised portfolio assessment powered by Gemini.</p>
-                  </div>
-                )}
-              </PanelBody>
-            </Panel>
-          )}
         </div>
       </div>
     </>
