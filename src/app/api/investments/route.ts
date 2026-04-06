@@ -30,6 +30,20 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(investment, { status: 201 });
 }
 
+export async function PUT(req: NextRequest) {
+  const userId = await getAuthUserId();
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const body = await req.json();
+  const { id, ...data } = body;
+  if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
+
+  const db = getDb();
+  const ref = db.collection('users').doc(userId).collection('investments').doc(id);
+  await ref.update(data);
+  return NextResponse.json({ id, ...data });
+}
+
 export async function DELETE(req: NextRequest) {
   const userId = await getAuthUserId();
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

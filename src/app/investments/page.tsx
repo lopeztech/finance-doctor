@@ -251,6 +251,7 @@ export default function InvestmentsPage() {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<FormState>({ ...EMPTY_FORM });
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [advice, setAdvice] = useState('');
   const [adviceLoading, setAdviceLoading] = useState(false);
 
@@ -263,23 +264,72 @@ export default function InvestmentsPage() {
 
   useEffect(() => { fetchInvestments(); }, [fetchInvestments]);
 
-  const addInvestment = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     const inv = buildInvestment(form);
-    const { id, ...data } = inv;
-    const res = await fetch('/api/investments', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    if (res.ok) {
-      const saved = await res.json();
-      setInvestments(prev => [...prev, saved]);
-      setForm({ ...EMPTY_FORM });
-      setShowForm(false);
+
+    if (editingId) {
+      const { id: _unusedId, ...data } = inv;
+      const res = await fetch('/api/investments', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: editingId, ...data }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setInvestments(prev => prev.map(i => i.id === editingId ? updated : i));
+        cancelEdit();
+      }
+    } else {
+      const { id: _unusedId, ...data } = inv;
+      const res = await fetch('/api/investments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (res.ok) {
+        const saved = await res.json();
+        setInvestments(prev => [...prev, saved]);
+        cancelEdit();
+      }
     }
     setSaving(false);
+  };
+
+  const startEdit = (inv: Investment) => {
+    const f: FormState = { ...EMPTY_FORM, name: inv.name, type: inv.type };
+    if (TRADED_TYPES.includes(inv.type)) {
+      f.units = String(inv.units || '');
+      f.buyPricePerUnit = String(inv.buyPricePerUnit || '');
+      f.currentValue = String(inv.currentValue);
+    } else if (inv.type === 'Property') {
+      f.purchasePrice = String(inv.costBasis);
+      f.currentValue = String(inv.currentValue);
+      f.rentalIncome = String(inv.rentalIncomeAnnual || '');
+    } else if (inv.type === 'Cash / Term Deposit') {
+      f.amount = String(inv.currentValue);
+      f.interestRate = String(inv.interestRate || '');
+    } else if (inv.type === 'Bonds') {
+      f.faceValue = String(inv.costBasis);
+      f.couponRate = String(inv.couponRate || '');
+      f.maturityDate = inv.maturityDate || '';
+    } else if (inv.type === 'Superannuation') {
+      f.balance = String(inv.currentValue);
+      f.employerContribution = String(inv.employerContribution || '');
+    } else {
+      f.purchasePrice = String(inv.costBasis);
+      f.currentValue = String(inv.currentValue);
+    }
+    setForm(f);
+    setEditingId(inv.id);
+    setShowForm(true);
+  };
+
+  const cancelEdit = () => {
+    setForm({ ...EMPTY_FORM });
+    setEditingId(null);
+    setShowForm(false);
   };
 
   const removeInvestment = async (id: string) => {
@@ -436,14 +486,14 @@ export default function InvestmentsPage() {
             <PanelHeader noButton>
               <div className="d-flex align-items-center">
                 Investments
-                <button className="btn btn-success btn-sm ms-auto" onClick={() => setShowForm(!showForm)}>
-                  <i className="fa fa-plus me-1"></i> Add Investment
+                <button className="btn btn-success btn-sm ms-auto" onClick={() => { if (showForm) cancelEdit(); else setShowForm(true); }}>
+                  {showForm ? <><i className="fa fa-times me-1"></i>Cancel</> : <><i className="fa fa-plus me-1"></i>Add Investment</>}
                 </button>
               </div>
             </PanelHeader>
             <PanelBody>
               {showForm && (
-                <form onSubmit={addInvestment} className="mb-3 p-3 bg-light rounded" style={{ maxWidth: '400px' }}>
+                <form onSubmit={handleSubmit} className="mb-3 p-3 bg-light rounded" style={{ maxWidth: '400px' }}>
                   <div className="mb-3">
                     <label className="form-label text-muted small mb-1">Investment type</label>
                     <select className="form-select" value={form.type} onChange={e => setForm({ ...EMPTY_FORM, type: e.target.value })}>
@@ -458,7 +508,7 @@ export default function InvestmentsPage() {
                     <TypeSpecificFields form={form} setForm={setForm} />
                   </div>
                   <button type="submit" className="btn btn-success w-100" disabled={saving}>
-                    {saving ? <><i className="fa fa-spinner fa-spin me-1"></i>Saving...</> : <><i className="fa fa-plus me-1"></i>Add Investment</>}
+                    {saving ? <><i className="fa fa-spinner fa-spin me-1"></i>Saving...</> : editingId ? <><i className="fa fa-check me-1"></i>Update Investment</> : <><i className="fa fa-plus me-1"></i>Add Investment</>}
                   </button>
                 </form>
               )}
@@ -481,7 +531,7 @@ export default function InvestmentsPage() {
                         <th className="text-end">Cost Basis</th>
                         <th className="text-end">Current Value</th>
                         <th className="text-end">Gain / Loss</th>
-                        <th style={{ width: '40px' }}></th>
+                        <th style={{ width: '70px' }}></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -504,8 +554,11 @@ export default function InvestmentsPage() {
                               {gainLoss >= 0 ? '+' : ''}{gainLoss.toLocaleString('en-AU', { minimumFractionDigits: 2 })}
                               <small className="ms-1">({returnPct >= 0 ? '+' : ''}{returnPct.toFixed(1)}%)</small>
                             </td>
-                            <td>
-                              <button className="btn btn-xs btn-danger" onClick={() => removeInvestment(inv.id)}>
+                            <td className="text-nowrap">
+                              <button className="btn btn-xs btn-primary me-1" onClick={() => startEdit(inv)} title="Edit">
+                                <i className="fa fa-pencil-alt"></i>
+                              </button>
+                              <button className="btn btn-xs btn-danger" onClick={() => removeInvestment(inv.id)} title="Delete">
                                 <i className="fa fa-times"></i>
                               </button>
                             </td>
