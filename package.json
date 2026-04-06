@@ -42,7 +42,7 @@
     "react-bootstrap-daterangepicker": "^8.0.0",
     "react-color": "^2.19.3",
     "react-countdown": "^2.3.6",
-    "react-datepicker": "^8.4.0",
+    "react-datepicker": "^9.1.0",
     "react-datetime": "^3.3.1",
     "react-dom": "^19.1.0",
     "react-highlight": "^0.15.0",
