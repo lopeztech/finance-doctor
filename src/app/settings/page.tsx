@@ -54,6 +54,27 @@ export default function SettingsPage() {
           </Panel>
         </div>
       </div>
+
+      <div className="row">
+        <div className="col-xl-6">
+          <Panel>
+            <PanelHeader noButton>Build Info</PanelHeader>
+            <PanelBody>
+              <div className="d-flex align-items-center">
+                <i className="fa fa-clock text-muted me-2"></i>
+                <div>
+                  <small className="text-muted d-block">Last Successful Build</small>
+                  <span>
+                    {process.env.NEXT_PUBLIC_BUILD_TIME
+                      ? new Date(process.env.NEXT_PUBLIC_BUILD_TIME).toLocaleString()
+                      : 'Development mode'}
+                  </span>
+                </div>
+              </div>
+            </PanelBody>
+          </Panel>
+        </div>
+      </div>
     </>
   );
 }

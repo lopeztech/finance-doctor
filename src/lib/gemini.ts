@@ -23,7 +23,7 @@ async function getProjectId(): Promise<string> {
 async function getGeminiModel() {
   const projectId = await getProjectId();
   const region = process.env.GEMINI_REGION || 'us-central1';
-  const modelName = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+  const modelName = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
   const vertexAI = new VertexAI({ project: projectId, location: region });
   return vertexAI.getGenerativeModel({ model: modelName });
