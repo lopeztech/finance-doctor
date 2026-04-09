@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { Expense } from '@/lib/types';
 
@@ -41,6 +41,23 @@ export default function TaxPage() {
   const [adviceLoading, setAdviceLoading] = useState(false);
   const [followUpInput, setFollowUpInput] = useState('');
   const [adviceCollapsed, setAdviceCollapsed] = useState(false);
+
+  const adviceHistoryRef = useRef(adviceHistory);
+  adviceHistoryRef.current = adviceHistory;
+
+  const saveChat = useCallback(async (history: { role: 'user' | 'model'; text: string }[]) => {
+    await fetch('/api/advice-chat', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'tax', history }),
+    });
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/advice-chat?type=tax')
+      .then(res => res.ok ? res.json() : { history: [] })
+      .then(data => { if (data.history?.length) setAdviceHistory(data.history); });
+  }, []);
 
   const fetchExpenses = useCallback(async () => {
     setLoading(true);
@@ -89,7 +106,8 @@ export default function TaxPage() {
     if (!res.ok || !res.body) {
       const errText = await res.text().catch(() => '');
       const errorMsg = `Unable to generate advice: ${errText || res.statusText}`;
-      setAdviceHistory(prev => [...prev, { role: 'model', text: errorMsg }]);
+      const updated = [...history, ...(followUp ? [{ role: 'user' as const, text: followUp }] : []), { role: 'model' as const, text: errorMsg }];
+      setAdviceHistory(updated);
       setAdviceLoading(false);
       return;
     }
@@ -104,10 +122,14 @@ export default function TaxPage() {
       setAdviceHistory(prev => [...prev.slice(0, -1), { role: 'model', text }]);
     }
     setAdviceLoading(false);
+    // Persist the full conversation after stream completes
+    const finalHistory = [...history, ...(followUp ? [{ role: 'user' as const, text: followUp }] : []), { role: 'model' as const, text }];
+    saveChat(finalHistory);
   };
 
   const getAdvice = async () => {
     setAdviceHistory([]);
+    setAdviceCollapsed(false);
     await streamAdvice([]);
   };
 
