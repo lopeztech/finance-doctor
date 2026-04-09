@@ -3,7 +3,7 @@ import { getAuthUserId } from '@/lib/auth-helpers';
 import { getDb } from '@/lib/firestore';
 import { getGeminiModel } from '@/lib/gemini';
 import { INVESTMENT_SYSTEM_PROMPT, buildInvestmentPrompt } from '@/lib/prompts';
-import type { Investment } from '@/lib/types';
+import type { Investment, FamilyMember } from '@/lib/types';
 
 interface ChatMessage {
   role: 'user' | 'model';
@@ -28,8 +28,14 @@ export async function POST(req: NextRequest) {
       return new Response('No investments found', { status: 400 });
     }
 
+    const membersSnapshot = await db
+      .collection('users').doc(userId)
+      .collection('family-members')
+      .get();
+    const familyMembers: FamilyMember[] = membersSnapshot.docs.map(doc => doc.data() as FamilyMember);
+
     const model = await getGeminiModel();
-    const initialPrompt = buildInvestmentPrompt(investments);
+    const initialPrompt = buildInvestmentPrompt(investments, familyMembers.length > 0 ? familyMembers : undefined);
 
     const contents: { role: string; parts: { text: string }[] }[] = [
       { role: 'user', parts: [{ text: initialPrompt }] },

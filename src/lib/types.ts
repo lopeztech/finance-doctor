@@ -7,10 +7,17 @@ export interface Expense {
   financialYear: string;
 }
 
+export interface FamilyMember {
+  id: string;
+  name: string;
+  salary: number;
+}
+
 export interface Investment {
   id: string;
   name: string;
   type: string;
+  owner?: string;
   currentValue: number;
   costBasis: number;
   units?: number;

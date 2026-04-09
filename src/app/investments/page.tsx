@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
-import type { Investment } from '@/lib/types';
+import type { Investment, FamilyMember } from '@/lib/types';
 
 const INVESTMENT_TYPES = [
   'Australian Shares',
@@ -57,6 +57,7 @@ const NAME_PLACEHOLDERS: Record<string, string> = {
 interface FormState {
   name: string;
   type: string;
+  owner: string;
   // Traded assets
   units: string;
   buyPricePerUnit: string;
@@ -78,7 +79,7 @@ interface FormState {
 }
 
 const EMPTY_FORM: FormState = {
-  name: '', type: INVESTMENT_TYPES[0],
+  name: '', type: INVESTMENT_TYPES[0], owner: '',
   units: '', buyPricePerUnit: '', currentValue: '',
   purchasePrice: '', rentalIncome: '', liability: '',
   amount: '', interestRate: '',
@@ -87,7 +88,7 @@ const EMPTY_FORM: FormState = {
 };
 
 function buildInvestment(form: FormState): Investment {
-  const base = { id: crypto.randomUUID(), name: form.name, type: form.type };
+  const base = { id: crypto.randomUUID(), name: form.name, type: form.type, ...(form.owner ? { owner: form.owner } : {}) };
 
   if (TRADED_TYPES.includes(form.type)) {
     const units = parseFloat(form.units);
@@ -266,6 +267,10 @@ export default function InvestmentsPage() {
   const [adviceLoading, setAdviceLoading] = useState(false);
   const [followUpInput, setFollowUpInput] = useState('');
   const [adviceCollapsed, setAdviceCollapsed] = useState(false);
+  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
+  const [showMemberForm, setShowMemberForm] = useState(false);
+  const [memberForm, setMemberForm] = useState({ name: '', salary: '' });
+  const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
 
   const adviceHistoryRef = useRef(adviceHistory);
   adviceHistoryRef.current = adviceHistory;
@@ -291,7 +296,12 @@ export default function InvestmentsPage() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { fetchInvestments(); }, [fetchInvestments]);
+  const fetchFamilyMembers = useCallback(async () => {
+    const res = await fetch('/api/family-members');
+    if (res.ok) setFamilyMembers(await res.json());
+  }, []);
+
+  useEffect(() => { fetchInvestments(); fetchFamilyMembers(); }, [fetchInvestments, fetchFamilyMembers]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -327,7 +337,7 @@ export default function InvestmentsPage() {
   };
 
   const startEdit = (inv: Investment) => {
-    const f: FormState = { ...EMPTY_FORM, name: inv.name, type: inv.type };
+    const f: FormState = { ...EMPTY_FORM, name: inv.name, type: inv.type, owner: inv.owner || '' };
     if (TRADED_TYPES.includes(inv.type)) {
       f.units = String(inv.units || '');
       f.buyPricePerUnit = String(inv.buyPricePerUnit || '');
@@ -365,6 +375,40 @@ export default function InvestmentsPage() {
   const removeInvestment = async (id: string) => {
     await fetch(`/api/investments?id=${id}`, { method: 'DELETE' });
     setInvestments(prev => prev.filter(i => i.id !== id));
+  };
+
+  const addOrUpdateMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const body = { name: memberForm.name, salary: parseFloat(memberForm.salary) };
+    if (editingMemberId) {
+      const res = await fetch('/api/family-members', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: editingMemberId, ...body }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setFamilyMembers(prev => prev.map(m => m.id === editingMemberId ? updated : m));
+      }
+    } else {
+      const res = await fetch('/api/family-members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        const member = await res.json();
+        setFamilyMembers(prev => [...prev, member]);
+      }
+    }
+    setMemberForm({ name: '', salary: '' });
+    setEditingMemberId(null);
+    setShowMemberForm(false);
+  };
+
+  const removeMember = async (id: string) => {
+    await fetch(`/api/family-members?id=${id}`, { method: 'DELETE' });
+    setFamilyMembers(prev => prev.filter(m => m.id !== id));
   };
 
   const streamAdvice = async (history: { role: 'user' | 'model'; text: string }[], followUp?: string) => {
@@ -449,7 +493,7 @@ export default function InvestmentsPage() {
   return (
     <>
       <div className="d-flex align-items-center mb-3">
-        <h1 className="page-header mb-0">Investment Health Check</h1>
+        <h1 className="page-header mb-0">Family Portfolio</h1>
       </div>
 
       <div className="row mb-3">
@@ -579,6 +623,73 @@ export default function InvestmentsPage() {
         </Panel>
       )}
 
+      <Panel className="mb-3">
+        <PanelHeader noButton>
+          <div className="d-flex align-items-center">
+            <i className="fa fa-users me-2"></i>Family Members
+            <button className="btn btn-sm btn-success ms-auto" onClick={() => { setShowMemberForm(!showMemberForm); setEditingMemberId(null); setMemberForm({ name: '', salary: '' }); }}>
+              {showMemberForm ? <><i className="fa fa-times me-1"></i>Cancel</> : <><i className="fa fa-plus me-1"></i>Add Member</>}
+            </button>
+          </div>
+        </PanelHeader>
+        <PanelBody>
+          {showMemberForm && (
+            <form onSubmit={addOrUpdateMember} className="row g-2 mb-3 p-3 bg-light rounded">
+              <div className="col-md-4">
+                <input type="text" className="form-control" placeholder="Name" value={memberForm.name} onChange={e => setMemberForm({ ...memberForm, name: e.target.value })} required />
+              </div>
+              <div className="col-md-4">
+                <div className="input-group">
+                  <span className="input-group-text">$</span>
+                  <input type="number" className="form-control" placeholder="Annual salary" step="1" min="0" value={memberForm.salary} onChange={e => setMemberForm({ ...memberForm, salary: e.target.value })} required />
+                </div>
+              </div>
+              <div className="col-md-4">
+                <button type="submit" className="btn btn-success w-100">
+                  {editingMemberId ? <><i className="fa fa-check me-1"></i>Update</> : <><i className="fa fa-plus me-1"></i>Add</>}
+                </button>
+              </div>
+            </form>
+          )}
+          {familyMembers.length === 0 ? (
+            <div className="text-muted text-center py-3">
+              <p className="mb-0">Add family members to track investment ownership and tax brackets.</p>
+            </div>
+          ) : (
+            <div className="d-flex flex-wrap gap-3">
+              {familyMembers.map(m => {
+                const bracket = m.salary <= 18200 ? '0%' : m.salary <= 45000 ? '16%' : m.salary <= 135000 ? '30%' : m.salary <= 190000 ? '37%' : '45%';
+                const memberInvestments = investments.filter(i => i.owner === m.name);
+                const memberValue = memberInvestments.reduce((sum, i) => sum + i.currentValue, 0);
+                return (
+                  <div key={m.id} className="card border mb-0" style={{ minWidth: '220px', flex: '1 1 220px' }}>
+                    <div className="card-body py-2 px-3">
+                      <div className="d-flex align-items-center">
+                        <div className="flex-grow-1">
+                          <div className="fw-bold">{m.name}</div>
+                          <div className="small text-muted">
+                            Salary: ${m.salary.toLocaleString('en-AU')} <span className="badge bg-secondary ms-1">{bracket} + ML</span>
+                          </div>
+                          <div className="small text-muted">{memberInvestments.length} investments &middot; ${memberValue.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</div>
+                        </div>
+                        <div className="ms-2">
+                          <button className="btn btn-xs btn-primary me-1" onClick={() => { setMemberForm({ name: m.name, salary: String(m.salary) }); setEditingMemberId(m.id); setShowMemberForm(true); }} title="Edit">
+                            <i className="fa fa-pencil-alt"></i>
+                          </button>
+                          <button className="btn btn-xs btn-danger" onClick={() => removeMember(m.id)} title="Delete">
+                            <i className="fa fa-times"></i>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </PanelBody>
+      </Panel>
+
       <div className="row">
         <div className="col-12">
           <Panel>
@@ -595,7 +706,7 @@ export default function InvestmentsPage() {
                 <form onSubmit={handleSubmit} className="mb-3 p-3 bg-light rounded" style={{ maxWidth: '400px' }}>
                   <div className="mb-3">
                     <label className="form-label text-muted small mb-1">Investment type</label>
-                    <select className="form-select" value={form.type} onChange={e => setForm({ ...EMPTY_FORM, type: e.target.value })}>
+                    <select className="form-select" value={form.type} onChange={e => setForm({ ...EMPTY_FORM, type: e.target.value, owner: form.owner })}>
                       {INVESTMENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                   </div>
@@ -603,6 +714,15 @@ export default function InvestmentsPage() {
                     <label className="form-label text-muted small mb-1">Name</label>
                     <input type="text" className="form-control" placeholder={NAME_PLACEHOLDERS[form.type] || 'Name'} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required />
                   </div>
+                  {familyMembers.length > 0 && (
+                    <div className="mb-3">
+                      <label className="form-label text-muted small mb-1">Owner</label>
+                      <select className="form-select" value={form.owner} onChange={e => setForm({ ...form, owner: e.target.value })}>
+                        <option value="">Unassigned</option>
+                        {familyMembers.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                      </select>
+                    </div>
+                  )}
                   <div className="row g-3 mb-3">
                     <TypeSpecificFields form={form} setForm={setForm} />
                   </div>
@@ -625,6 +745,7 @@ export default function InvestmentsPage() {
                     <thead>
                       <tr>
                         <th>Name</th>
+                        <th>Owner</th>
                         <th>Type</th>
                         <th>Details</th>
                         <th className="text-end">Cost Basis</th>
@@ -642,6 +763,7 @@ export default function InvestmentsPage() {
                         return (
                           <tr key={inv.id}>
                             <td className="fw-bold">{inv.name}</td>
+                            <td className="text-muted small">{inv.owner || '—'}</td>
                             <td>
                               <span className={`badge ${TYPE_COLORS[inv.type] || 'bg-secondary'}`}>
                                 <i className={`fa ${TYPE_ICONS[inv.type] || 'fa-wallet'} me-1`}></i>
@@ -669,7 +791,7 @@ export default function InvestmentsPage() {
                     </tbody>
                     <tfoot>
                       <tr className="fw-bold">
-                        <td colSpan={4}>Total</td>
+                        <td colSpan={5}>Total</td>
                         <td className="text-end">${totalValue.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</td>
                         <td className={`text-end ${totalGainLoss >= 0 ? 'text-success' : 'text-danger'}`}>
                           {totalGainLoss >= 0 ? '+' : ''}{totalGainLoss.toLocaleString('en-AU', { minimumFractionDigits: 2 })}
