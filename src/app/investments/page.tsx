@@ -242,6 +242,45 @@ function TypeSpecificFields({ form, setForm }: { form: FormState; setForm: (f: F
   );
 }
 
+function getMarginalRate(salary: number): number {
+  if (salary <= 18200) return 0;
+  if (salary <= 45000) return 0.16;
+  if (salary <= 135000) return 0.30;
+  if (salary <= 190000) return 0.37;
+  return 0.45;
+}
+
+function estimateCgt(inv: Investment, familyMembers: FamilyMember[]): { amount: number; label: string } | null {
+  const gain = inv.currentValue - inv.costBasis;
+  if (gain <= 0) return { amount: 0, label: '$0.00' };
+
+  // 50% CGT discount (assuming held >12 months)
+  const discountedGain = gain * 0.5;
+
+  if (!inv.owner || inv.owner === 'Unassigned') {
+    return null; // Can't calculate without an owner
+  }
+
+  if (inv.owner === 'Joint') {
+    // Split evenly, each member gets 50% of the discounted gain
+    if (familyMembers.length < 2) return null;
+    const perPerson = discountedGain / 2;
+    // Use the two highest-salary members as a proxy
+    const sorted = [...familyMembers].sort((a, b) => b.salary - a.salary);
+    const rate1 = getMarginalRate(sorted[0].salary) + 0.02; // +Medicare Levy
+    const rate2 = getMarginalRate(sorted[1].salary) + 0.02;
+    const cgt = perPerson * rate1 + perPerson * rate2;
+    return { amount: cgt, label: `$${cgt.toLocaleString('en-AU', { minimumFractionDigits: 2 })}` };
+  }
+
+  const member = familyMembers.find(m => m.name === inv.owner);
+  if (!member) return null;
+
+  const rate = getMarginalRate(member.salary) + 0.02; // +Medicare Levy
+  const cgt = discountedGain * rate;
+  return { amount: cgt, label: `$${cgt.toLocaleString('en-AU', { minimumFractionDigits: 2 })}` };
+}
+
 function formatDetail(inv: Investment): string {
   if (TRADED_TYPES.includes(inv.type) && inv.units) return `${inv.units} units @ $${inv.buyPricePerUnit?.toFixed(2)}`;
   if (inv.type === 'Property') {
@@ -720,6 +759,7 @@ export default function InvestmentsPage() {
                       <select className="form-select" value={form.owner} onChange={e => setForm({ ...form, owner: e.target.value })}>
                         <option value="">Unassigned</option>
                         {familyMembers.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                        {familyMembers.length >= 2 && <option value="Joint">Joint</option>}
                       </select>
                     </div>
                   )}
@@ -751,6 +791,7 @@ export default function InvestmentsPage() {
                         <th className="text-end">Cost Basis</th>
                         <th className="text-end">Current Value</th>
                         <th className="text-end">Gain / Loss</th>
+                        <th className="text-end">Est. CGT</th>
                         <th style={{ width: '70px' }}></th>
                       </tr>
                     </thead>
@@ -760,6 +801,7 @@ export default function InvestmentsPage() {
                           ? inv.currentValue - inv.liability  // Property equity
                           : inv.currentValue - inv.costBasis;
                         const returnPct = inv.costBasis > 0 ? ((gainLoss / inv.costBasis) * 100) : 0;
+                        const cgt = estimateCgt(inv, familyMembers);
                         return (
                           <tr key={inv.id}>
                             <td className="fw-bold">{inv.name}</td>
@@ -777,6 +819,9 @@ export default function InvestmentsPage() {
                               {gainLoss >= 0 ? '+' : ''}{gainLoss.toLocaleString('en-AU', { minimumFractionDigits: 2 })}
                               <small className="ms-1">({returnPct >= 0 ? '+' : ''}{returnPct.toFixed(1)}%)</small>
                             </td>
+                            <td className="text-end text-muted small">
+                              {cgt ? cgt.label : '—'}
+                            </td>
                             <td className="text-nowrap">
                               <button className="btn btn-xs btn-primary me-1" onClick={() => startEdit(inv)} title="Edit">
                                 <i className="fa fa-pencil-alt"></i>
@@ -790,14 +835,23 @@ export default function InvestmentsPage() {
                       })}
                     </tbody>
                     <tfoot>
-                      <tr className="fw-bold">
-                        <td colSpan={5}>Total</td>
-                        <td className="text-end">${totalValue.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</td>
-                        <td className={`text-end ${totalGainLoss >= 0 ? 'text-success' : 'text-danger'}`}>
-                          {totalGainLoss >= 0 ? '+' : ''}{totalGainLoss.toLocaleString('en-AU', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td></td>
-                      </tr>
+                      {(() => {
+                        const totalCgt = investments.reduce((sum, inv) => {
+                          const cgt = estimateCgt(inv, familyMembers);
+                          return sum + (cgt ? cgt.amount : 0);
+                        }, 0);
+                        return (
+                          <tr className="fw-bold">
+                            <td colSpan={5}>Total</td>
+                            <td className="text-end">${totalValue.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</td>
+                            <td className={`text-end ${totalGainLoss >= 0 ? 'text-success' : 'text-danger'}`}>
+                              {totalGainLoss >= 0 ? '+' : ''}{totalGainLoss.toLocaleString('en-AU', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="text-end text-muted">${totalCgt.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</td>
+                            <td></td>
+                          </tr>
+                        );
+                      })()}
                     </tfoot>
                   </table>
                 </div>

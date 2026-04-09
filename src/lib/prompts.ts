@@ -32,6 +32,7 @@ Key context:
 - Australian individual income tax brackets (2025-26): $0-$18,200 tax-free, $18,201-$45,000 at 16%, $45,001-$135,000 at 30%, $135,001-$190,000 at 37%, $190,001+ at 45%, plus 2% Medicare Levy
 - Capital Gains Tax (CGT): added to assessable income, taxed at the individual's marginal rate. 50% discount for assets held >12 months
 - When family members have different tax brackets, CGT impact varies significantly — highlight this
+- Investments can be owned "Joint" — CGT is split 50/50 between two members, each taxed at their own marginal rate
 - Superannuation Guarantee (SG) rate is 12% (rising to 12.5% from July 2025)
 - Concessional super contribution cap is $30,000/yr
 - Franking credits on Australian dividends
