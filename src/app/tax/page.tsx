@@ -40,6 +40,7 @@ export default function TaxPage() {
   const [adviceHistory, setAdviceHistory] = useState<{ role: 'user' | 'model'; text: string }[]>([]);
   const [adviceLoading, setAdviceLoading] = useState(false);
   const [followUpInput, setFollowUpInput] = useState('');
+  const [adviceCollapsed, setAdviceCollapsed] = useState(false);
 
   const fetchExpenses = useCallback(async () => {
     setLoading(true);
@@ -299,13 +300,18 @@ export default function TaxPage() {
             <Panel>
               <PanelHeader noButton>
                 <div className="d-flex align-items-center">
+                  {adviceHistory.length > 0 && (
+                    <button className="btn btn-sm btn-outline-secondary me-2" onClick={() => setAdviceCollapsed(!adviceCollapsed)} title={adviceCollapsed ? 'Expand' : 'Collapse'}>
+                      <i className={`fa fa-chevron-${adviceCollapsed ? 'down' : 'up'}`}></i>
+                    </button>
+                  )}
                   <i className="fa fa-stethoscope me-2"></i>Tax Health Assessment
                   <button className="btn btn-sm btn-success ms-auto" onClick={getAdvice} disabled={adviceLoading}>
                     {adviceLoading && adviceHistory.length <= 1 ? <><i className="fa fa-spinner fa-spin me-1"></i>Analysing...</> : <><i className="fa fa-robot me-1"></i>{adviceHistory.length > 0 ? 'New Assessment' : 'Get AI Advice'}</>}
                   </button>
                 </div>
               </PanelHeader>
-              <PanelBody>
+              {!adviceCollapsed && <PanelBody>
                 {adviceHistory.length > 0 ? (
                   <>
                     {adviceHistory.map((msg, i) => (
@@ -351,7 +357,7 @@ export default function TaxPage() {
                     <p className="mb-0">Click &quot;Get AI Advice&quot; for a personalised tax health assessment powered by Gemini.</p>
                   </div>
                 )}
-              </PanelBody>
+              </PanelBody>}
             </Panel>
           )}
         </div>
