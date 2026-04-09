@@ -262,8 +262,9 @@ export default function InvestmentsPage() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<FormState>({ ...EMPTY_FORM });
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [advice, setAdvice] = useState('');
+  const [adviceHistory, setAdviceHistory] = useState<{ role: 'user' | 'model'; text: string }[]>([]);
   const [adviceLoading, setAdviceLoading] = useState(false);
+  const [followUpInput, setFollowUpInput] = useState('');
 
   const fetchInvestments = useCallback(async () => {
     setLoading(true);
@@ -348,26 +349,45 @@ export default function InvestmentsPage() {
     setInvestments(prev => prev.filter(i => i.id !== id));
   };
 
-  const getAdvice = async () => {
-    setAdvice('');
+  const streamAdvice = async (history: { role: 'user' | 'model'; text: string }[], followUp?: string) => {
     setAdviceLoading(true);
-    const res = await fetch('/api/investments/advice', { method: 'POST' });
+    const res = await fetch('/api/investments/advice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ history, followUp }),
+    });
     if (!res.ok || !res.body) {
       const errText = await res.text().catch(() => '');
-      setAdvice(`Unable to generate advice: ${errText || res.statusText}`);
+      const errorMsg = `Unable to generate advice: ${errText || res.statusText}`;
+      setAdviceHistory(prev => [...prev, { role: 'model', text: errorMsg }]);
       setAdviceLoading(false);
       return;
     }
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let text = '';
+    setAdviceHistory(prev => [...prev, { role: 'model', text: '' }]);
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
       text += decoder.decode(value, { stream: true });
-      setAdvice(text);
+      setAdviceHistory(prev => [...prev.slice(0, -1), { role: 'model', text }]);
     }
     setAdviceLoading(false);
+  };
+
+  const getAdvice = async () => {
+    setAdviceHistory([]);
+    await streamAdvice([]);
+  };
+
+  const sendFollowUp = async () => {
+    const question = followUpInput.trim();
+    if (!question || adviceLoading) return;
+    setFollowUpInput('');
+    const updatedHistory = [...adviceHistory, { role: 'user' as const, text: question }];
+    setAdviceHistory(updatedHistory);
+    await streamAdvice(updatedHistory.slice(0, -1), question);
   };
 
   const totalValue = investments.reduce((sum, i) => sum + i.currentValue, 0);
@@ -478,16 +498,54 @@ export default function InvestmentsPage() {
             <div className="d-flex align-items-center">
               <i className="fa fa-stethoscope me-2"></i>Investment Health Assessment
               <button className="btn btn-sm btn-success ms-auto" onClick={getAdvice} disabled={adviceLoading}>
-                {adviceLoading ? <><i className="fa fa-spinner fa-spin me-1"></i>Analysing...</> : <><i className="fa fa-robot me-1"></i>Get AI Advice</>}
+                {adviceLoading && adviceHistory.length <= 1 ? <><i className="fa fa-spinner fa-spin me-1"></i>Analysing...</> : <><i className="fa fa-robot me-1"></i>{adviceHistory.length > 0 ? 'New Assessment' : 'Get AI Advice'}</>}
               </button>
             </div>
           </PanelHeader>
           <PanelBody>
-            {advice ? (
-              <div className="advice-content" style={{ whiteSpace: 'pre-wrap', fontSize: '0.9rem' }}>{advice}</div>
+            {adviceHistory.length > 0 ? (
+              <>
+                {adviceHistory.map((msg, i) => (
+                  <div key={i} className="mb-3">
+                    {msg.role === 'user' ? (
+                      <div className="d-flex align-items-start mb-2">
+                        <span className="badge bg-primary me-2 mt-1"><i className="fa fa-user"></i></span>
+                        <div className="fw-medium">{msg.text}</div>
+                      </div>
+                    ) : (
+                      <div className="d-flex align-items-start">
+                        <span className="badge bg-teal me-2 mt-1"><i className="fa fa-stethoscope"></i></span>
+                        <div className="advice-content flex-grow-1" dangerouslySetInnerHTML={{ __html: msg.text }} />
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {adviceLoading && adviceHistory[adviceHistory.length - 1]?.role === 'user' && (
+                  <div className="d-flex align-items-start mb-3">
+                    <span className="badge bg-teal me-2 mt-1"><i className="fa fa-stethoscope"></i></span>
+                    <div className="text-muted"><i className="fa fa-spinner fa-spin me-1"></i>Thinking...</div>
+                  </div>
+                )}
+                {!adviceLoading && (
+                  <form onSubmit={(e) => { e.preventDefault(); sendFollowUp(); }} className="mt-3 border-top pt-3">
+                    <div className="input-group">
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="Ask Dr Finance a follow-up question..."
+                        value={followUpInput}
+                        onChange={(e) => setFollowUpInput(e.target.value)}
+                      />
+                      <button type="submit" className="btn btn-teal" disabled={!followUpInput.trim()}>
+                        <i className="fa fa-paper-plane"></i>
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </>
             ) : (
               <div className="text-muted text-center py-3">
-                <p className="mb-0">Click "Get AI Advice" for a personalised portfolio assessment powered by Gemini.</p>
+                <p className="mb-0">Click &quot;Get AI Advice&quot; for a personalised portfolio assessment powered by Gemini.</p>
               </div>
             )}
           </PanelBody>

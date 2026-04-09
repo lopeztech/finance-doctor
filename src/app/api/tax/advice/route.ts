@@ -5,12 +5,17 @@ import { getGeminiModel } from '@/lib/gemini';
 import { TAX_SYSTEM_PROMPT, buildTaxPrompt } from '@/lib/prompts';
 import type { Expense } from '@/lib/types';
 
+interface ChatMessage {
+  role: 'user' | 'model';
+  text: string;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const userId = await getAuthUserId();
     if (!userId) return new Response('Unauthorized', { status: 401 });
 
-    const { financialYear } = await req.json();
+    const { financialYear, history, followUp } = await req.json();
     const db = getDb();
     const snapshot = await db
       .collection('users').doc(userId)
@@ -24,10 +29,24 @@ export async function POST(req: NextRequest) {
     }
 
     const model = await getGeminiModel();
-    const prompt = buildTaxPrompt(expenses, financialYear || '2025-2026');
+    const initialPrompt = buildTaxPrompt(expenses, financialYear || '2025-2026');
+
+    const contents: { role: string; parts: { text: string }[] }[] = [
+      { role: 'user', parts: [{ text: initialPrompt }] },
+    ];
+
+    if (history && Array.isArray(history)) {
+      for (const msg of history as ChatMessage[]) {
+        contents.push({ role: msg.role === 'model' ? 'model' : 'user', parts: [{ text: msg.text }] });
+      }
+    }
+
+    if (followUp) {
+      contents.push({ role: 'user', parts: [{ text: followUp }] });
+    }
 
     const result = await model.generateContentStream({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      contents,
       systemInstruction: { role: 'system', parts: [{ text: TAX_SYSTEM_PROMPT }] },
     });
 

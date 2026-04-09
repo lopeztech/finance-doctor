@@ -1,13 +1,21 @@
+import { NextRequest } from 'next/server';
 import { getAuthUserId } from '@/lib/auth-helpers';
 import { getDb } from '@/lib/firestore';
 import { getGeminiModel } from '@/lib/gemini';
 import { INVESTMENT_SYSTEM_PROMPT, buildInvestmentPrompt } from '@/lib/prompts';
 import type { Investment } from '@/lib/types';
 
-export async function POST() {
+interface ChatMessage {
+  role: 'user' | 'model';
+  text: string;
+}
+
+export async function POST(req: NextRequest) {
   try {
     const userId = await getAuthUserId();
     if (!userId) return new Response('Unauthorized', { status: 401 });
+
+    const { history, followUp } = await req.json().catch(() => ({}));
 
     const db = getDb();
     const snapshot = await db
@@ -21,10 +29,24 @@ export async function POST() {
     }
 
     const model = await getGeminiModel();
-    const prompt = buildInvestmentPrompt(investments);
+    const initialPrompt = buildInvestmentPrompt(investments);
+
+    const contents: { role: string; parts: { text: string }[] }[] = [
+      { role: 'user', parts: [{ text: initialPrompt }] },
+    ];
+
+    if (history && Array.isArray(history)) {
+      for (const msg of history as ChatMessage[]) {
+        contents.push({ role: msg.role === 'model' ? 'model' : 'user', parts: [{ text: msg.text }] });
+      }
+    }
+
+    if (followUp) {
+      contents.push({ role: 'user', parts: [{ text: followUp }] });
+    }
 
     const result = await model.generateContentStream({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      contents,
       systemInstruction: { role: 'system', parts: [{ text: INVESTMENT_SYSTEM_PROMPT }] },
     });
 

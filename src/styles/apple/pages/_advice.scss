@@ -1,0 +1,58 @@
+.advice-content {
+  font-size: 0.9rem;
+  line-height: 1.7;
+
+  h4 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-top: 1.25rem;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 2px solid rgba(var(--bs-teal-rgb, 32, 201, 151), 0.3);
+
+    &:first-child {
+      margin-top: 0;
+    }
+  }
+
+  h5 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+  }
+
+  p {
+    margin-bottom: 0.6rem;
+  }
+
+  ul, ol {
+    padding-left: 1.25rem;
+    margin-bottom: 0.75rem;
+
+    li {
+      margin-bottom: 0.4rem;
+    }
+  }
+
+  strong {
+    color: var(--bs-emphasis-color);
+  }
+
+  hr {
+    margin: 1rem 0;
+    opacity: 0.15;
+  }
+
+  .badge {
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 0.3em 0.6em;
+    vertical-align: middle;
+  }
+
+  em {
+    color: var(--bs-secondary-color);
+    font-style: italic;
+  }
+}
