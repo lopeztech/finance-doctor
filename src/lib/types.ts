@@ -5,6 +5,7 @@ export interface Expense {
   amount: number;
   category: string;
   financialYear: string;
+  owner?: string;
 }
 
 export interface FamilyMember {

@@ -34,9 +34,22 @@ export async function POST(req: NextRequest) {
     amount: body.amount,
     category: body.category,
     financialYear: body.financialYear,
+    ...(body.owner ? { owner: body.owner } : {}),
   };
   await ref.set(expense);
   return NextResponse.json(expense, { status: 201 });
+}
+
+export async function PUT(req: NextRequest) {
+  const userId = await getAuthUserId();
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const { id, ...data } = await req.json();
+  if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
+
+  const db = getDb();
+  await db.collection('users').doc(userId).collection('expenses').doc(id).update(data);
+  return NextResponse.json({ id, ...data });
 }
 
 export async function DELETE(req: NextRequest) {

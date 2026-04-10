@@ -307,9 +307,6 @@ export default function InvestmentsPage() {
   const [followUpInput, setFollowUpInput] = useState('');
   const [adviceCollapsed, setAdviceCollapsed] = useState(false);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
-  const [showMemberForm, setShowMemberForm] = useState(false);
-  const [memberForm, setMemberForm] = useState({ name: '', salary: '', job: '' });
-  const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
 
   const adviceHistoryRef = useRef(adviceHistory);
   adviceHistoryRef.current = adviceHistory;
@@ -414,40 +411,6 @@ export default function InvestmentsPage() {
   const removeInvestment = async (id: string) => {
     await fetch(`/api/investments?id=${id}`, { method: 'DELETE' });
     setInvestments(prev => prev.filter(i => i.id !== id));
-  };
-
-  const addOrUpdateMember = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const body = { name: memberForm.name, salary: parseFloat(memberForm.salary), ...(memberForm.job ? { job: memberForm.job } : {}) };
-    if (editingMemberId) {
-      const res = await fetch('/api/family-members', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: editingMemberId, ...body }),
-      });
-      if (res.ok) {
-        const updated = await res.json();
-        setFamilyMembers(prev => prev.map(m => m.id === editingMemberId ? updated : m));
-      }
-    } else {
-      const res = await fetch('/api/family-members', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (res.ok) {
-        const member = await res.json();
-        setFamilyMembers(prev => [...prev, member]);
-      }
-    }
-    setMemberForm({ name: '', salary: '', job: '' });
-    setEditingMemberId(null);
-    setShowMemberForm(false);
-  };
-
-  const removeMember = async (id: string) => {
-    await fetch(`/api/family-members?id=${id}`, { method: 'DELETE' });
-    setFamilyMembers(prev => prev.filter(m => m.id !== id));
   };
 
   const streamAdvice = async (history: { role: 'user' | 'model'; text: string }[], followUp?: string) => {
@@ -661,76 +624,6 @@ export default function InvestmentsPage() {
           </PanelBody>}
         </Panel>
       )}
-
-      <Panel className="mb-3">
-        <PanelHeader noButton>
-          <div className="d-flex align-items-center">
-            <i className="fa fa-users me-2"></i>Family Members
-            <button className="btn btn-sm btn-success ms-auto" onClick={() => { setShowMemberForm(!showMemberForm); setEditingMemberId(null); setMemberForm({ name: '', salary: '', job: '' }); }}>
-              {showMemberForm ? <><i className="fa fa-times me-1"></i>Cancel</> : <><i className="fa fa-plus me-1"></i>Add Member</>}
-            </button>
-          </div>
-        </PanelHeader>
-        <PanelBody>
-          {showMemberForm && (
-            <form onSubmit={addOrUpdateMember} className="row g-2 mb-3 p-3 bg-light rounded">
-              <div className="col-md-3">
-                <input type="text" className="form-control" placeholder="Name" value={memberForm.name} onChange={e => setMemberForm({ ...memberForm, name: e.target.value })} required />
-              </div>
-              <div className="col-md-3">
-                <input type="text" className="form-control" placeholder="Job title / industry" value={memberForm.job} onChange={e => setMemberForm({ ...memberForm, job: e.target.value })} />
-              </div>
-              <div className="col-md-3">
-                <div className="input-group">
-                  <span className="input-group-text">$</span>
-                  <input type="number" className="form-control" placeholder="Annual salary" step="1" min="0" value={memberForm.salary} onChange={e => setMemberForm({ ...memberForm, salary: e.target.value })} required />
-                </div>
-              </div>
-              <div className="col-md-3">
-                <button type="submit" className="btn btn-success w-100">
-                  {editingMemberId ? <><i className="fa fa-check me-1"></i>Update</> : <><i className="fa fa-plus me-1"></i>Add</>}
-                </button>
-              </div>
-            </form>
-          )}
-          {familyMembers.length === 0 ? (
-            <div className="text-muted text-center py-3">
-              <p className="mb-0">Add family members to track investment ownership and tax brackets.</p>
-            </div>
-          ) : (
-            <div className="d-flex flex-wrap gap-3">
-              {familyMembers.map(m => {
-                const bracket = m.salary <= 18200 ? '0%' : m.salary <= 45000 ? '16%' : m.salary <= 135000 ? '30%' : m.salary <= 190000 ? '37%' : '45%';
-                const memberInvestments = investments.filter(i => i.owner === m.name);
-                const memberValue = memberInvestments.reduce((sum, i) => sum + i.currentValue, 0);
-                return (
-                  <div key={m.id} className="card border mb-0" style={{ minWidth: '220px', flex: '1 1 220px' }}>
-                    <div className="card-body py-2 px-3">
-                      <div className="d-flex align-items-center">
-                        <div className="flex-grow-1">
-                          <div className="fw-bold">{m.name}{m.job ? <span className="fw-normal text-muted ms-1">— {m.job}</span> : ''}</div>
-                          <div className="small text-muted">
-                            Salary: ${m.salary.toLocaleString('en-AU')} <span className="badge bg-secondary ms-1">{bracket} + ML</span>
-                          </div>
-                          <div className="small text-muted">{memberInvestments.length} investments &middot; ${memberValue.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</div>
-                        </div>
-                        <div className="ms-2">
-                          <button className="btn btn-xs btn-primary me-1" onClick={() => { setMemberForm({ name: m.name, salary: String(m.salary), job: m.job || '' }); setEditingMemberId(m.id); setShowMemberForm(true); }} title="Edit">
-                            <i className="fa fa-pencil-alt"></i>
-                          </button>
-                          <button className="btn btn-xs btn-danger" onClick={() => removeMember(m.id)} title="Delete">
-                            <i className="fa fa-times"></i>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </PanelBody>
-      </Panel>
 
       <div className="row">
         <div className="col-12">

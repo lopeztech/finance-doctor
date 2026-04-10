@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
-import type { Expense } from '@/lib/types';
+import type { Expense, FamilyMember } from '@/lib/types';
 
 const CATEGORY_ICONS: Record<string, string> = {
   'Work from Home': 'fa-house-laptop',
@@ -32,8 +32,10 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [financialYear, setFinancialYear] = useState('2025-2026');
+  const [selectedOwner, setSelectedOwner] = useState('');
 
   const fetchExpenses = useCallback(async () => {
     setLoading(true);
@@ -42,18 +44,22 @@ export default function ExpensesPage() {
     setLoading(false);
   }, [financialYear]);
 
-  useEffect(() => { fetchExpenses(); }, [fetchExpenses]);
+  useEffect(() => {
+    fetchExpenses();
+    fetch('/api/family-members').then(r => r.ok ? r.json() : []).then(setFamilyMembers);
+  }, [fetchExpenses]);
 
-  const totalSpend = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const filteredExpenses = selectedOwner ? expenses.filter(e => e.owner === selectedOwner) : expenses;
+  const totalSpend = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
 
-  const categoryTotals = expenses.reduce((acc, e) => {
+  const categoryTotals = filteredExpenses.reduce((acc, e) => {
     acc[e.category] = (acc[e.category] || 0) + e.amount;
     return acc;
   }, {} as Record<string, number>);
   const sortedCategories = Object.entries(categoryTotals).sort(([, a], [, b]) => b - a);
 
   // Monthly breakdown
-  const monthlyTotals = expenses.reduce((acc, e) => {
+  const monthlyTotals = filteredExpenses.reduce((acc, e) => {
     const month = e.date.substring(0, 7); // YYYY-MM
     acc[month] = (acc[month] || 0) + e.amount;
     return acc;
@@ -62,7 +68,7 @@ export default function ExpensesPage() {
   const maxMonthly = Math.max(...Object.values(monthlyTotals), 1);
 
   // Monthly by category
-  const monthlyCategoryTotals = expenses.reduce((acc, e) => {
+  const monthlyCategoryTotals = filteredExpenses.reduce((acc, e) => {
     const month = e.date.substring(0, 7);
     if (!acc[month]) acc[month] = {};
     acc[month][e.category] = (acc[month][e.category] || 0) + e.amount;
@@ -72,7 +78,7 @@ export default function ExpensesPage() {
   const avgMonthly = sortedMonths.length > 0 ? totalSpend / sortedMonths.length : 0;
 
   // Top expenses
-  const topExpenses = [...expenses].sort((a, b) => b.amount - a.amount).slice(0, 10);
+  const topExpenses = [...filteredExpenses].sort((a, b) => b.amount - a.amount).slice(0, 10);
 
   if (loading) {
     return (
@@ -87,7 +93,13 @@ export default function ExpensesPage() {
     <>
       <div className="d-flex align-items-center mb-3">
         <h1 className="page-header mb-0">Expenses</h1>
-        <div className="ms-auto">
+        <div className="ms-auto d-flex gap-2">
+          {familyMembers.length > 0 && (
+            <select className="form-select" value={selectedOwner} onChange={(e) => setSelectedOwner(e.target.value)}>
+              <option value="">All Members</option>
+              {familyMembers.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+            </select>
+          )}
           <select className="form-select" value={financialYear} onChange={(e) => setFinancialYear(e.target.value)}>
             <option value="2025-2026">FY 2025-2026</option>
             <option value="2024-2025">FY 2024-2025</option>
@@ -117,7 +129,7 @@ export default function ExpensesPage() {
           <div className="card border-0 bg-dark text-white mb-3">
             <div className="card-body">
               <div className="text-white text-opacity-75 mb-1">Transactions</div>
-              <h3 className="text-white mb-0">{expenses.length}</h3>
+              <h3 className="text-white mb-0">{filteredExpenses.length}</h3>
             </div>
           </div>
         </div>

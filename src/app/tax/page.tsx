@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
-import type { Expense } from '@/lib/types';
+import type { Expense, FamilyMember } from '@/lib/types';
 
 const CATEGORIES = [
   'Work from Home',
@@ -41,11 +41,8 @@ export default function TaxPage() {
   const [adviceLoading, setAdviceLoading] = useState(false);
   const [followUpInput, setFollowUpInput] = useState('');
   const [adviceCollapsed, setAdviceCollapsed] = useState(false);
-  const [showImport, setShowImport] = useState(false);
-  const [importLoading, setImportLoading] = useState(false);
-  const [importPreview, setImportPreview] = useState<{ date: string; description: string; amount: number; category: string; financialYear: string; duplicate?: boolean }[] | null>(null);
-  const [importDuplicateCount, setImportDuplicateCount] = useState(0);
-  const [importSaving, setImportSaving] = useState(false);
+  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
+  const [selectedOwner, setSelectedOwner] = useState('');
 
   const adviceHistoryRef = useRef(adviceHistory);
   adviceHistoryRef.current = adviceHistory;
@@ -59,6 +56,7 @@ export default function TaxPage() {
   }, []);
 
   useEffect(() => {
+    fetch('/api/family-members').then(r => r.ok ? r.json() : []).then(setFamilyMembers);
     fetch('/api/advice-chat?type=tax')
       .then(res => res.ok ? res.json() : { history: [] })
       .then(data => { if (data.history?.length) setAdviceHistory(data.history); });
@@ -99,55 +97,6 @@ export default function TaxPage() {
   const removeExpense = async (id: string) => {
     await fetch(`/api/expenses?id=${id}`, { method: 'DELETE' });
     setExpenses(prev => prev.filter(e => e.id !== id));
-  };
-
-  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setImportLoading(true);
-    setImportPreview(null);
-    setImportDuplicateCount(0);
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('financialYear', financialYear);
-    const res = await fetch('/api/expenses/import', { method: 'POST', body: formData });
-    if (res.ok) {
-      const data = await res.json();
-      setImportDuplicateCount(data.duplicateCount || 0);
-      // Auto-exclude duplicates from preview
-      setImportPreview(data.preview);
-    } else {
-      const err = await res.json().catch(() => ({ error: 'Import failed' }));
-      alert(err.error || 'Import failed');
-    }
-    setImportLoading(false);
-    e.target.value = '';
-  };
-
-  const updatePreviewCategory = (index: number, category: string) => {
-    setImportPreview(prev => prev ? prev.map((item, i) => i === index ? { ...item, category } : item) : null);
-  };
-
-  const removePreviewRow = (index: number) => {
-    setImportPreview(prev => prev ? prev.filter((_, i) => i !== index) : null);
-  };
-
-  const confirmImport = async () => {
-    const toSave = importPreview?.filter(r => !r.duplicate);
-    if (!toSave?.length) return;
-    setImportSaving(true);
-    const res = await fetch('/api/expenses/import', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ expenses: toSave }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      setExpenses(prev => [...data.saved, ...prev]);
-      setImportPreview(null);
-      setShowImport(false);
-    }
-    setImportSaving(false);
   };
 
   const streamAdvice = async (history: { role: 'user' | 'model'; text: string }[], followUp?: string) => {
@@ -196,8 +145,9 @@ export default function TaxPage() {
     await streamAdvice(updatedHistory.slice(0, -1), question);
   };
 
-  const totalDeductions = expenses.reduce((sum, e) => sum + e.amount, 0);
-  const categoryTotals = expenses.reduce((acc, e) => {
+  const filteredExpenses = selectedOwner ? expenses.filter(e => e.owner === selectedOwner) : expenses;
+  const totalDeductions = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const categoryTotals = filteredExpenses.reduce((acc, e) => {
     acc[e.category] = (acc[e.category] || 0) + e.amount;
     return acc;
   }, {} as Record<string, number>);
@@ -207,7 +157,13 @@ export default function TaxPage() {
     <>
       <div className="d-flex align-items-center mb-3">
         <h1 className="page-header mb-0">Tax Health Check</h1>
-        <div className="ms-auto">
+        <div className="ms-auto d-flex gap-2">
+          {familyMembers.length > 0 && (
+            <select className="form-select" value={selectedOwner} onChange={(e) => setSelectedOwner(e.target.value)}>
+              <option value="">All Members</option>
+              {familyMembers.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+            </select>
+          )}
           <select className="form-select" value={financialYear} onChange={(e) => setFinancialYear(e.target.value)}>
             <option value="2025-2026">FY 2025-2026</option>
             <option value="2024-2025">FY 2024-2025</option>
@@ -263,89 +219,13 @@ export default function TaxPage() {
           <Panel>
             <PanelHeader noButton>
               <div className="d-flex align-items-center">
-                Expenses
-                <button className="btn btn-outline-primary btn-sm ms-auto me-2" onClick={() => { setShowImport(!showImport); setImportPreview(null); }}>
-                  <i className="fa fa-file-csv me-1"></i> Import CSV
-                </button>
-                <button className="btn btn-success btn-sm" onClick={() => setShowForm(!showForm)}>
+                Deductions{selectedOwner ? ` — ${selectedOwner}` : ''}
+                <button className="btn btn-success btn-sm ms-auto" onClick={() => setShowForm(!showForm)}>
                   <i className="fa fa-plus me-1"></i> Add Expense
                 </button>
               </div>
             </PanelHeader>
             <PanelBody>
-              {showImport && (
-                <div className="mb-3 p-3 bg-light rounded">
-                  <h6 className="mb-2"><i className="fa fa-file-csv me-2"></i>Import from CSV</h6>
-                  <p className="text-muted small mb-2">Upload a CSV with Date, Description, and Amount columns. Dr Finance will auto-categorise each expense using AI.</p>
-                  {!importPreview ? (
-                    <div>
-                      <label className="btn btn-outline-primary" htmlFor="csv-upload">
-                        {importLoading ? <><i className="fa fa-spinner fa-spin me-1"></i>Analysing...</> : <><i className="fa fa-upload me-1"></i>Choose File</>}
-                      </label>
-                      <input id="csv-upload" type="file" accept=".csv" className="d-none" onChange={handleImportFile} disabled={importLoading} />
-                    </div>
-                  ) : (
-                    <>
-                      <div className="d-flex align-items-center flex-wrap gap-2 mb-2">
-                        <span className="badge bg-teal">{importPreview.filter(r => !r.duplicate).length} new</span>
-                        {importDuplicateCount > 0 && (
-                          <span className="badge bg-warning text-dark"><i className="fa fa-copy me-1"></i>{importDuplicateCount} duplicates skipped</span>
-                        )}
-                        <span className="text-muted small">Review categories below, then confirm to import.</span>
-                        <button className="btn btn-sm btn-success ms-auto me-2" onClick={confirmImport} disabled={importSaving || importPreview.filter(r => !r.duplicate).length === 0}>
-                          {importSaving ? <><i className="fa fa-spinner fa-spin me-1"></i>Saving...</> : <><i className="fa fa-check me-1"></i>Confirm Import ({importPreview.filter(r => !r.duplicate).length})</>}
-                        </button>
-                        <button className="btn btn-sm btn-outline-secondary" onClick={() => setImportPreview(null)}>
-                          <i className="fa fa-times me-1"></i>Cancel
-                        </button>
-                      </div>
-                      <div className="table-responsive" style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                        <table className="table table-sm table-hover mb-0">
-                          <thead className="sticky-top bg-light">
-                            <tr>
-                              <th></th>
-                              <th>Date</th>
-                              <th>Description</th>
-                              <th className="text-end">Amount</th>
-                              <th>Category (AI)</th>
-                              <th style={{ width: '30px' }}></th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {importPreview.map((row, i) => (
-                              <tr key={i} className={row.duplicate ? 'text-muted' : ''} style={row.duplicate ? { opacity: 0.5 } : undefined}>
-                                <td>
-                                  {row.duplicate && <span className="badge bg-warning text-dark" title="Already exists"><i className="fa fa-copy"></i></span>}
-                                </td>
-                                <td className="small">{new Date(row.date).toLocaleDateString('en-AU')}</td>
-                                <td className="small">{row.description}</td>
-                                <td className="text-end small">${row.amount.toFixed(2)}</td>
-                                <td>
-                                  {row.duplicate ? (
-                                    <span className="small text-muted">Duplicate — will skip</span>
-                                  ) : (
-                                    <select className="form-select form-select-sm" value={row.category} onChange={e => updatePreviewCategory(i, e.target.value)}>
-                                      {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                                    </select>
-                                  )}
-                                </td>
-                                <td>
-                                  {!row.duplicate && (
-                                    <button className="btn btn-xs btn-outline-danger" onClick={() => removePreviewRow(i)} title="Remove">
-                                      <i className="fa fa-times"></i>
-                                    </button>
-                                  )}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-
               {showForm && (
                 <form onSubmit={addExpense} className="row g-2 mb-3 p-3 bg-light rounded">
                   <div className="col-md-2">
@@ -372,7 +252,7 @@ export default function TaxPage() {
 
               {loading ? (
                 <div className="text-center py-5"><i className="fa fa-spinner fa-spin fa-2x"></i></div>
-              ) : expenses.length === 0 ? (
+              ) : filteredExpenses.length === 0 ? (
                 <div className="text-center py-5 text-muted">
                   <i className="fa fa-file-invoice-dollar fa-3x mb-3 d-block"></i>
                   <p>No expenses yet. Add your first expense to get started.</p>
@@ -390,7 +270,7 @@ export default function TaxPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {expenses.map(expense => (
+                      {filteredExpenses.map(expense => (
                         <tr key={expense.id}>
                           <td>{new Date(expense.date).toLocaleDateString('en-AU')}</td>
                           <td>{expense.description}</td>
@@ -448,7 +328,7 @@ export default function TaxPage() {
             </PanelBody>
           </Panel>
 
-          {expenses.length > 0 && (
+          {filteredExpenses.length > 0 && (
             <Panel>
               <PanelHeader noButton>
                 <div className="d-flex align-items-center">
