@@ -31,37 +31,36 @@ Rules:
 
 function parseCSV(text: string): { date: string; description: string; amount: number }[] {
   const lines = text.trim().split('\n');
-  if (lines.length < 2) return [];
+  if (lines.length < 1) return [];
 
-  // Detect header row
-  const header = lines[0].toLowerCase();
-  const hasHeader = header.includes('date') || header.includes('description') || header.includes('amount') || header.includes('narration') || header.includes('debit');
+  // Detect header row — only if first row contains known header keywords
+  const firstRowCols = splitCSVLine(lines[0]);
+  const firstRowLower = firstRowCols.map(c => c.toLowerCase().trim());
+  const hasHeader = firstRowLower.some(c => c.includes('date')) &&
+    (firstRowLower.some(c => c.includes('description') || c.includes('narration') || c.includes('memo') || c.includes('amount') || c.includes('debit')));
 
   const dataLines = hasHeader ? lines.slice(1) : lines;
   const results: { date: string; description: string; amount: number }[] = [];
 
-  // Try to detect column positions from header
+  // Default layout: Date, Amount, Description, Additional Description...
   let dateCol = 0;
-  let descCol = 1;
-  let amountCol = 2;
-
-  let descCols: number[] = [];
+  let amountCol = 1;
+  let descCols: number[] = [2, 3]; // Merge cols 2+ as description by default
 
   if (hasHeader) {
-    const cols = splitCSVLine(lines[0]).map(c => c.toLowerCase().trim());
-    const dateIdx = cols.findIndex(c => c.includes('date'));
-    const amountIdx = cols.findIndex(c => c.includes('amount') || c.includes('debit') || c.includes('value'));
+    const dateIdx = firstRowLower.findIndex(c => c.includes('date'));
+    const amountIdx = firstRowLower.findIndex(c => c.includes('amount') || c.includes('debit') || c.includes('value'));
 
-    // Collect ALL description-like columns to merge them
-    cols.forEach((c, i) => {
+    const headerDescCols: number[] = [];
+    firstRowLower.forEach((c, i) => {
       if (c.includes('description') || c.includes('narration') || c.includes('memo') || c.includes('details') || c.includes('transaction')) {
-        descCols.push(i);
+        headerDescCols.push(i);
       }
     });
 
     if (dateIdx >= 0) dateCol = dateIdx;
-    if (descCols.length > 0) descCol = descCols[0];
     if (amountIdx >= 0) amountCol = amountIdx;
+    if (headerDescCols.length > 0) descCols = headerDescCols;
   }
 
   for (const line of dataLines) {
@@ -71,9 +70,10 @@ function parseCSV(text: string): { date: string; description: string; amount: nu
 
     const rawDate = cols[dateCol]?.trim();
     // Merge all description columns
-    const description = descCols.length > 1
-      ? descCols.map(i => cols[i]?.trim()).filter(Boolean).join(' — ')
-      : cols[descCol]?.trim();
+    const description = descCols
+      .map(i => cols[i]?.trim())
+      .filter(Boolean)
+      .join(' — ');
     const rawAmount = cols[amountCol]?.trim().replace(/[,$"]/g, '');
 
     if (!rawDate || !description || !rawAmount) continue;
