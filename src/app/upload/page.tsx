@@ -40,6 +40,14 @@ interface ImportRow {
   duplicate?: boolean;
 }
 
+function getFinancialYear(date: string): string {
+  const [yearStr, monthStr] = date.split('-');
+  const year = parseInt(yearStr);
+  const month = parseInt(monthStr);
+  if (month >= 7) return `${year}-${year + 1}`;
+  return `${year - 1}-${year}`;
+}
+
 export default function UploadPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
@@ -82,7 +90,7 @@ export default function UploadPage() {
         description: form.description,
         amount: parseFloat(form.amount),
         category: form.category,
-        financialYear,
+        financialYear: getFinancialYear(form.date),
         ...(form.owner ? { owner: form.owner } : {}),
       }),
     });
@@ -118,7 +126,6 @@ export default function UploadPage() {
     setImportDuplicateCount(0);
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('financialYear', financialYear);
     const res = await fetch('/api/expenses/import', { method: 'POST', body: formData });
     if (res.ok) {
       const data = await res.json();
@@ -169,16 +176,7 @@ export default function UploadPage() {
 
   return (
     <>
-      <div className="d-flex align-items-center mb-3">
-        <h1 className="page-header mb-0">Upload & Manage</h1>
-        <div className="ms-auto">
-          <select className="form-select" value={financialYear} onChange={(e) => setFinancialYear(e.target.value)}>
-            <option value="2025-2026">FY 2025-2026</option>
-            <option value="2024-2025">FY 2024-2025</option>
-            <option value="2023-2024">FY 2023-2024</option>
-          </select>
-        </div>
-      </div>
+      <h1 className="page-header">Upload & Manage</h1>
 
       <Panel className="mb-3">
         <PanelHeader noButton>
@@ -191,7 +189,7 @@ export default function UploadPage() {
         </PanelHeader>
         {showImport && (
           <PanelBody>
-            <p className="text-muted small mb-3">Upload a CSV with Date, Amount, Description columns. Dr Finance will auto-categorise each expense using AI.</p>
+            <p className="text-muted small mb-3">Upload a CSV with Date, Amount, Description columns. Financial year is auto-detected from each expense date. Dr Finance will auto-categorise using AI.</p>
 
             {!importPreview ? (
               <div className="d-flex align-items-center gap-3">
@@ -232,6 +230,7 @@ export default function UploadPage() {
                       <tr>
                         <th></th>
                         <th>Date</th>
+                        <th>FY</th>
                         <th>Description</th>
                         <th className="text-end">Amount</th>
                         <th>Category (AI)</th>
@@ -246,6 +245,7 @@ export default function UploadPage() {
                             {row.duplicate && <span className="badge bg-warning text-dark" title="Already exists"><i className="fa fa-copy"></i></span>}
                           </td>
                           <td className="small">{new Date(row.date).toLocaleDateString('en-AU')}</td>
+                          <td className="small text-muted">{row.financialYear}</td>
                           <td className="small">{row.description}</td>
                           <td className="text-end small">${row.amount.toFixed(2)}</td>
                           <td>
@@ -286,11 +286,18 @@ export default function UploadPage() {
       <Panel>
         <PanelHeader noButton>
           <div className="d-flex align-items-center">
-            Expenses — FY {financialYear}
+            Expenses
             <span className="badge bg-secondary ms-2">{expenses.length}</span>
-            <button className="btn btn-success btn-sm ms-auto" onClick={() => setShowForm(!showForm)}>
-              {showForm ? <><i className="fa fa-times me-1"></i>Cancel</> : <><i className="fa fa-plus me-1"></i>Add Expense</>}
-            </button>
+            <div className="ms-auto d-flex gap-2">
+              <select className="form-select form-select-sm" value={financialYear} onChange={(e) => setFinancialYear(e.target.value)} style={{ width: '140px' }}>
+                <option value="2025-2026">FY 2025-2026</option>
+                <option value="2024-2025">FY 2024-2025</option>
+                <option value="2023-2024">FY 2023-2024</option>
+              </select>
+              <button className="btn btn-success btn-sm" onClick={() => setShowForm(!showForm)}>
+                {showForm ? <><i className="fa fa-times me-1"></i>Cancel</> : <><i className="fa fa-plus me-1"></i>Add Expense</>}
+              </button>
+            </div>
           </div>
         </PanelHeader>
         <PanelBody>

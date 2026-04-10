@@ -111,6 +111,15 @@ function splitCSVLine(line: string): string[] {
   return result;
 }
 
+function getFinancialYear(date: string): string {
+  const [yearStr, monthStr] = date.split('-');
+  const year = parseInt(yearStr);
+  const month = parseInt(monthStr);
+  // AU FY: Jul 1 to Jun 30 — Jul-Dec = current/next, Jan-Jun = prev/current
+  if (month >= 7) return `${year}-${year + 1}`;
+  return `${year - 1}-${year}`;
+}
+
 function normaliseDate(raw: string): string | null {
   // Try DD/MM/YYYY or DD-MM-YYYY (Australian format)
   let match = raw.match(/^(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})$/);
@@ -138,7 +147,6 @@ export async function POST(req: NextRequest) {
 
     const formData = await req.formData();
     const file = formData.get('file') as File;
-    const financialYear = (formData.get('financialYear') as string) || '2025-2026';
 
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
@@ -180,11 +188,10 @@ export async function POST(req: NextRequest) {
       categoryMap.set(cat.index, validCategory);
     }
 
-    // Check for duplicates against existing expenses
+    // Check for duplicates against all existing expenses
     const existingSnapshot = await db
       .collection('users').doc(userId)
       .collection('expenses')
-      .where('financialYear', '==', financialYear)
       .get();
 
     const existingSet = new Set(
@@ -194,13 +201,13 @@ export async function POST(req: NextRequest) {
       })
     );
 
-    // Return preview — don't save yet, let user review
+    // Return preview — derive FY from each expense's date
     const preview = parsed.map((p, i) => ({
       date: p.date,
       description: p.description,
       amount: p.amount,
       category: categoryMap.get(i) || 'Other Deductions',
-      financialYear,
+      financialYear: getFinancialYear(p.date),
       duplicate: existingSet.has(`${p.date}|${p.description}|${p.amount}`),
     }));
 
