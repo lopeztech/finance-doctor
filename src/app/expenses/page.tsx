@@ -36,6 +36,8 @@ export default function ExpensesPage() {
   const [loading, setLoading] = useState(true);
   const [financialYear, setFinancialYear] = useState('2025-2026');
   const [selectedOwner, setSelectedOwner] = useState('');
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [reanalysing, setReanalysing] = useState(false);
 
   const fetchExpenses = useCallback(async () => {
     setLoading(true);
@@ -58,16 +60,22 @@ export default function ExpensesPage() {
   }, {} as Record<string, number>);
   const sortedCategories = Object.entries(categoryTotals).sort(([, a], [, b]) => b - a);
 
+  // Group expenses by category
+  const expensesByCategory = filteredExpenses.reduce((acc, e) => {
+    if (!acc[e.category]) acc[e.category] = [];
+    acc[e.category].push(e);
+    return acc;
+  }, {} as Record<string, Expense[]>);
+
   // Monthly breakdown
   const monthlyTotals = filteredExpenses.reduce((acc, e) => {
-    const month = e.date.substring(0, 7); // YYYY-MM
+    const month = e.date.substring(0, 7);
     acc[month] = (acc[month] || 0) + e.amount;
     return acc;
   }, {} as Record<string, number>);
   const sortedMonths = Object.entries(monthlyTotals).sort(([a], [b]) => a.localeCompare(b));
   const maxMonthly = Math.max(...Object.values(monthlyTotals), 1);
 
-  // Monthly by category
   const monthlyCategoryTotals = filteredExpenses.reduce((acc, e) => {
     const month = e.date.substring(0, 7);
     if (!acc[month]) acc[month] = {};
@@ -77,8 +85,27 @@ export default function ExpensesPage() {
 
   const avgMonthly = sortedMonths.length > 0 ? totalSpend / sortedMonths.length : 0;
 
-  // Top expenses
-  const topExpenses = [...filteredExpenses].sort((a, b) => b.amount - a.amount).slice(0, 10);
+  const toggleCategory = (category: string) => {
+    setExpandedCategories(prev => {
+      const next = new Set(prev);
+      if (next.has(category)) next.delete(category);
+      else next.add(category);
+      return next;
+    });
+  };
+
+  const reanalyse = async () => {
+    setReanalysing(true);
+    const res = await fetch('/api/expenses/reanalyse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ financialYear }),
+    });
+    if (res.ok) {
+      await fetchExpenses();
+    }
+    setReanalysing(false);
+  };
 
   if (loading) {
     return (
@@ -147,6 +174,63 @@ export default function ExpensesPage() {
         <div className="col-xl-8">
           <Panel>
             <PanelHeader noButton>
+              <div className="d-flex align-items-center">
+                <i className="fa fa-list me-2"></i>Expenses by Category
+                <button className="btn btn-sm btn-outline-primary ms-auto" onClick={reanalyse} disabled={reanalysing || filteredExpenses.length === 0}>
+                  {reanalysing ? <><i className="fa fa-spinner fa-spin me-1"></i>Re-analysing...</> : <><i className="fa fa-robot me-1"></i>Re-analyse</>}
+                </button>
+              </div>
+            </PanelHeader>
+            <PanelBody>
+              {sortedCategories.length === 0 ? (
+                <div className="text-center py-4 text-muted">No expense data yet.</div>
+              ) : (
+                <div>
+                  {sortedCategories.map(([category, total]) => {
+                    const pct = totalSpend > 0 ? (total / totalSpend) * 100 : 0;
+                    const color = CATEGORY_COLORS[category] || '#6c757d';
+                    const isExpanded = expandedCategories.has(category);
+                    const categoryExpenses = (expensesByCategory[category] || []).sort((a, b) => b.amount - a.amount);
+                    return (
+                      <div key={category} className="mb-2">
+                        <div
+                          className="d-flex align-items-center p-2 rounded"
+                          style={{ cursor: 'pointer', backgroundColor: isExpanded ? 'var(--bs-light)' : 'transparent' }}
+                          onClick={() => toggleCategory(category)}
+                        >
+                          <i className={`fa fa-chevron-${isExpanded ? 'down' : 'right'} me-2 text-muted`} style={{ width: '12px', fontSize: '0.7rem' }}></i>
+                          <i className={`fa ${CATEGORY_ICONS[category] || 'fa-receipt'} me-2`} style={{ color }}></i>
+                          <span className="fw-bold flex-grow-1">{category}</span>
+                          <span className="badge bg-secondary me-2">{categoryExpenses.length}</span>
+                          <span className="fw-bold me-2">${total.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</span>
+                          <span className="small text-muted" style={{ width: '45px', textAlign: 'right' }}>{pct.toFixed(1)}%</span>
+                        </div>
+                        {isExpanded && (
+                          <div className="ms-4 mt-1 mb-2">
+                            <table className="table table-sm table-hover mb-0">
+                              <tbody>
+                                {categoryExpenses.map(e => (
+                                  <tr key={e.id}>
+                                    <td className="small text-muted" style={{ width: '90px' }}>{new Date(e.date).toLocaleDateString('en-AU')}</td>
+                                    <td className="small">{e.description}</td>
+                                    {e.owner && <td className="small text-muted" style={{ width: '80px' }}>{e.owner}</td>}
+                                    <td className="text-end small fw-bold" style={{ width: '90px' }}>${e.amount.toFixed(2)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </PanelBody>
+          </Panel>
+
+          <Panel>
+            <PanelHeader noButton>
               <i className="fa fa-chart-bar me-2"></i>Monthly Spending
             </PanelHeader>
             <PanelBody>
@@ -186,51 +270,12 @@ export default function ExpensesPage() {
               )}
             </PanelBody>
           </Panel>
-
-          <Panel>
-            <PanelHeader noButton>
-              <i className="fa fa-arrow-up-wide-short me-2"></i>Top Expenses
-            </PanelHeader>
-            <PanelBody>
-              {topExpenses.length === 0 ? (
-                <div className="text-center py-4 text-muted">No expenses yet.</div>
-              ) : (
-                <div className="table-responsive">
-                  <table className="table table-sm table-hover mb-0">
-                    <thead>
-                      <tr>
-                        <th>Date</th>
-                        <th>Description</th>
-                        <th>Category</th>
-                        <th className="text-end">Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {topExpenses.map((e, i) => (
-                        <tr key={i}>
-                          <td className="small">{new Date(e.date).toLocaleDateString('en-AU')}</td>
-                          <td className="small">{e.description}</td>
-                          <td>
-                            <span className="badge bg-secondary">
-                              <i className={`fa ${CATEGORY_ICONS[e.category] || 'fa-receipt'} me-1`}></i>
-                              {e.category}
-                            </span>
-                          </td>
-                          <td className="text-end fw-bold">${e.amount.toFixed(2)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </PanelBody>
-          </Panel>
         </div>
 
         <div className="col-xl-4">
           <Panel>
             <PanelHeader noButton>
-              <i className="fa fa-chart-pie me-2"></i>Spending by Category
+              <i className="fa fa-chart-pie me-2"></i>Spending Breakdown
             </PanelHeader>
             <PanelBody>
               {sortedCategories.length === 0 ? (
@@ -289,7 +334,7 @@ export default function ExpensesPage() {
               <div className="mb-2">
                 <div className="d-flex justify-content-between small">
                   <span className="text-muted">Avg per Transaction</span>
-                  <span className="fw-bold">${expenses.length > 0 ? (totalSpend / expenses.length).toFixed(2) : '0.00'}</span>
+                  <span className="fw-bold">${filteredExpenses.length > 0 ? (totalSpend / filteredExpenses.length).toFixed(2) : '0.00'}</span>
                 </div>
               </div>
               <div className="mb-2">
