@@ -28,7 +28,7 @@ describe('Tax Page', () => {
 
   it('fetches expenses on load', async () => {
     render(<TaxPage />);
-    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/expenses?fy=2025-2026'));
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/expenses?fy=all'));
   });
 
   it('shows loading spinner then empty state', async () => {
@@ -65,6 +65,6 @@ describe('Tax Page', () => {
 
   it('renders financial year selector', async () => {
     render(<TaxPage />);
-    expect(screen.getByDisplayValue('FY 2025-2026')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('All Years')).toBeInTheDocument();
   });
 });
