@@ -39,7 +39,7 @@ export default function UploadPage() {
   const [importSaving, setImportSaving] = useState(false);
   const [importOwner, setImportOwner] = useState('');
   const [migrating, setMigrating] = useState(false);
-  const [migrateResult, setMigrateResult] = useState<{ total: number; fixed: number; addedFY: number } | null>(null);
+  const [migrateResult, setMigrateResult] = useState<{ total: number; fixedBasic: number; addedFY: number; setOwner: number; categorised: number } | null>(null);
 
   const fetchExpenses = useCallback(async () => {
     setLoading(true);
@@ -232,7 +232,7 @@ export default function UploadPage() {
               setMigrating(false);
             }}
           >
-            {migrating ? <><i className="fa fa-spinner fa-spin me-1"></i>Fixing...</> : <><i className="fa fa-wrench me-1"></i>Fix Data</>}
+            {migrating ? <><i className="fa fa-spinner fa-spin me-1"></i>Fixing &amp; categorising...</> : <><i className="fa fa-wrench me-1"></i>Fix Data</>}
           </button>
         </div>
       )}
@@ -240,7 +240,11 @@ export default function UploadPage() {
       {migrateResult && (
         <div className="alert alert-info">
           <i className="fa fa-info-circle me-2"></i>
-          Scanned {migrateResult.total} expenses: {migrateResult.addedFY} missing FY backfilled, {migrateResult.fixed} total fixed.
+          Scanned <strong>{migrateResult.total}</strong> expenses:
+          {migrateResult.addedFY > 0 && <span className="ms-2"><strong>{migrateResult.addedFY}</strong> FY backfilled</span>}
+          {migrateResult.setOwner > 0 && <span className="ms-2"><strong>{migrateResult.setOwner}</strong> owner set to Josh</span>}
+          {migrateResult.categorised > 0 && <span className="ms-2"><strong>{migrateResult.categorised}</strong> categorised by AI</span>}
+          {migrateResult.fixedBasic === 0 && migrateResult.categorised === 0 && <span className="ms-2">All data is up to date.</span>}
         </div>
       )}
     </>
