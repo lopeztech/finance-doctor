@@ -133,6 +133,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
+    const db = getDb();
     const text = await file.text();
     const parsed = parseCSV(text);
 
