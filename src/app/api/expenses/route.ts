@@ -9,12 +9,13 @@ export async function GET(req: NextRequest) {
 
   const fy = req.nextUrl.searchParams.get('fy') || '2025-2026';
   const db = getDb();
-  const snapshot = await db
+  let query = db
     .collection('users').doc(userId)
-    .collection('expenses')
-    .where('financialYear', '==', fy)
-    .orderBy('date', 'desc')
-    .get();
+    .collection('expenses') as FirebaseFirestore.Query;
+  if (fy !== 'all') {
+    query = query.where('financialYear', '==', fy);
+  }
+  const snapshot = await query.orderBy('date', 'desc').get();
 
   const expenses: Expense[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Expense));
   return NextResponse.json(expenses);

@@ -52,8 +52,6 @@ export default function UploadPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [loading, setLoading] = useState(true);
-  const [financialYear, setFinancialYear] = useState('2025-2026');
-
   // Add expense form
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -69,10 +67,10 @@ export default function UploadPage() {
 
   const fetchExpenses = useCallback(async () => {
     setLoading(true);
-    const res = await fetch(`/api/expenses?fy=${financialYear}`);
+    const res = await fetch('/api/expenses?fy=all');
     if (res.ok) setExpenses(await res.json());
     setLoading(false);
-  }, [financialYear]);
+  }, []);
 
   useEffect(() => {
     fetchExpenses();
@@ -288,16 +286,9 @@ export default function UploadPage() {
           <div className="d-flex align-items-center">
             Expenses
             <span className="badge bg-secondary ms-2">{expenses.length}</span>
-            <div className="ms-auto d-flex gap-2">
-              <select className="form-select form-select-sm" value={financialYear} onChange={(e) => setFinancialYear(e.target.value)} style={{ width: '140px' }}>
-                <option value="2025-2026">FY 2025-2026</option>
-                <option value="2024-2025">FY 2024-2025</option>
-                <option value="2023-2024">FY 2023-2024</option>
-              </select>
-              <button className="btn btn-success btn-sm" onClick={() => setShowForm(!showForm)}>
-                {showForm ? <><i className="fa fa-times me-1"></i>Cancel</> : <><i className="fa fa-plus me-1"></i>Add Expense</>}
-              </button>
-            </div>
+            <button className="btn btn-success btn-sm ms-auto" onClick={() => setShowForm(!showForm)}>
+              {showForm ? <><i className="fa fa-times me-1"></i>Cancel</> : <><i className="fa fa-plus me-1"></i>Add Expense</>}
+            </button>
           </div>
         </PanelHeader>
         <PanelBody>
@@ -346,6 +337,7 @@ export default function UploadPage() {
                 <thead>
                   <tr>
                     <th>Date</th>
+                    <th>FY</th>
                     <th>Description</th>
                     <th>Category</th>
                     <th>Owner</th>
@@ -357,6 +349,7 @@ export default function UploadPage() {
                   {expenses.map(expense => (
                     <tr key={expense.id}>
                       <td>{new Date(expense.date).toLocaleDateString('en-AU')}</td>
+                      <td className="small text-muted">{expense.financialYear}</td>
                       <td>{expense.description}</td>
                       <td>
                         <span className="badge bg-secondary">
@@ -385,7 +378,7 @@ export default function UploadPage() {
                 </tbody>
                 <tfoot>
                   <tr className="fw-bold">
-                    <td colSpan={4}>Total</td>
+                    <td colSpan={5}>Total</td>
                     <td className="text-end">${expenses.reduce((s, e) => s + e.amount, 0).toFixed(2)}</td>
                     <td></td>
                   </tr>
