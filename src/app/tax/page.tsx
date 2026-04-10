@@ -36,7 +36,7 @@ export default function TaxPage() {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ date: '', description: '', amount: '', category: CATEGORIES[0] });
-  const [financialYear, setFinancialYear] = useState('2025-2026');
+  const [financialYear, setFinancialYear] = useState('all');
   const [adviceHistory, setAdviceHistory] = useState<{ role: 'user' | 'model'; text: string }[]>([]);
   const [adviceLoading, setAdviceLoading] = useState(false);
   const [followUpInput, setFollowUpInput] = useState('');
@@ -165,6 +165,7 @@ export default function TaxPage() {
             </select>
           )}
           <select className="form-select" value={financialYear} onChange={(e) => setFinancialYear(e.target.value)}>
+            <option value="all">All Years</option>
             <option value="2025-2026">FY 2025-2026</option>
             <option value="2024-2025">FY 2024-2025</option>
             <option value="2023-2024">FY 2023-2024</option>

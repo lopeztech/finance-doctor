@@ -37,6 +37,8 @@ export default function UploadPage() {
   const [importDuplicateCount, setImportDuplicateCount] = useState(0);
   const [importSaving, setImportSaving] = useState(false);
   const [importOwner, setImportOwner] = useState('');
+  const [migrating, setMigrating] = useState(false);
+  const [migrateResult, setMigrateResult] = useState<{ total: number; fixed: number; addedFY: number } | null>(null);
 
   const fetchExpenses = useCallback(async () => {
     setLoading(true);
@@ -209,9 +211,34 @@ export default function UploadPage() {
       {loading ? (
         <div className="text-center py-5"><i className="fa fa-spinner fa-spin fa-2x"></i></div>
       ) : expenses.length > 0 && (
-        <div className="alert alert-success">
-          <i className="fa fa-check-circle me-2"></i>
-          <strong>{expenses.length}</strong> expenses uploaded. View them in <a href="/tax" className="alert-link">Tax</a> or <a href="/expenses" className="alert-link">Expenses</a>.
+        <div className="alert alert-success d-flex align-items-center">
+          <div className="flex-grow-1">
+            <i className="fa fa-check-circle me-2"></i>
+            <strong>{expenses.length}</strong> expenses uploaded. View them in <a href="/tax" className="alert-link">Tax</a> or <a href="/expenses" className="alert-link">Expenses</a>.
+          </div>
+          <button
+            className="btn btn-sm btn-outline-dark ms-2"
+            disabled={migrating}
+            onClick={async () => {
+              setMigrating(true);
+              const res = await fetch('/api/expenses/migrate', { method: 'POST' });
+              if (res.ok) {
+                const data = await res.json();
+                setMigrateResult(data);
+                if (data.fixed > 0) fetchExpenses();
+              }
+              setMigrating(false);
+            }}
+          >
+            {migrating ? <><i className="fa fa-spinner fa-spin me-1"></i>Fixing...</> : <><i className="fa fa-wrench me-1"></i>Fix Data</>}
+          </button>
+        </div>
+      )}
+
+      {migrateResult && (
+        <div className="alert alert-info">
+          <i className="fa fa-info-circle me-2"></i>
+          Scanned {migrateResult.total} expenses: {migrateResult.addedFY} missing FY backfilled, {migrateResult.fixed} total fixed.
         </div>
       )}
     </>

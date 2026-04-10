@@ -34,7 +34,7 @@ export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [loading, setLoading] = useState(true);
-  const [financialYear, setFinancialYear] = useState('2025-2026');
+  const [financialYear, setFinancialYear] = useState('all');
   const [selectedOwner, setSelectedOwner] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [reanalysing, setReanalysing] = useState(false);
@@ -128,6 +128,7 @@ export default function ExpensesPage() {
             </select>
           )}
           <select className="form-select" value={financialYear} onChange={(e) => setFinancialYear(e.target.value)}>
+            <option value="all">All Years</option>
             <option value="2025-2026">FY 2025-2026</option>
             <option value="2024-2025">FY 2024-2025</option>
             <option value="2023-2024">FY 2023-2024</option>
