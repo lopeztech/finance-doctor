@@ -5,6 +5,12 @@ import Link from 'next/link';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { Expense, Investment } from '@/lib/types';
 
+interface DashboardTip {
+  icon: string;
+  tip: string;
+  type: 'tax' | 'investment' | 'strategy';
+}
+
 const CATEGORY_ICONS: Record<string, string> = {
   'Work from Home': 'fa-house-laptop',
   'Vehicle & Travel': 'fa-car',
@@ -46,6 +52,8 @@ export default function Dashboard() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tips, setTips] = useState<DashboardTip[]>([]);
+  const [tipsLoading, setTipsLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
@@ -56,6 +64,11 @@ export default function Dashboard() {
       setInvestments(inv);
       setLoading(false);
     });
+
+    fetch('/api/dashboard/tips')
+      .then(r => r.ok ? r.json() : { tips: [] })
+      .then(data => { setTips(data.tips || []); setTipsLoading(false); })
+      .catch(() => setTipsLoading(false));
   }, []);
 
   const totalDeductions = expenses.reduce((sum, e) => sum + e.amount, 0);
@@ -155,6 +168,45 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {(tips.length > 0 || tipsLoading) && (
+        <Panel className="mb-3">
+          <PanelHeader noButton>
+            <div className="d-flex align-items-center">
+              <i className="fa fa-stethoscope me-2"></i>Dr Finance Says
+              <span className="badge bg-teal ms-auto">Daily Tips</span>
+            </div>
+          </PanelHeader>
+          <PanelBody>
+            {tipsLoading ? (
+              <div className="text-center py-3 text-muted">
+                <i className="fa fa-spinner fa-spin me-2"></i>Dr Finance is reviewing your finances...
+              </div>
+            ) : (
+              <div className="row">
+                {tips.map((tip, i) => {
+                  const colors = { tax: 'teal', investment: 'indigo', strategy: 'warning' };
+                  const labels = { tax: 'Tax', investment: 'Portfolio', strategy: 'Strategy' };
+                  const color = colors[tip.type] || 'secondary';
+                  return (
+                    <div key={i} className="col-md-4 mb-2 mb-md-0">
+                      <div className={`d-flex align-items-start p-3 rounded bg-light h-100`}>
+                        <div className={`text-${color} me-3 mt-1`}>
+                          <i className={`fa ${tip.icon} fa-lg`}></i>
+                        </div>
+                        <div>
+                          <span className={`badge bg-${color} mb-1`} style={{ fontSize: '0.65rem' }}>{labels[tip.type] || tip.type}</span>
+                          <p className="mb-0 small">{tip.tip}</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </PanelBody>
+        </Panel>
+      )}
 
       <div className="row">
         <div className="col-xl-6">
