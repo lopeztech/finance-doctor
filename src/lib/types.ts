@@ -4,6 +4,7 @@ export interface Expense {
   description: string;
   amount: number;
   category: string;
+  spendingCategory?: string;
   financialYear: string;
   owner?: string;
 }

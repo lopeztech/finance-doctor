@@ -22,6 +22,7 @@ interface ImportRow {
   description: string;
   amount: number;
   category: string;
+  spendingCategory?: string;
   financialYear: string;
   owner?: string;
   duplicate?: boolean;
@@ -87,6 +88,7 @@ export default function UploadPage() {
       description: r.description,
       amount: r.amount,
       category: r.category,
+      ...(r.spendingCategory ? { spendingCategory: r.spendingCategory } : {}),
       financialYear: r.financialYear,
       ...(importOwner ? { owner: importOwner } : {}),
     }));

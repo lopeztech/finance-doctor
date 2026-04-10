@@ -4,7 +4,7 @@ import { getDb } from '@/lib/firestore';
 import { getGeminiModel } from '@/lib/gemini';
 import type { Expense } from '@/lib/types';
 
-const CATEGORIES = [
+const TAX_CATEGORIES = [
   'Work from Home',
   'Vehicle & Travel',
   'Clothing & Laundry',
@@ -17,15 +17,45 @@ const CATEGORIES = [
   'Other Deductions',
 ];
 
-const CATEGORISE_PROMPT = `You are an Australian tax categorisation engine.
+const SPENDING_CATEGORIES = [
+  'Groceries',
+  'Dining & Takeaway',
+  'Transport',
+  'Utilities & Bills',
+  'Shopping',
+  'Healthcare',
+  'Entertainment',
+  'Subscriptions',
+  'Education',
+  'Insurance',
+  'Home & Garden',
+  'Personal Care',
+  'Travel & Holidays',
+  'Gifts & Donations',
+  'Financial & Banking',
+  'Other',
+];
+
+const TAX_PROMPT = `You are an Australian tax categorisation engine.
 Given a list of expense transactions, re-categorise each one into exactly one of these ATO deduction categories:
-${CATEGORIES.map((c, i) => `${i + 1}. ${c}`).join('\n')}
+${TAX_CATEGORIES.map((c, i) => `${i + 1}. ${c}`).join('\n')}
 
 Rules:
 - Return a JSON array of objects: [{"id": "expense-id", "category": "exact category name"}]
 - Use ONLY the exact category names listed above
 - If unsure, use "Other Deductions"
-- Consider Australian tax context — e.g. "Officeworks" is likely "Tools & Equipment", "Uber" could be "Vehicle & Travel"
+- Consider Australian tax context
+- Do NOT wrap in markdown code fences, return raw JSON only`;
+
+const SPENDING_PROMPT = `You are a personal finance categorisation engine.
+Given a list of expense transactions, categorise each one into exactly one of these spending categories:
+${SPENDING_CATEGORIES.map((c, i) => `${i + 1}. ${c}`).join('\n')}
+
+Rules:
+- Return a JSON array of objects: [{"id": "expense-id", "spendingCategory": "exact category name"}]
+- Use ONLY the exact category names listed above
+- If unsure, use "Other"
+- Consider Australian context — e.g. "Coles" is "Groceries", "Uber" is "Transport", "Netflix" is "Subscriptions"
 - Do NOT wrap in markdown code fences, return raw JSON only`;
 
 export async function POST(req: NextRequest) {
@@ -33,14 +63,17 @@ export async function POST(req: NextRequest) {
     const userId = await getAuthUserId();
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { financialYear } = await req.json();
+    const { financialYear, type } = await req.json();
+    const isSpending = type === 'spending';
     const db = getDb();
 
-    let query = db.collection('users').doc(userId).collection('expenses') as FirebaseFirestore.Query;
+    let snapshot;
     if (financialYear && financialYear !== 'all') {
-      query = query.where('financialYear', '==', financialYear);
+      snapshot = await db.collection('users').doc(userId).collection('expenses')
+        .where('financialYear', '==', financialYear).get();
+    } else {
+      snapshot = await db.collection('users').doc(userId).collection('expenses').get();
     }
-    const snapshot = await query.get();
 
     const expenses: Expense[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Expense));
     if (expenses.length === 0) {
@@ -53,27 +86,32 @@ export async function POST(req: NextRequest) {
     const model = await getGeminiModel();
     const result = await model.generateContent({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      systemInstruction: { role: 'system', parts: [{ text: CATEGORISE_PROMPT }] },
+      systemInstruction: { role: 'system', parts: [{ text: isSpending ? SPENDING_PROMPT : TAX_PROMPT }] },
     });
 
     const responseText = result.response?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
     const cleaned = responseText.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
 
-    let categories: { id: string; category: string }[] = [];
+    let results: { id: string; category?: string; spendingCategory?: string }[] = [];
     try {
-      categories = JSON.parse(cleaned);
+      results = JSON.parse(cleaned);
     } catch {
       return NextResponse.json({ error: 'Failed to parse AI response' }, { status: 500 });
     }
 
-    // Update expenses in Firestore
     const batch = db.batch();
     let updated = 0;
-    for (const cat of categories) {
-      const validCategory = CATEGORIES.includes(cat.category) ? cat.category : null;
-      if (!validCategory) continue;
-      const ref = db.collection('users').doc(userId).collection('expenses').doc(cat.id);
-      batch.update(ref, { category: validCategory });
+    for (const item of results) {
+      const ref = db.collection('users').doc(userId).collection('expenses').doc(item.id);
+      if (isSpending) {
+        const valid = SPENDING_CATEGORIES.includes(item.spendingCategory || '') ? item.spendingCategory : null;
+        if (!valid) continue;
+        batch.update(ref, { spendingCategory: valid });
+      } else {
+        const valid = TAX_CATEGORIES.includes(item.category || '') ? item.category : null;
+        if (!valid) continue;
+        batch.update(ref, { category: valid });
+      }
       updated++;
     }
     await batch.commit();

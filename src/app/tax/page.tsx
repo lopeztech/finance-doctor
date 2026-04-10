@@ -57,6 +57,8 @@ export default function TaxPage() {
   const [selectedOwner, setSelectedOwner] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [reanalysing, setReanalysing] = useState(false);
+  const [sortField, setSortField] = useState<'date' | 'description' | 'amount'>('date');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   const adviceHistoryRef = useRef(adviceHistory);
   adviceHistoryRef.current = adviceHistory;
@@ -158,6 +160,25 @@ export default function TaxPage() {
       return next;
     });
   };
+
+  const toggleSort = (field: 'date' | 'description' | 'amount') => {
+    if (sortField === field) setSortDir(prev => prev === 'asc' ? 'desc' : 'asc');
+    else { setSortField(field); setSortDir(field === 'amount' ? 'desc' : 'asc'); }
+  };
+
+  const sortExpenses = (list: Expense[]) => {
+    return [...list].sort((a, b) => {
+      let cmp = 0;
+      if (sortField === 'date') cmp = a.date.localeCompare(b.date);
+      else if (sortField === 'description') cmp = a.description.localeCompare(b.description);
+      else cmp = a.amount - b.amount;
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  };
+
+  const SortIcon = ({ field }: { field: 'date' | 'description' | 'amount' }) => (
+    <i className={`fa fa-sort${sortField === field ? (sortDir === 'asc' ? '-up' : '-down') : ''} ms-1 text-muted`} style={{ fontSize: '0.7rem' }}></i>
+  );
 
   const filteredExpenses = selectedOwner ? expenses.filter(e => e.owner === selectedOwner) : expenses;
 
@@ -265,7 +286,7 @@ export default function TaxPage() {
                     const pct = totalDeductions > 0 ? (total / totalDeductions) * 100 : 0;
                     const color = CATEGORY_COLORS[category] || '#6c757d';
                     const isExpanded = expandedCategories.has(category);
-                    const catExpenses = (expensesByCategory[category] || []).sort((a, b) => b.amount - a.amount);
+                    const catExpenses = sortExpenses(expensesByCategory[category] || []);
                     return (
                       <div key={category} className="mb-2">
                         <div
@@ -283,13 +304,21 @@ export default function TaxPage() {
                         {isExpanded && (
                           <div className="ms-4 mt-1 mb-2">
                             <table className="table table-sm table-hover mb-0">
+                              <thead>
+                                <tr>
+                                  <th style={{ width: '90px', cursor: 'pointer' }} onClick={(ev) => { ev.stopPropagation(); toggleSort('date'); }}>Date<SortIcon field="date" /></th>
+                                  <th style={{ cursor: 'pointer' }} onClick={(ev) => { ev.stopPropagation(); toggleSort('description'); }}>Description<SortIcon field="description" /></th>
+                                  {catExpenses.some(e => e.owner) && <th style={{ width: '80px' }}>Owner</th>}
+                                  <th className="text-end" style={{ width: '90px', cursor: 'pointer' }} onClick={(ev) => { ev.stopPropagation(); toggleSort('amount'); }}>Amount<SortIcon field="amount" /></th>
+                                </tr>
+                              </thead>
                               <tbody>
                                 {catExpenses.map(e => (
                                   <tr key={e.id}>
-                                    <td className="small text-muted" style={{ width: '90px' }}>{new Date(e.date).toLocaleDateString('en-AU')}</td>
+                                    <td className="small text-muted">{new Date(e.date).toLocaleDateString('en-AU')}</td>
                                     <td className="small">{e.description}</td>
-                                    {e.owner && <td className="small text-muted" style={{ width: '80px' }}>{e.owner}</td>}
-                                    <td className="text-end small fw-bold" style={{ width: '90px' }}>${e.amount.toFixed(2)}</td>
+                                    {catExpenses.some(ex => ex.owner) && <td className="small text-muted">{e.owner || ''}</td>}
+                                    <td className="text-end small fw-bold">${e.amount.toFixed(2)}</td>
                                   </tr>
                                 ))}
                               </tbody>

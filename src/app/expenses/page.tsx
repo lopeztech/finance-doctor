@@ -4,31 +4,46 @@ import { useState, useEffect, useCallback } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { Expense, FamilyMember } from '@/lib/types';
 
-const CATEGORY_ICONS: Record<string, string> = {
-  'Work from Home': 'fa-house-laptop',
-  'Vehicle & Travel': 'fa-car',
-  'Clothing & Laundry': 'fa-shirt',
-  'Self-Education': 'fa-graduation-cap',
-  'Tools & Equipment': 'fa-tools',
-  'Professional Memberships': 'fa-id-card',
-  'Phone & Internet': 'fa-mobile-alt',
-  'Donations': 'fa-hand-holding-heart',
-  'Investment Expenses': 'fa-piggy-bank',
-  'Other Deductions': 'fa-receipt',
+const SPENDING_ICONS: Record<string, string> = {
+  'Groceries': 'fa-cart-shopping',
+  'Dining & Takeaway': 'fa-utensils',
+  'Transport': 'fa-car',
+  'Utilities & Bills': 'fa-bolt',
+  'Shopping': 'fa-bag-shopping',
+  'Healthcare': 'fa-heart-pulse',
+  'Entertainment': 'fa-film',
+  'Subscriptions': 'fa-repeat',
+  'Education': 'fa-graduation-cap',
+  'Insurance': 'fa-shield',
+  'Home & Garden': 'fa-house',
+  'Personal Care': 'fa-spa',
+  'Travel & Holidays': 'fa-plane',
+  'Gifts & Donations': 'fa-gift',
+  'Financial & Banking': 'fa-university',
+  'Other': 'fa-ellipsis',
 };
 
-const CATEGORY_COLORS: Record<string, string> = {
-  'Work from Home': '#20c997',
-  'Vehicle & Travel': '#0d6efd',
-  'Clothing & Laundry': '#6f42c1',
-  'Self-Education': '#fd7e14',
-  'Tools & Equipment': '#6610f2',
-  'Professional Memberships': '#0dcaf0',
-  'Phone & Internet': '#198754',
-  'Donations': '#dc3545',
-  'Investment Expenses': '#ffc107',
-  'Other Deductions': '#6c757d',
+const SPENDING_COLORS: Record<string, string> = {
+  'Groceries': '#20c997',
+  'Dining & Takeaway': '#fd7e14',
+  'Transport': '#0d6efd',
+  'Utilities & Bills': '#ffc107',
+  'Shopping': '#e83e8c',
+  'Healthcare': '#dc3545',
+  'Entertainment': '#6f42c1',
+  'Subscriptions': '#6610f2',
+  'Education': '#0dcaf0',
+  'Insurance': '#198754',
+  'Home & Garden': '#795548',
+  'Personal Care': '#ff69b4',
+  'Travel & Holidays': '#17a2b8',
+  'Gifts & Donations': '#e91e63',
+  'Financial & Banking': '#607d8b',
+  'Other': '#6c757d',
 };
+
+type SortField = 'date' | 'description' | 'amount';
+type SortDir = 'asc' | 'desc';
 
 export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -38,6 +53,8 @@ export default function ExpensesPage() {
   const [selectedOwner, setSelectedOwner] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [reanalysing, setReanalysing] = useState(false);
+  const [sortField, setSortField] = useState<SortField>('date');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
 
   const fetchExpenses = useCallback(async () => {
     setLoading(true);
@@ -54,16 +71,20 @@ export default function ExpensesPage() {
   const filteredExpenses = selectedOwner ? expenses.filter(e => e.owner === selectedOwner) : expenses;
   const totalSpend = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
 
+  // Use spendingCategory, fallback to 'Other' if not set
+  const getSpendingCat = (e: Expense) => e.spendingCategory || 'Other';
+
   const categoryTotals = filteredExpenses.reduce((acc, e) => {
-    acc[e.category] = (acc[e.category] || 0) + e.amount;
+    const cat = getSpendingCat(e);
+    acc[cat] = (acc[cat] || 0) + e.amount;
     return acc;
   }, {} as Record<string, number>);
   const sortedCategories = Object.entries(categoryTotals).sort(([, a], [, b]) => b - a);
 
-  // Group expenses by category
   const expensesByCategory = filteredExpenses.reduce((acc, e) => {
-    if (!acc[e.category]) acc[e.category] = [];
-    acc[e.category].push(e);
+    const cat = getSpendingCat(e);
+    if (!acc[cat]) acc[cat] = [];
+    acc[cat].push(e);
     return acc;
   }, {} as Record<string, Expense[]>);
 
@@ -78,8 +99,9 @@ export default function ExpensesPage() {
 
   const monthlyCategoryTotals = filteredExpenses.reduce((acc, e) => {
     const month = e.date.substring(0, 7);
+    const cat = getSpendingCat(e);
     if (!acc[month]) acc[month] = {};
-    acc[month][e.category] = (acc[month][e.category] || 0) + e.amount;
+    acc[month][cat] = (acc[month][cat] || 0) + e.amount;
     return acc;
   }, {} as Record<string, Record<string, number>>);
 
@@ -94,16 +116,33 @@ export default function ExpensesPage() {
     });
   };
 
+  const toggleSort = (field: SortField) => {
+    if (sortField === field) setSortDir(prev => prev === 'asc' ? 'desc' : 'asc');
+    else { setSortField(field); setSortDir(field === 'amount' ? 'desc' : 'asc'); }
+  };
+
+  const sortExpenses = (list: Expense[]) => {
+    return [...list].sort((a, b) => {
+      let cmp = 0;
+      if (sortField === 'date') cmp = a.date.localeCompare(b.date);
+      else if (sortField === 'description') cmp = a.description.localeCompare(b.description);
+      else cmp = a.amount - b.amount;
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  };
+
+  const SortIcon = ({ field }: { field: SortField }) => (
+    <i className={`fa fa-sort${sortField === field ? (sortDir === 'asc' ? '-up' : '-down') : ''} ms-1 text-muted`} style={{ fontSize: '0.7rem' }}></i>
+  );
+
   const reanalyse = async () => {
     setReanalysing(true);
     const res = await fetch('/api/expenses/reanalyse', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ financialYear }),
+      body: JSON.stringify({ financialYear, type: 'spending' }),
     });
-    if (res.ok) {
-      await fetchExpenses();
-    }
+    if (res.ok) await fetchExpenses();
     setReanalysing(false);
   };
 
@@ -189,9 +228,9 @@ export default function ExpensesPage() {
                 <div>
                   {sortedCategories.map(([category, total]) => {
                     const pct = totalSpend > 0 ? (total / totalSpend) * 100 : 0;
-                    const color = CATEGORY_COLORS[category] || '#6c757d';
+                    const color = SPENDING_COLORS[category] || '#6c757d';
                     const isExpanded = expandedCategories.has(category);
-                    const categoryExpenses = (expensesByCategory[category] || []).sort((a, b) => b.amount - a.amount);
+                    const catExpenses = sortExpenses(expensesByCategory[category] || []);
                     return (
                       <div key={category} className="mb-2">
                         <div
@@ -200,22 +239,30 @@ export default function ExpensesPage() {
                           onClick={() => toggleCategory(category)}
                         >
                           <i className={`fa fa-chevron-${isExpanded ? 'down' : 'right'} me-2 text-muted`} style={{ width: '12px', fontSize: '0.7rem' }}></i>
-                          <i className={`fa ${CATEGORY_ICONS[category] || 'fa-receipt'} me-2`} style={{ color }}></i>
+                          <i className={`fa ${SPENDING_ICONS[category] || 'fa-ellipsis'} me-2`} style={{ color }}></i>
                           <span className="fw-bold flex-grow-1">{category}</span>
-                          <span className="badge bg-secondary me-2">{categoryExpenses.length}</span>
+                          <span className="badge bg-secondary me-2">{catExpenses.length}</span>
                           <span className="fw-bold me-2">${total.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</span>
                           <span className="small text-muted" style={{ width: '45px', textAlign: 'right' }}>{pct.toFixed(1)}%</span>
                         </div>
                         {isExpanded && (
                           <div className="ms-4 mt-1 mb-2">
                             <table className="table table-sm table-hover mb-0">
+                              <thead>
+                                <tr>
+                                  <th style={{ width: '90px', cursor: 'pointer' }} onClick={(ev) => { ev.stopPropagation(); toggleSort('date'); }}>Date<SortIcon field="date" /></th>
+                                  <th style={{ cursor: 'pointer' }} onClick={(ev) => { ev.stopPropagation(); toggleSort('description'); }}>Description<SortIcon field="description" /></th>
+                                  {catExpenses.some(e => e.owner) && <th style={{ width: '80px' }}>Owner</th>}
+                                  <th className="text-end" style={{ width: '90px', cursor: 'pointer' }} onClick={(ev) => { ev.stopPropagation(); toggleSort('amount'); }}>Amount<SortIcon field="amount" /></th>
+                                </tr>
+                              </thead>
                               <tbody>
-                                {categoryExpenses.map(e => (
+                                {catExpenses.map(e => (
                                   <tr key={e.id}>
-                                    <td className="small text-muted" style={{ width: '90px' }}>{new Date(e.date).toLocaleDateString('en-AU')}</td>
+                                    <td className="small text-muted">{new Date(e.date).toLocaleDateString('en-AU')}</td>
                                     <td className="small">{e.description}</td>
-                                    {e.owner && <td className="small text-muted" style={{ width: '80px' }}>{e.owner}</td>}
-                                    <td className="text-end small fw-bold" style={{ width: '90px' }}>${e.amount.toFixed(2)}</td>
+                                    {catExpenses.some(ex => ex.owner) && <td className="small text-muted">{e.owner || ''}</td>}
+                                    <td className="text-end small fw-bold">${e.amount.toFixed(2)}</td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -258,7 +305,7 @@ export default function ExpensesPage() {
                               title={`${cat}: $${catTotal.toFixed(2)}`}
                               style={{
                                 width: `${(catTotal / maxMonthly) * 100}%`,
-                                backgroundColor: CATEGORY_COLORS[cat] || '#6c757d',
+                                backgroundColor: SPENDING_COLORS[cat] || '#6c757d',
                               }}
                             ></div>
                           ))}
@@ -285,11 +332,11 @@ export default function ExpensesPage() {
                 <div>
                   {sortedCategories.map(([category, total]) => {
                     const pct = totalSpend > 0 ? (total / totalSpend) * 100 : 0;
-                    const color = CATEGORY_COLORS[category] || '#6c757d';
+                    const color = SPENDING_COLORS[category] || '#6c757d';
                     return (
                       <div key={category} className="mb-3">
                         <div className="d-flex align-items-center mb-1">
-                          <i className={`fa ${CATEGORY_ICONS[category] || 'fa-receipt'} me-2`} style={{ color }}></i>
+                          <i className={`fa ${SPENDING_ICONS[category] || 'fa-ellipsis'} me-2`} style={{ color }}></i>
                           <span className="flex-grow-1 small">{category}</span>
                           <span className="small fw-bold">${total.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</span>
                           <span className="small text-muted ms-2" style={{ width: '45px', textAlign: 'right' }}>{pct.toFixed(1)}%</span>

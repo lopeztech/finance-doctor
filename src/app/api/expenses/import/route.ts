@@ -17,15 +17,42 @@ const CATEGORIES = [
   'Other Deductions',
 ];
 
-const CATEGORISE_PROMPT = `You are an Australian tax categorisation engine.
-Given a list of expense transactions, categorise each one into exactly one of these ATO deduction categories:
+const SPENDING_CATEGORIES = [
+  'Groceries',
+  'Dining & Takeaway',
+  'Transport',
+  'Utilities & Bills',
+  'Shopping',
+  'Healthcare',
+  'Entertainment',
+  'Subscriptions',
+  'Education',
+  'Insurance',
+  'Home & Garden',
+  'Personal Care',
+  'Travel & Holidays',
+  'Gifts & Donations',
+  'Financial & Banking',
+  'Other',
+];
+
+const CATEGORISE_PROMPT = `You are an Australian financial categorisation engine.
+Given a list of expense transactions, categorise each one into:
+1. A TAX deduction category (for ATO tax purposes)
+2. A SPENDING category (for personal budgeting)
+
+TAX categories (use exactly these names):
 ${CATEGORIES.map((c, i) => `${i + 1}. ${c}`).join('\n')}
 
+SPENDING categories (use exactly these names):
+${SPENDING_CATEGORIES.map((c, i) => `${i + 1}. ${c}`).join('\n')}
+
 Rules:
-- Return a JSON array of objects: [{"index": 0, "category": "exact category name"}]
+- Return a JSON array: [{"index": 0, "category": "tax category name", "spendingCategory": "spending category name"}]
 - Use ONLY the exact category names listed above
-- If unsure, use "Other Deductions"
-- Consider Australian tax context — e.g. "Officeworks" is likely "Tools & Equipment", "Uber" could be "Vehicle & Travel"
+- If unsure about tax category, use "Other Deductions"
+- If unsure about spending category, use "Other"
+- Consider Australian context — e.g. "Coles" is "Groceries", "Uber" is "Transport", "Netflix" is "Subscriptions"
 - Do NOT wrap in markdown code fences, return raw JSON only
 - The index must match the position in the input array (0-based)`;
 
@@ -173,7 +200,7 @@ export async function POST(req: NextRequest) {
     const responseText = result.response?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
     const cleaned = responseText.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
 
-    let categories: { index: number; category: string }[] = [];
+    let categories: { index: number; category: string; spendingCategory?: string }[] = [];
     try {
       categories = JSON.parse(cleaned);
     } catch {
@@ -181,11 +208,12 @@ export async function POST(req: NextRequest) {
       categories = parsed.map((_, i) => ({ index: i, category: 'Other Deductions' }));
     }
 
-    // Build category lookup
+    // Build category lookups
     const categoryMap = new Map<number, string>();
+    const spendingCategoryMap = new Map<number, string>();
     for (const cat of categories) {
-      const validCategory = CATEGORIES.includes(cat.category) ? cat.category : 'Other Deductions';
-      categoryMap.set(cat.index, validCategory);
+      categoryMap.set(cat.index, CATEGORIES.includes(cat.category) ? cat.category : 'Other Deductions');
+      spendingCategoryMap.set(cat.index, SPENDING_CATEGORIES.includes(cat.spendingCategory || '') ? cat.spendingCategory! : 'Other');
     }
 
     // Check for duplicates against all existing expenses
@@ -207,6 +235,7 @@ export async function POST(req: NextRequest) {
       description: p.description,
       amount: p.amount,
       category: categoryMap.get(i) || 'Other Deductions',
+      spendingCategory: spendingCategoryMap.get(i) || 'Other',
       financialYear: getFinancialYear(p.date),
       duplicate: existingSet.has(`${p.date}|${p.description}|${p.amount}`),
     }));
@@ -244,6 +273,7 @@ export async function PUT(req: NextRequest) {
         description: rest.description as string,
         amount: rest.amount as number,
         category: rest.category as string,
+        ...(rest.spendingCategory ? { spendingCategory: rest.spendingCategory as string } : {}),
         financialYear: rest.financialYear as string,
         ...(owner ? { owner: owner as string } : {}),
       };
