@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
-import type { Expense, Investment } from '@/lib/types';
+import type { Expense, Investment, FamilyMember } from '@/lib/types';
 
 interface DashboardTip {
   icon: string;
@@ -51,6 +51,7 @@ const TYPE_COLORS: Record<string, string> = {
 export default function Dashboard() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [investments, setInvestments] = useState<Investment[]>([]);
+  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [tips, setTips] = useState<DashboardTip[]>([]);
   const [tipsLoading, setTipsLoading] = useState(true);
@@ -59,9 +60,11 @@ export default function Dashboard() {
     Promise.all([
       fetch('/api/expenses?fy=2025-2026').then(r => r.ok ? r.json() : []),
       fetch('/api/investments').then(r => r.ok ? r.json() : []),
-    ]).then(([exp, inv]) => {
+      fetch('/api/family-members').then(r => r.ok ? r.json() : []),
+    ]).then(([exp, inv, members]) => {
       setExpenses(exp);
       setInvestments(inv);
+      setFamilyMembers(members);
       setLoading(false);
     });
 
@@ -114,6 +117,51 @@ export default function Dashboard() {
     if (cats >= 4) return { label: 'Fair', color: 'warning', icon: 'fa-heart-crack' };
     return { label: 'Needs Attention', color: 'danger', icon: 'fa-heart-pulse' };
   };
+
+  // Australian 2025-26 tax calculation
+  function calculateTax(taxableIncome: number): number {
+    if (taxableIncome <= 18200) return 0;
+    if (taxableIncome <= 45000) return (taxableIncome - 18200) * 0.16;
+    if (taxableIncome <= 135000) return 4288 + (taxableIncome - 45000) * 0.30;
+    if (taxableIncome <= 190000) return 31288 + (taxableIncome - 135000) * 0.37;
+    return 51638 + (taxableIncome - 190000) * 0.45;
+  }
+
+  function calculateMedicareLevy(taxableIncome: number): number {
+    if (taxableIncome <= 26000) return 0; // Phase-in threshold
+    if (taxableIncome <= 32500) return (taxableIncome - 26000) * 0.10; // Phase-in rate
+    return taxableIncome * 0.02;
+  }
+
+  const taxEstimates = familyMembers.map(member => {
+    const grossIncome = member.salary;
+    // Split deductions evenly across members for now (simplified)
+    const deductions = totalDeductions / (familyMembers.length || 1);
+    const taxableIncome = Math.max(0, grossIncome - deductions);
+    const incomeTax = calculateTax(taxableIncome);
+    const medicare = calculateMedicareLevy(taxableIncome);
+    const totalTax = incomeTax + medicare;
+
+    // Estimate PAYG withheld (tax on gross with no deductions)
+    const paygWithheld = calculateTax(grossIncome) + calculateMedicareLevy(grossIncome);
+    const estimatedRefund = paygWithheld - totalTax;
+    const effectiveRate = grossIncome > 0 ? (totalTax / grossIncome) * 100 : 0;
+
+    return {
+      name: member.name,
+      grossIncome,
+      deductions,
+      taxableIncome,
+      incomeTax,
+      medicare,
+      totalTax,
+      paygWithheld,
+      estimatedRefund,
+      effectiveRate,
+    };
+  });
+
+  const totalFamilyRefund = taxEstimates.reduce((sum, e) => sum + e.estimatedRefund, 0);
 
   const taxHealth = getTaxHealth();
   const investHealth = getInvestmentHealth();
@@ -206,6 +254,90 @@ export default function Dashboard() {
             )}
           </PanelBody>
         </Panel>
+      )}
+
+      {taxEstimates.length > 0 && (
+        <Panel className="mb-3">
+          <PanelHeader noButton>
+            <div className="d-flex align-items-center">
+              <i className="fa fa-calculator me-2"></i>Tax Estimate — FY 2025-26
+              {totalFamilyRefund > 0 && (
+                <span className="badge bg-success ms-auto">
+                  <i className="fa fa-arrow-down me-1"></i>Estimated refund: ${totalFamilyRefund.toLocaleString('en-AU', { minimumFractionDigits: 2 })}
+                </span>
+              )}
+              {totalFamilyRefund < 0 && (
+                <span className="badge bg-danger ms-auto">
+                  <i className="fa fa-arrow-up me-1"></i>Estimated owing: ${Math.abs(totalFamilyRefund).toLocaleString('en-AU', { minimumFractionDigits: 2 })}
+                </span>
+              )}
+            </div>
+          </PanelHeader>
+          <PanelBody>
+            <div className="table-responsive">
+              <table className="table table-sm mb-0">
+                <thead>
+                  <tr>
+                    <th>Member</th>
+                    <th className="text-end">Gross Income</th>
+                    <th className="text-end">Deductions</th>
+                    <th className="text-end">Taxable Income</th>
+                    <th className="text-end">Income Tax</th>
+                    <th className="text-end">Medicare</th>
+                    <th className="text-end">PAYG Withheld</th>
+                    <th className="text-end">Est. Refund</th>
+                    <th className="text-end">Effective Rate</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {taxEstimates.map((est, i) => (
+                    <tr key={i}>
+                      <td className="fw-bold">{est.name}</td>
+                      <td className="text-end">${est.grossIncome.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</td>
+                      <td className="text-end text-teal">${est.deductions.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</td>
+                      <td className="text-end">${est.taxableIncome.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</td>
+                      <td className="text-end">${est.incomeTax.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</td>
+                      <td className="text-end">${est.medicare.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</td>
+                      <td className="text-end text-muted">${est.paygWithheld.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</td>
+                      <td className={`text-end fw-bold ${est.estimatedRefund >= 0 ? 'text-success' : 'text-danger'}`}>
+                        {est.estimatedRefund >= 0 ? '+' : ''}{est.estimatedRefund.toLocaleString('en-AU', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="text-end text-muted">{est.effectiveRate.toFixed(1)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+                {taxEstimates.length > 1 && (
+                  <tfoot>
+                    <tr className="fw-bold">
+                      <td>Total</td>
+                      <td className="text-end">${taxEstimates.reduce((s, e) => s + e.grossIncome, 0).toLocaleString('en-AU', { minimumFractionDigits: 2 })}</td>
+                      <td className="text-end text-teal">${totalDeductions.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</td>
+                      <td className="text-end">${taxEstimates.reduce((s, e) => s + e.taxableIncome, 0).toLocaleString('en-AU', { minimumFractionDigits: 2 })}</td>
+                      <td className="text-end">${taxEstimates.reduce((s, e) => s + e.incomeTax, 0).toLocaleString('en-AU', { minimumFractionDigits: 2 })}</td>
+                      <td className="text-end">${taxEstimates.reduce((s, e) => s + e.medicare, 0).toLocaleString('en-AU', { minimumFractionDigits: 2 })}</td>
+                      <td className="text-end text-muted">${taxEstimates.reduce((s, e) => s + e.paygWithheld, 0).toLocaleString('en-AU', { minimumFractionDigits: 2 })}</td>
+                      <td className={`text-end ${totalFamilyRefund >= 0 ? 'text-success' : 'text-danger'}`}>
+                        {totalFamilyRefund >= 0 ? '+' : ''}{totalFamilyRefund.toLocaleString('en-AU', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+            <p className="text-muted small mt-2 mb-0">
+              <i className="fa fa-info-circle me-1"></i>
+              Estimate based on 2025-26 tax rates. PAYG assumes standard withholding on gross salary. Deductions split evenly across members. This is not tax advice — consult your accountant.
+            </p>
+          </PanelBody>
+        </Panel>
+      )}
+
+      {familyMembers.length === 0 && expenses.length > 0 && (
+        <div className="alert alert-info mb-3">
+          <i className="fa fa-info-circle me-2"></i>
+          <Link href="/investments" className="alert-link">Add family members</Link> with their salaries to see a personalised tax estimate on the dashboard.
+        </div>
       )}
 
       <div className="row">
