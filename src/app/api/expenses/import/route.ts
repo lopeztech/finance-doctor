@@ -187,33 +187,61 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No valid rows found in CSV. Expected columns: Date, Description, Amount' }, { status: 400 });
     }
 
-    // Categorise with Gemini
-    const descriptions = parsed.map((p, i) => `${i}. "${p.description}" ($${p.amount.toFixed(2)})`).join('\n');
-    const prompt = `Categorise these ${parsed.length} expense transactions:\n${descriptions}`;
+    // Load saved category rules
+    const rulesSnapshot = await db.collection('users').doc(userId).collection('category-rules').get();
+    const rules = rulesSnapshot.docs.map(doc => doc.data() as { pattern: string; taxCategory?: string; spendingCategory?: string });
 
-    const model = await getGeminiModel();
-    const result = await model.generateContent({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      systemInstruction: { role: 'system', parts: [{ text: CATEGORISE_PROMPT }] },
-    });
+    // Find matching rule for a description
+    const findRule = (description: string) => {
+      const lower = description.toLowerCase();
+      return rules.find(r => lower.includes(r.pattern));
+    };
 
-    const responseText = result.response?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
-    const cleaned = responseText.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
+    // Only send to Gemini expenses without a matching rule
+    const needsAI = parsed.filter((p, i) => { const r = findRule(p.description); return !r || (!r.taxCategory && !r.spendingCategory); });
+    const aiIndexMap = new Map<number, number>(); // maps AI index back to parsed index
+    let aiIdx = 0;
+    parsed.forEach((p, i) => { const r = findRule(p.description); if (!r || (!r.taxCategory && !r.spendingCategory)) { aiIndexMap.set(aiIdx++, i); } });
 
-    let categories: { index: number; category: string; spendingCategory?: string }[] = [];
-    try {
-      categories = JSON.parse(cleaned);
-    } catch {
-      // If Gemini response isn't valid JSON, default all to Other
-      categories = parsed.map((_, i) => ({ index: i, category: 'Other Deductions' }));
-    }
+    // Categorise with Gemini (only items without rules)
+    const descriptions = needsAI.map((p, i) => `${i}. "${p.description}" ($${p.amount.toFixed(2)})`).join('\n');
+    const prompt = needsAI.length > 0 ? `Categorise these ${needsAI.length} expense transactions:\n${descriptions}` : '';
 
-    // Build category lookups
+    // Build category lookups — start with rules
     const categoryMap = new Map<number, string>();
     const spendingCategoryMap = new Map<number, string>();
-    for (const cat of categories) {
-      categoryMap.set(cat.index, CATEGORIES.includes(cat.category) ? cat.category : 'Other Deductions');
-      spendingCategoryMap.set(cat.index, SPENDING_CATEGORIES.includes(cat.spendingCategory || '') ? cat.spendingCategory! : 'Other');
+
+    // Apply saved rules first
+    parsed.forEach((p, i) => {
+      const rule = findRule(p.description);
+      if (rule?.taxCategory) categoryMap.set(i, rule.taxCategory);
+      if (rule?.spendingCategory) spendingCategoryMap.set(i, rule.spendingCategory);
+    });
+
+    // Call Gemini for items without rules
+    if (needsAI.length > 0) {
+      const model = await getGeminiModel();
+      const result = await model.generateContent({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        systemInstruction: { role: 'system', parts: [{ text: CATEGORISE_PROMPT }] },
+      });
+
+      const responseText = result.response?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+      const cleaned = responseText.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
+
+      let categories: { index: number; category: string; spendingCategory?: string }[] = [];
+      try {
+        categories = JSON.parse(cleaned);
+      } catch {
+        categories = needsAI.map((_, i) => ({ index: i, category: 'Other Deductions' }));
+      }
+
+      for (const cat of categories) {
+        const origIdx = aiIndexMap.get(cat.index);
+        if (origIdx === undefined) continue;
+        if (!categoryMap.has(origIdx)) categoryMap.set(origIdx, CATEGORIES.includes(cat.category) ? cat.category : 'Other Deductions');
+        if (!spendingCategoryMap.has(origIdx)) spendingCategoryMap.set(origIdx, SPENDING_CATEGORIES.includes(cat.spendingCategory || '') ? cat.spendingCategory! : 'Other');
+      }
     }
 
     // Check for duplicates against all existing expenses

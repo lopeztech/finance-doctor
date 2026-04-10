@@ -59,6 +59,7 @@ export default function TaxPage() {
   const [reanalysing, setReanalysing] = useState(false);
   const [sortField, setSortField] = useState<'date' | 'description' | 'amount'>('date');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
 
   const adviceHistoryRef = useRef(adviceHistory);
   adviceHistoryRef.current = adviceHistory;
@@ -88,12 +89,22 @@ export default function TaxPage() {
   useEffect(() => { fetchExpenses(); }, [fetchExpenses]);
 
   const updateExpenseCategory = async (id: string, category: string) => {
+    const expense = expenses.find(e => e.id === id);
     await fetch('/api/expenses', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, category }),
     });
     setExpenses(prev => prev.map(e => e.id === id ? { ...e, category } : e));
+    setEditingExpenseId(null);
+    // Save rule for future imports
+    if (expense) {
+      fetch('/api/category-rules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pattern: expense.description, taxCategory: category }),
+      });
+    }
   };
 
   const reanalyseOther = async () => {
@@ -310,6 +321,7 @@ export default function TaxPage() {
                                   <th style={{ cursor: 'pointer' }} onClick={(ev) => { ev.stopPropagation(); toggleSort('description'); }}>Description<SortIcon field="description" /></th>
                                   {catExpenses.some(e => e.owner) && <th style={{ width: '80px' }}>Owner</th>}
                                   <th className="text-end" style={{ width: '90px', cursor: 'pointer' }} onClick={(ev) => { ev.stopPropagation(); toggleSort('amount'); }}>Amount<SortIcon field="amount" /></th>
+                                  <th style={{ width: '140px' }}></th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -319,6 +331,17 @@ export default function TaxPage() {
                                     <td className="small">{e.description}</td>
                                     {catExpenses.some(ex => ex.owner) && <td className="small text-muted">{e.owner || ''}</td>}
                                     <td className="text-end small fw-bold">${e.amount.toFixed(2)}</td>
+                                    <td style={{ width: '140px' }}>
+                                      {editingExpenseId === e.id ? (
+                                        <select className="form-select form-select-sm" autoFocus value={e.category} onChange={ev => updateExpenseCategory(e.id, ev.target.value)} onBlur={() => setEditingExpenseId(null)}>
+                                          {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                        </select>
+                                      ) : (
+                                        <button className="btn btn-xs btn-outline-secondary" onClick={(ev) => { ev.stopPropagation(); setEditingExpenseId(e.id); }} title="Change category">
+                                          <i className="fa fa-pen-to-square"></i>
+                                        </button>
+                                      )}
+                                    </td>
                                   </tr>
                                 ))}
                               </tbody>

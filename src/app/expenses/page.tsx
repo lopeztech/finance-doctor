@@ -42,6 +42,8 @@ const SPENDING_COLORS: Record<string, string> = {
   'Other': '#6c757d',
 };
 
+const SPENDING_CATEGORIES = Object.keys(SPENDING_ICONS);
+
 type SortField = 'date' | 'description' | 'amount';
 type SortDir = 'asc' | 'desc';
 
@@ -55,6 +57,7 @@ export default function ExpensesPage() {
   const [reanalysing, setReanalysing] = useState(false);
   const [sortField, setSortField] = useState<SortField>('date');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
 
   const fetchExpenses = useCallback(async () => {
     setLoading(true);
@@ -67,6 +70,24 @@ export default function ExpensesPage() {
     fetchExpenses();
     fetch('/api/family-members').then(r => r.ok ? r.json() : []).then(setFamilyMembers);
   }, [fetchExpenses]);
+
+  const updateExpenseSpendingCategory = async (id: string, spendingCategory: string) => {
+    const expense = expenses.find(e => e.id === id);
+    await fetch('/api/expenses', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, spendingCategory }),
+    });
+    setExpenses(prev => prev.map(e => e.id === id ? { ...e, spendingCategory } : e));
+    setEditingExpenseId(null);
+    if (expense) {
+      fetch('/api/category-rules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pattern: expense.description, spendingCategory }),
+      });
+    }
+  };
 
   const filteredExpenses = selectedOwner ? expenses.filter(e => e.owner === selectedOwner) : expenses;
   const totalSpend = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
@@ -254,6 +275,7 @@ export default function ExpensesPage() {
                                   <th style={{ cursor: 'pointer' }} onClick={(ev) => { ev.stopPropagation(); toggleSort('description'); }}>Description<SortIcon field="description" /></th>
                                   {catExpenses.some(e => e.owner) && <th style={{ width: '80px' }}>Owner</th>}
                                   <th className="text-end" style={{ width: '90px', cursor: 'pointer' }} onClick={(ev) => { ev.stopPropagation(); toggleSort('amount'); }}>Amount<SortIcon field="amount" /></th>
+                                  <th style={{ width: '140px' }}></th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -263,6 +285,17 @@ export default function ExpensesPage() {
                                     <td className="small">{e.description}</td>
                                     {catExpenses.some(ex => ex.owner) && <td className="small text-muted">{e.owner || ''}</td>}
                                     <td className="text-end small fw-bold">${e.amount.toFixed(2)}</td>
+                                    <td>
+                                      {editingExpenseId === e.id ? (
+                                        <select className="form-select form-select-sm" autoFocus value={getSpendingCat(e)} onChange={ev => updateExpenseSpendingCategory(e.id, ev.target.value)} onBlur={() => setEditingExpenseId(null)}>
+                                          {SPENDING_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                        </select>
+                                      ) : (
+                                        <button className="btn btn-xs btn-outline-secondary" onClick={(ev) => { ev.stopPropagation(); setEditingExpenseId(e.id); }} title="Change category">
+                                          <i className="fa fa-pen-to-square"></i>
+                                        </button>
+                                      )}
+                                    </td>
                                   </tr>
                                 ))}
                               </tbody>
