@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { Expense, Investment, FamilyMember } from '@/lib/types';
@@ -49,6 +49,7 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 export default function Dashboard() {
+  const [financialYear, setFinancialYear] = useState('2025-2026');
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
@@ -56,23 +57,29 @@ export default function Dashboard() {
   const [tips, setTips] = useState<DashboardTip[]>([]);
   const [tipsLoading, setTipsLoading] = useState(true);
 
+  const fetchExpenses = useCallback(async () => {
+    const res = await fetch(`/api/expenses?fy=${financialYear}`);
+    if (res.ok) setExpenses(await res.json());
+  }, [financialYear]);
+
   useEffect(() => {
     Promise.all([
-      fetch('/api/expenses?fy=2025-2026').then(r => r.ok ? r.json() : []),
-      fetch('/api/investments').then(r => r.ok ? r.json() : []),
-      fetch('/api/family-members').then(r => r.ok ? r.json() : []),
-    ]).then(([exp, inv, members]) => {
-      setExpenses(exp);
-      setInvestments(inv);
-      setFamilyMembers(members);
-      setLoading(false);
-    });
+      fetchExpenses(),
+      fetch('/api/investments').then(r => r.ok ? r.json() : []).then(setInvestments),
+      fetch('/api/family-members').then(r => r.ok ? r.json() : []).then(setFamilyMembers),
+    ]).then(() => setLoading(false));
 
     fetch('/api/dashboard/tips')
       .then(r => r.ok ? r.json() : { tips: [] })
       .then(data => { setTips(data.tips || []); setTipsLoading(false); })
       .catch(() => setTipsLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Refetch expenses when FY changes (after initial load)
+  useEffect(() => {
+    if (!loading) fetchExpenses();
+  }, [financialYear, fetchExpenses, loading]);
 
   const totalDeductions = expenses.reduce((sum, e) => sum + e.amount, 0);
   const categoryTotals = expenses.reduce((acc, e) => {
@@ -177,7 +184,16 @@ export default function Dashboard() {
 
   return (
     <>
-      <h1 className="page-header">Dashboard</h1>
+      <div className="d-flex align-items-center mb-3">
+        <h1 className="page-header mb-0">Dashboard</h1>
+        <div className="ms-auto">
+          <select className="form-select" value={financialYear} onChange={(e) => setFinancialYear(e.target.value)}>
+            <option value="2025-2026">FY 2025-2026</option>
+            <option value="2024-2025">FY 2024-2025</option>
+            <option value="2023-2024">FY 2023-2024</option>
+          </select>
+        </div>
+      </div>
 
       <div className="row mb-3">
         <div className="col-lg-3">
@@ -260,7 +276,7 @@ export default function Dashboard() {
         <Panel className="mb-3">
           <PanelHeader noButton>
             <div className="d-flex align-items-center">
-              <i className="fa fa-calculator me-2"></i>Tax Estimate — FY 2025-26
+              <i className="fa fa-calculator me-2"></i>Tax Estimate — FY {financialYear}
               {totalFamilyRefund > 0 && (
                 <span className="badge bg-success ms-auto">
                   <i className="fa fa-arrow-down me-1"></i>Estimated refund: ${totalFamilyRefund.toLocaleString('en-AU', { minimumFractionDigits: 2 })}
@@ -327,7 +343,7 @@ export default function Dashboard() {
             </div>
             <p className="text-muted small mt-2 mb-0">
               <i className="fa fa-info-circle me-1"></i>
-              Estimate based on 2025-26 tax rates. PAYG assumes standard withholding on gross salary. Deductions split evenly across members. This is not tax advice — consult your accountant.
+              Estimate based on FY {financialYear} tax rates. PAYG assumes standard withholding on gross salary. Deductions split evenly across members. This is not tax advice — consult your accountant.
             </p>
           </PanelBody>
         </Panel>
@@ -403,7 +419,7 @@ export default function Dashboard() {
               {expenses.length === 0 ? (
                 <div className="text-center py-4 text-muted">
                   <i className="fa fa-file-invoice-dollar fa-2x mb-2 d-block"></i>
-                  <p className="mb-2">No expenses tracked for FY 2025-2026</p>
+                  <p className="mb-2">No expenses tracked for FY {financialYear}</p>
                   <Link href="/tax" className="btn btn-sm btn-teal">Add Expenses</Link>
                 </div>
               ) : (
