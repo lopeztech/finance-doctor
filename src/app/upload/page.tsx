@@ -17,19 +17,6 @@ const CATEGORIES = [
   'Other Deductions',
 ];
 
-const CATEGORY_ICONS: Record<string, string> = {
-  'Work from Home': 'fa-house-laptop',
-  'Vehicle & Travel': 'fa-car',
-  'Clothing & Laundry': 'fa-shirt',
-  'Self-Education': 'fa-graduation-cap',
-  'Tools & Equipment': 'fa-tools',
-  'Professional Memberships': 'fa-id-card',
-  'Phone & Internet': 'fa-mobile-alt',
-  'Donations': 'fa-hand-holding-heart',
-  'Investment Expenses': 'fa-piggy-bank',
-  'Other Deductions': 'fa-receipt',
-};
-
 interface ImportRow {
   date: string;
   description: string;
@@ -40,25 +27,16 @@ interface ImportRow {
   duplicate?: boolean;
 }
 
-function getFinancialYear(date: string): string {
-  const [yearStr, monthStr] = date.split('-');
-  const year = parseInt(yearStr);
-  const month = parseInt(monthStr);
-  if (month >= 7) return `${year}-${year + 1}`;
-  return `${year - 1}-${year}`;
-}
-
 export default function UploadPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [loading, setLoading] = useState(true);
-  // CSV import
   const [showImport, setShowImport] = useState(false);
   const [importLoading, setImportLoading] = useState(false);
   const [importPreview, setImportPreview] = useState<ImportRow[] | null>(null);
   const [importDuplicateCount, setImportDuplicateCount] = useState(0);
   const [importSaving, setImportSaving] = useState(false);
-  const [importDefaultOwner, setImportDefaultOwner] = useState('');
+  const [importOwner, setImportOwner] = useState('');
 
   const fetchExpenses = useCallback(async () => {
     setLoading(true);
@@ -72,7 +50,6 @@ export default function UploadPage() {
     fetch('/api/family-members').then(r => r.ok ? r.json() : []).then(setFamilyMembers);
   }, [fetchExpenses]);
 
-  // CSV import handlers
   const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -85,12 +62,7 @@ export default function UploadPage() {
     if (res.ok) {
       const data = await res.json();
       setImportDuplicateCount(data.duplicateCount || 0);
-      // Apply default owner to all non-duplicate rows
-      const preview = data.preview.map((row: ImportRow) => ({
-        ...row,
-        owner: row.duplicate ? undefined : importDefaultOwner,
-      }));
-      setImportPreview(preview);
+      setImportPreview(data.preview);
     } else {
       const err = await res.json().catch(() => ({ error: 'Import failed' }));
       alert(err.error || 'Import failed');
@@ -103,16 +75,19 @@ export default function UploadPage() {
     setImportPreview(prev => prev ? prev.map((item, i) => i === index ? { ...item, category } : item) : null);
   };
 
-  const updatePreviewOwner = (index: number, owner: string) => {
-    setImportPreview(prev => prev ? prev.map((item, i) => i === index ? { ...item, owner } : item) : null);
-  };
-
   const removePreviewRow = (index: number) => {
     setImportPreview(prev => prev ? prev.filter((_, i) => i !== index) : null);
   };
 
   const confirmImport = async () => {
-    const toSave = importPreview?.filter(r => !r.duplicate);
+    const toSave = importPreview?.filter(r => !r.duplicate).map(r => ({
+      date: r.date,
+      description: r.description,
+      amount: r.amount,
+      category: r.category,
+      financialYear: r.financialYear,
+      ...(importOwner ? { owner: importOwner } : {}),
+    }));
     if (!toSave?.length) return;
     setImportSaving(true);
     const res = await fetch('/api/expenses/import', {
@@ -123,11 +98,12 @@ export default function UploadPage() {
     if (res.ok) {
       setImportPreview(null);
       setShowImport(false);
-      // Refetch to pick up all imported expenses (may span multiple FYs)
       fetchExpenses();
     }
     setImportSaving(false);
   };
+
+  const newCount = importPreview?.filter(r => !r.duplicate).length || 0;
 
   return (
     <>
@@ -150,8 +126,8 @@ export default function UploadPage() {
               <div className="d-flex align-items-center gap-3">
                 {familyMembers.length > 0 && (
                   <div>
-                    <label className="form-label text-muted small mb-1">Default owner</label>
-                    <select className="form-select form-select-sm" value={importDefaultOwner} onChange={e => setImportDefaultOwner(e.target.value)} style={{ width: '200px' }}>
+                    <label className="form-label text-muted small mb-1">Owner</label>
+                    <select className="form-select form-select-sm" value={importOwner} onChange={e => setImportOwner(e.target.value)} style={{ width: '200px' }}>
                       <option value="">Unassigned</option>
                       {familyMembers.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
                     </select>
@@ -167,13 +143,14 @@ export default function UploadPage() {
             ) : (
               <>
                 <div className="d-flex align-items-center flex-wrap gap-2 mb-2">
-                  <span className="badge bg-teal">{importPreview.filter(r => !r.duplicate).length} new</span>
+                  <span className="badge bg-teal">{newCount} new</span>
                   {importDuplicateCount > 0 && (
                     <span className="badge bg-warning text-dark"><i className="fa fa-copy me-1"></i>{importDuplicateCount} duplicates skipped</span>
                   )}
-                  <span className="text-muted small">Review categories and owners, then confirm.</span>
-                  <button className="btn btn-sm btn-success ms-auto me-2" onClick={confirmImport} disabled={importSaving || importPreview.filter(r => !r.duplicate).length === 0}>
-                    {importSaving ? <><i className="fa fa-spinner fa-spin me-1"></i>Saving...</> : <><i className="fa fa-check me-1"></i>Confirm Import ({importPreview.filter(r => !r.duplicate).length})</>}
+                  {importOwner && <span className="badge bg-primary"><i className="fa fa-user me-1"></i>{importOwner}</span>}
+                  <span className="text-muted small">Review categories, then confirm.</span>
+                  <button className="btn btn-sm btn-success ms-auto me-2" onClick={confirmImport} disabled={importSaving || newCount === 0}>
+                    {importSaving ? <><i className="fa fa-spinner fa-spin me-1"></i>Saving...</> : <><i className="fa fa-check me-1"></i>Confirm Import ({newCount})</>}
                   </button>
                   <button className="btn btn-sm btn-outline-secondary" onClick={() => setImportPreview(null)}>
                     <i className="fa fa-times me-1"></i>Cancel
@@ -189,7 +166,6 @@ export default function UploadPage() {
                         <th>Description</th>
                         <th className="text-end">Amount</th>
                         <th>Category (AI)</th>
-                        <th>Owner</th>
                         <th style={{ width: '30px' }}></th>
                       </tr>
                     </thead>
@@ -209,14 +185,6 @@ export default function UploadPage() {
                             ) : (
                               <select className="form-select form-select-sm" value={row.category} onChange={e => updatePreviewCategory(i, e.target.value)}>
                                 {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                              </select>
-                            )}
-                          </td>
-                          <td>
-                            {!row.duplicate && familyMembers.length > 0 && (
-                              <select className="form-select form-select-sm" value={row.owner || ''} onChange={e => updatePreviewOwner(i, e.target.value)}>
-                                <option value="">Unassigned</option>
-                                {familyMembers.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
                               </select>
                             )}
                           </td>
