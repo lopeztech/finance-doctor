@@ -92,7 +92,7 @@ export async function POST() {
   }
 }
 
-// PUT — AI categorisation, processes one batch at a time. Call repeatedly.
+// PUT — Categorisation: rules first, then AI for the rest. One batch at a time.
 export async function PUT(req: NextRequest) {
   try {
     const userId = await getAuthUserId();
@@ -100,6 +100,16 @@ export async function PUT(req: NextRequest) {
 
     const { batchSize = 50 } = await req.json().catch(() => ({}));
     const db = getDb();
+
+    // Load saved category rules
+    const rulesSnapshot = await db.collection('users').doc(userId).collection('category-rules').get();
+    const rules = rulesSnapshot.docs.map(doc => doc.data() as { pattern: string; taxCategory?: string; spendingCategory?: string });
+
+    const findRule = (description: string) => {
+      const lower = description.toLowerCase();
+      return rules.find(r => lower.includes(r.pattern));
+    };
+
     const snapshot = await db.collection('users').doc(userId).collection('expenses').get();
 
     const needsCategorisation = snapshot.docs.filter(doc => {
@@ -108,50 +118,80 @@ export async function PUT(req: NextRequest) {
     });
 
     if (needsCategorisation.length === 0) {
-      return NextResponse.json({ categorised: 0, remaining: 0 });
+      return NextResponse.json({ categorised: 0, remaining: 0, ruleApplied: 0 });
     }
 
     const chunk = needsCategorisation.slice(0, batchSize);
-    const descriptions = chunk.map((doc, idx) => {
-      const d = doc.data();
-      return `${idx}. "${d.description}" ($${d.amount?.toFixed(2) || '0.00'})`;
-    }).join('\n');
 
-    const model = await getGeminiModel();
-    const result = await model.generateContent({
-      contents: [{ role: 'user', parts: [{ text: `Categorise these ${chunk.length} expense transactions:\n${descriptions}` }] }],
-      systemInstruction: { role: 'system', parts: [{ text: CATEGORISE_PROMPT }] },
+    // Phase 1: Apply saved rules
+    const ruleBatch = db.batch();
+    let ruleApplied = 0;
+    const needsAI: { doc: FirebaseFirestore.QueryDocumentSnapshot; idx: number }[] = [];
+
+    chunk.forEach((doc, idx) => {
+      const data = doc.data();
+      const rule = findRule(data.description || '');
+      if (rule && (rule.taxCategory || rule.spendingCategory)) {
+        const updates: Record<string, string> = {};
+        if (rule.spendingCategory && !data.spendingCategory) updates.spendingCategory = rule.spendingCategory;
+        if (rule.taxCategory && data.category === 'Other Deductions') updates.category = rule.taxCategory;
+        if (Object.keys(updates).length > 0) {
+          ruleBatch.update(doc.ref, updates);
+          ruleApplied++;
+        } else {
+          needsAI.push({ doc, idx });
+        }
+      } else {
+        needsAI.push({ doc, idx });
+      }
     });
 
-    const responseText = result.response?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
-    const cleaned = responseText.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
-    const categories: { index: number; category?: string; spendingCategory?: string }[] = JSON.parse(cleaned);
+    if (ruleApplied > 0) await ruleBatch.commit();
 
-    const batch = db.batch();
-    let categorised = 0;
-    for (const cat of categories) {
-      if (cat.index < 0 || cat.index >= chunk.length) continue;
-      const doc = chunk[cat.index];
-      const data = doc.data();
-      const updates: Record<string, string> = {};
+    // Phase 2: AI for expenses without matching rules
+    let aiCategorised = 0;
+    if (needsAI.length > 0) {
+      const descriptions = needsAI.map(({ doc }, i) => {
+        const d = doc.data();
+        return `${i}. "${d.description}" ($${d.amount?.toFixed(2) || '0.00'})`;
+      }).join('\n');
 
-      if (cat.spendingCategory && SPENDING_CATEGORIES.includes(cat.spendingCategory)) {
-        updates.spendingCategory = cat.spendingCategory;
+      const model = await getGeminiModel();
+      const result = await model.generateContent({
+        contents: [{ role: 'user', parts: [{ text: `Categorise these ${needsAI.length} expense transactions:\n${descriptions}` }] }],
+        systemInstruction: { role: 'system', parts: [{ text: CATEGORISE_PROMPT }] },
+      });
+
+      const responseText = result.response?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+      const cleaned = responseText.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
+      const categories: { index: number; category?: string; spendingCategory?: string }[] = JSON.parse(cleaned);
+
+      const aiBatch = db.batch();
+      for (const cat of categories) {
+        if (cat.index < 0 || cat.index >= needsAI.length) continue;
+        const { doc } = needsAI[cat.index];
+        const data = doc.data();
+        const updates: Record<string, string> = {};
+
+        if (cat.spendingCategory && SPENDING_CATEGORIES.includes(cat.spendingCategory)) {
+          updates.spendingCategory = cat.spendingCategory;
+        }
+        if (data.category === 'Other Deductions' && cat.category && TAX_CATEGORIES.includes(cat.category)) {
+          updates.category = cat.category;
+        }
+
+        if (Object.keys(updates).length > 0) {
+          aiBatch.update(doc.ref, updates);
+          aiCategorised++;
+        }
       }
-
-      if (data.category === 'Other Deductions' && cat.category && TAX_CATEGORIES.includes(cat.category)) {
-        updates.category = cat.category;
-      }
-
-      if (Object.keys(updates).length > 0) {
-        batch.update(doc.ref, updates);
-        categorised++;
-      }
+      await aiBatch.commit();
     }
-    await batch.commit();
 
     return NextResponse.json({
-      categorised,
+      categorised: ruleApplied + aiCategorised,
+      ruleApplied,
+      aiCategorised,
       remaining: needsCategorisation.length - chunk.length,
       batchProcessed: chunk.length,
     });
