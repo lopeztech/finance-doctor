@@ -14,6 +14,7 @@ const CATEGORIES = [
   'Phone & Internet',
   'Donations',
   'Investment Expenses',
+  'Investment Property',
   'Other Deductions',
 ];
 

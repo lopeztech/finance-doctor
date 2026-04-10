@@ -6,7 +6,7 @@ import { getGeminiModel } from '@/lib/gemini';
 const TAX_CATEGORIES = [
   'Work from Home', 'Vehicle & Travel', 'Clothing & Laundry', 'Self-Education',
   'Tools & Equipment', 'Professional Memberships', 'Phone & Internet',
-  'Donations', 'Investment Expenses', 'Other Deductions',
+  'Donations', 'Investment Expenses', 'Investment Property', 'Other Deductions',
 ];
 
 const SPENDING_CATEGORIES = [

@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
     // Build context snapshot
     const totalDeductions = expenses.reduce((s, e) => s + e.amount, 0);
     const categories = [...new Set(expenses.map(e => e.category))];
-    const allCategories = ['Work from Home', 'Vehicle & Travel', 'Clothing & Laundry', 'Self-Education', 'Tools & Equipment', 'Professional Memberships', 'Phone & Internet', 'Donations', 'Investment Expenses', 'Other Deductions'];
+    const allCategories = ['Work from Home', 'Vehicle & Travel', 'Clothing & Laundry', 'Self-Education', 'Tools & Equipment', 'Professional Memberships', 'Phone & Internet', 'Donations', 'Investment Expenses', 'Investment Property', 'Other Deductions'];
     const missingCategories = allCategories.filter(c => !categories.includes(c));
 
     const totalPortfolio = investments.reduce((s, i) => s + i.currentValue, 0);

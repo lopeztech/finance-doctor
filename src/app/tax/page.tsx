@@ -14,6 +14,7 @@ const CATEGORIES = [
   'Phone & Internet',
   'Donations',
   'Investment Expenses',
+  'Investment Property',
   'Other Deductions',
 ];
 
@@ -29,6 +30,7 @@ const CATEGORY_ICONS: Record<string, string> = {
   'Phone & Internet': 'fa-mobile-alt',
   'Donations': 'fa-hand-holding-heart',
   'Investment Expenses': 'fa-piggy-bank',
+  'Investment Property': 'fa-building',
   'Other Deductions': 'fa-receipt',
 };
 
@@ -42,6 +44,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   'Phone & Internet': '#198754',
   'Donations': '#dc3545',
   'Investment Expenses': '#ffc107',
+  'Investment Property': '#795548',
   'Other Deductions': '#6c757d',
 };
 
