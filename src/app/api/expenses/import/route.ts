@@ -45,14 +45,22 @@ function parseCSV(text: string): { date: string; description: string; amount: nu
   let descCol = 1;
   let amountCol = 2;
 
+  let descCols: number[] = [];
+
   if (hasHeader) {
     const cols = splitCSVLine(lines[0]).map(c => c.toLowerCase().trim());
     const dateIdx = cols.findIndex(c => c.includes('date'));
-    const descIdx = cols.findIndex(c => c.includes('description') || c.includes('narration') || c.includes('memo') || c.includes('details') || c.includes('transaction'));
     const amountIdx = cols.findIndex(c => c.includes('amount') || c.includes('debit') || c.includes('value'));
 
+    // Collect ALL description-like columns to merge them
+    cols.forEach((c, i) => {
+      if (c.includes('description') || c.includes('narration') || c.includes('memo') || c.includes('details') || c.includes('transaction')) {
+        descCols.push(i);
+      }
+    });
+
     if (dateIdx >= 0) dateCol = dateIdx;
-    if (descIdx >= 0) descCol = descIdx;
+    if (descCols.length > 0) descCol = descCols[0];
     if (amountIdx >= 0) amountCol = amountIdx;
   }
 
@@ -62,7 +70,10 @@ function parseCSV(text: string): { date: string; description: string; amount: nu
     if (cols.length < 3) continue;
 
     const rawDate = cols[dateCol]?.trim();
-    const description = cols[descCol]?.trim();
+    // Merge all description columns
+    const description = descCols.length > 1
+      ? descCols.map(i => cols[i]?.trim()).filter(Boolean).join(' — ')
+      : cols[descCol]?.trim();
     const rawAmount = cols[amountCol]?.trim().replace(/[,$"]/g, '');
 
     if (!rawDate || !description || !rawAmount) continue;
