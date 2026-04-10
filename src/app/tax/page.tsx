@@ -17,6 +17,8 @@ const CATEGORIES = [
   'Other Deductions',
 ];
 
+const DEDUCTION_CATEGORIES = CATEGORIES.filter(c => c !== 'Other Deductions');
+
 const CATEGORY_ICONS: Record<string, string> = {
   'Work from Home': 'fa-house-laptop',
   'Vehicle & Travel': 'fa-car',
@@ -30,12 +32,22 @@ const CATEGORY_ICONS: Record<string, string> = {
   'Other Deductions': 'fa-receipt',
 };
 
+const CATEGORY_COLORS: Record<string, string> = {
+  'Work from Home': '#20c997',
+  'Vehicle & Travel': '#0d6efd',
+  'Clothing & Laundry': '#6f42c1',
+  'Self-Education': '#fd7e14',
+  'Tools & Equipment': '#6610f2',
+  'Professional Memberships': '#0dcaf0',
+  'Phone & Internet': '#198754',
+  'Donations': '#dc3545',
+  'Investment Expenses': '#ffc107',
+  'Other Deductions': '#6c757d',
+};
+
 export default function TaxPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ date: '', description: '', amount: '', category: CATEGORIES[0] });
   const [financialYear, setFinancialYear] = useState('all');
   const [adviceHistory, setAdviceHistory] = useState<{ role: 'user' | 'model'; text: string }[]>([]);
   const [adviceLoading, setAdviceLoading] = useState(false);
@@ -43,6 +55,8 @@ export default function TaxPage() {
   const [adviceCollapsed, setAdviceCollapsed] = useState(false);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [selectedOwner, setSelectedOwner] = useState('');
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [reanalysing, setReanalysing] = useState(false);
 
   const adviceHistoryRef = useRef(adviceHistory);
   adviceHistoryRef.current = adviceHistory;
@@ -71,32 +85,24 @@ export default function TaxPage() {
 
   useEffect(() => { fetchExpenses(); }, [fetchExpenses]);
 
-  const addExpense = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    const res = await fetch('/api/expenses', {
-      method: 'POST',
+  const updateExpenseCategory = async (id: string, category: string) => {
+    await fetch('/api/expenses', {
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        date: form.date,
-        description: form.description,
-        amount: parseFloat(form.amount),
-        category: form.category,
-        financialYear,
-      }),
+      body: JSON.stringify({ id, category }),
     });
-    if (res.ok) {
-      const expense = await res.json();
-      setExpenses(prev => [expense, ...prev]);
-      setForm({ date: '', description: '', amount: '', category: CATEGORIES[0] });
-      setShowForm(false);
-    }
-    setSaving(false);
+    setExpenses(prev => prev.map(e => e.id === id ? { ...e, category } : e));
   };
 
-  const removeExpense = async (id: string) => {
-    await fetch(`/api/expenses?id=${id}`, { method: 'DELETE' });
-    setExpenses(prev => prev.filter(e => e.id !== id));
+  const reanalyseOther = async () => {
+    setReanalysing(true);
+    const res = await fetch('/api/expenses/reanalyse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ financialYear }),
+    });
+    if (res.ok) await fetchExpenses();
+    setReanalysing(false);
   };
 
   const streamAdvice = async (history: { role: 'user' | 'model'; text: string }[], followUp?: string) => {
@@ -125,7 +131,6 @@ export default function TaxPage() {
       setAdviceHistory(prev => [...prev.slice(0, -1), { role: 'model', text }]);
     }
     setAdviceLoading(false);
-    // Persist the full conversation after stream completes
     const finalHistory = [...history, ...(followUp ? [{ role: 'user' as const, text: followUp }] : []), { role: 'model' as const, text }];
     saveChat(finalHistory);
   };
@@ -145,13 +150,35 @@ export default function TaxPage() {
     await streamAdvice(updatedHistory.slice(0, -1), question);
   };
 
+  const toggleCategory = (category: string) => {
+    setExpandedCategories(prev => {
+      const next = new Set(prev);
+      if (next.has(category)) next.delete(category);
+      else next.add(category);
+      return next;
+    });
+  };
+
   const filteredExpenses = selectedOwner ? expenses.filter(e => e.owner === selectedOwner) : expenses;
-  const totalDeductions = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
-  const categoryTotals = filteredExpenses.reduce((acc, e) => {
+
+  // Split into deductions (not Other) and Other Deductions
+  const deductionExpenses = filteredExpenses.filter(e => e.category !== 'Other Deductions');
+  const otherExpenses = filteredExpenses.filter(e => e.category === 'Other Deductions');
+
+  const totalDeductions = deductionExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const totalOther = otherExpenses.reduce((sum, e) => sum + e.amount, 0);
+
+  const categoryTotals = deductionExpenses.reduce((acc, e) => {
     acc[e.category] = (acc[e.category] || 0) + e.amount;
     return acc;
   }, {} as Record<string, number>);
   const sortedCategories = Object.entries(categoryTotals).sort(([, a], [, b]) => b - a);
+
+  const expensesByCategory = deductionExpenses.reduce((acc, e) => {
+    if (!acc[e.category]) acc[e.category] = [];
+    acc[e.category].push(e);
+    return acc;
+  }, {} as Record<string, Expense[]>);
 
   return (
     <>
@@ -193,7 +220,7 @@ export default function TaxPage() {
               <div className="d-flex align-items-center">
                 <div>
                   <div className="text-white text-opacity-75 mb-1">Categories Used</div>
-                  <h2 className="text-white mb-0">{Object.keys(categoryTotals).length} / {CATEGORIES.length}</h2>
+                  <h2 className="text-white mb-0">{sortedCategories.length} / {DEDUCTION_CATEGORIES.length}</h2>
                 </div>
                 <div className="ms-auto"><i className="fa fa-layer-group fa-3x text-white text-opacity-25"></i></div>
               </div>
@@ -201,14 +228,14 @@ export default function TaxPage() {
           </div>
         </div>
         <div className="col-lg-4">
-          <div className="card border-0 bg-dark text-white mb-3">
+          <div className="card border-0 bg-warning text-dark mb-3">
             <div className="card-body">
               <div className="d-flex align-items-center">
                 <div>
-                  <div className="text-white text-opacity-75 mb-1">Expenses Logged</div>
-                  <h2 className="text-white mb-0">{expenses.length}</h2>
+                  <div className="text-dark text-opacity-75 mb-1">Uncategorised</div>
+                  <h2 className="text-dark mb-0">{otherExpenses.length} <small className="fs-6">(${totalOther.toLocaleString('en-AU', { minimumFractionDigits: 2 })})</small></h2>
                 </div>
-                <div className="ms-auto"><i className="fa fa-file-alt fa-3x text-white text-opacity-25"></i></div>
+                <div className="ms-auto"><i className="fa fa-question-circle fa-3x text-dark text-opacity-25"></i></div>
               </div>
             </div>
           </div>
@@ -220,115 +247,113 @@ export default function TaxPage() {
           <Panel>
             <PanelHeader noButton>
               <div className="d-flex align-items-center">
-                Deductions{selectedOwner ? ` — ${selectedOwner}` : ''}
-                <button className="btn btn-success btn-sm ms-auto" onClick={() => setShowForm(!showForm)}>
-                  <i className="fa fa-plus me-1"></i> Add Expense
-                </button>
+                <i className="fa fa-receipt me-2"></i>Deductions by Category
+                {selectedOwner && <span className="badge bg-primary ms-2">{selectedOwner}</span>}
               </div>
             </PanelHeader>
             <PanelBody>
-              {showForm && (
-                <form onSubmit={addExpense} className="row g-2 mb-3 p-3 bg-light rounded">
-                  <div className="col-md-2">
-                    <input type="date" className="form-control" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} required />
-                  </div>
-                  <div className="col-md-3">
-                    <input type="text" className="form-control" placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} required />
-                  </div>
-                  <div className="col-md-2">
-                    <input type="number" className="form-control" placeholder="Amount" step="0.01" min="0" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} required />
-                  </div>
-                  <div className="col-md-3">
-                    <select className="form-select" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
-                      {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </div>
-                  <div className="col-md-2">
-                    <button type="submit" className="btn btn-success w-100" disabled={saving}>
-                      {saving ? <i className="fa fa-spinner fa-spin"></i> : 'Add'}
-                    </button>
-                  </div>
-                </form>
-              )}
-
               {loading ? (
                 <div className="text-center py-5"><i className="fa fa-spinner fa-spin fa-2x"></i></div>
-              ) : filteredExpenses.length === 0 ? (
+              ) : sortedCategories.length === 0 ? (
                 <div className="text-center py-5 text-muted">
                   <i className="fa fa-file-invoice-dollar fa-3x mb-3 d-block"></i>
-                  <p>No expenses yet. Add your first expense to get started.</p>
+                  <p>No deductions found. Upload expenses or re-analyse uncategorised items below.</p>
                 </div>
               ) : (
-                <div className="table-responsive">
-                  <table className="table table-hover mb-0">
-                    <thead>
+                <div>
+                  {sortedCategories.map(([category, total]) => {
+                    const pct = totalDeductions > 0 ? (total / totalDeductions) * 100 : 0;
+                    const color = CATEGORY_COLORS[category] || '#6c757d';
+                    const isExpanded = expandedCategories.has(category);
+                    const catExpenses = (expensesByCategory[category] || []).sort((a, b) => b.amount - a.amount);
+                    return (
+                      <div key={category} className="mb-2">
+                        <div
+                          className="d-flex align-items-center p-2 rounded"
+                          style={{ cursor: 'pointer', backgroundColor: isExpanded ? 'var(--bs-light)' : 'transparent' }}
+                          onClick={() => toggleCategory(category)}
+                        >
+                          <i className={`fa fa-chevron-${isExpanded ? 'down' : 'right'} me-2 text-muted`} style={{ width: '12px', fontSize: '0.7rem' }}></i>
+                          <i className={`fa ${CATEGORY_ICONS[category] || 'fa-receipt'} me-2`} style={{ color }}></i>
+                          <span className="fw-bold flex-grow-1">{category}</span>
+                          <span className="badge bg-secondary me-2">{catExpenses.length}</span>
+                          <span className="fw-bold me-2">${total.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</span>
+                          <span className="small text-muted" style={{ width: '45px', textAlign: 'right' }}>{pct.toFixed(1)}%</span>
+                        </div>
+                        {isExpanded && (
+                          <div className="ms-4 mt-1 mb-2">
+                            <table className="table table-sm table-hover mb-0">
+                              <tbody>
+                                {catExpenses.map(e => (
+                                  <tr key={e.id}>
+                                    <td className="small text-muted" style={{ width: '90px' }}>{new Date(e.date).toLocaleDateString('en-AU')}</td>
+                                    <td className="small">{e.description}</td>
+                                    {e.owner && <td className="small text-muted" style={{ width: '80px' }}>{e.owner}</td>}
+                                    <td className="text-end small fw-bold" style={{ width: '90px' }}>${e.amount.toFixed(2)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  <div className="border-top pt-2 mt-2 d-flex align-items-center fw-bold">
+                    <span className="flex-grow-1">Total Deductions</span>
+                    <span>${totalDeductions.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
+              )}
+            </PanelBody>
+          </Panel>
+
+          {otherExpenses.length > 0 && (
+            <Panel>
+              <PanelHeader noButton>
+                <div className="d-flex align-items-center">
+                  <i className="fa fa-question-circle me-2 text-warning"></i>Uncategorised / Other Deductions
+                  <span className="badge bg-warning text-dark ms-2">{otherExpenses.length}</span>
+                  <button className="btn btn-sm btn-outline-primary ms-auto" onClick={reanalyseOther} disabled={reanalysing}>
+                    {reanalysing ? <><i className="fa fa-spinner fa-spin me-1"></i>Re-analysing...</> : <><i className="fa fa-robot me-1"></i>Re-analyse</>}
+                  </button>
+                </div>
+              </PanelHeader>
+              <PanelBody>
+                <p className="text-muted small mb-2">These expenses are categorised as &quot;Other Deductions&quot;. Re-analyse with AI or manually assign a category to include them in your deductions.</p>
+                <div className="table-responsive" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                  <table className="table table-sm table-hover mb-0">
+                    <thead className="sticky-top bg-white">
                       <tr>
                         <th>Date</th>
                         <th>Description</th>
-                        <th>Category</th>
                         <th className="text-end">Amount</th>
-                        <th style={{ width: '40px' }}></th>
+                        <th>Move to Category</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredExpenses.map(expense => (
-                        <tr key={expense.id}>
-                          <td>{new Date(expense.date).toLocaleDateString('en-AU')}</td>
-                          <td>{expense.description}</td>
+                      {otherExpenses.sort((a, b) => b.amount - a.amount).map(e => (
+                        <tr key={e.id}>
+                          <td className="small text-muted">{new Date(e.date).toLocaleDateString('en-AU')}</td>
+                          <td className="small">{e.description}</td>
+                          <td className="text-end small fw-bold">${e.amount.toFixed(2)}</td>
                           <td>
-                            <span className="badge bg-secondary">
-                              <i className={`fa ${CATEGORY_ICONS[expense.category] || 'fa-receipt'} me-1`}></i>
-                              {expense.category}
-                            </span>
-                          </td>
-                          <td className="text-end">${expense.amount.toFixed(2)}</td>
-                          <td>
-                            <button className="btn btn-xs btn-danger" onClick={() => removeExpense(expense.id)}>
-                              <i className="fa fa-times"></i>
-                            </button>
+                            <select className="form-select form-select-sm" value="Other Deductions" onChange={ev => updateExpenseCategory(e.id, ev.target.value)}>
+                              <option value="Other Deductions">— Select —</option>
+                              {DEDUCTION_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
                           </td>
                         </tr>
                       ))}
                     </tbody>
-                    <tfoot>
-                      <tr className="fw-bold">
-                        <td colSpan={3}>Total</td>
-                        <td className="text-end">${totalDeductions.toFixed(2)}</td>
-                        <td></td>
-                      </tr>
-                    </tfoot>
                   </table>
                 </div>
-              )}
-            </PanelBody>
-          </Panel>
+              </PanelBody>
+            </Panel>
+          )}
         </div>
 
         <div className="col-xl-4">
-          <Panel>
-            <PanelHeader noButton>Deductions by Category</PanelHeader>
-            <PanelBody>
-              {sortedCategories.length === 0 ? (
-                <div className="text-center py-4 text-muted"><p className="mb-0">Add expenses to see the breakdown</p></div>
-              ) : (
-                <div>
-                  {sortedCategories.map(([category, total]) => (
-                    <div key={category} className="mb-3">
-                      <div className="d-flex align-items-center mb-1">
-                        <i className={`fa ${CATEGORY_ICONS[category] || 'fa-receipt'} me-2 text-muted`}></i>
-                        <span className="flex-grow-1">{category}</span>
-                        <span className="fw-bold">${total.toFixed(2)}</span>
-                      </div>
-                      <div className="progress" style={{ height: '4px' }}>
-                        <div className="progress-bar bg-teal" style={{ width: `${(total / totalDeductions) * 100}%` }}></div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </PanelBody>
-          </Panel>
-
           {filteredExpenses.length > 0 && (
             <Panel>
               <PanelHeader noButton>
@@ -348,7 +373,7 @@ export default function TaxPage() {
                 {adviceHistory.length > 0 ? (
                   <>
                     {adviceHistory.map((msg, i) => (
-                      <div key={i} className={msg.role === 'user' ? 'mb-3' : 'mb-3'}>
+                      <div key={i} className="mb-3">
                         {msg.role === 'user' ? (
                           <div className="d-flex align-items-start mb-2">
                             <span className="badge bg-primary me-2 mt-1"><i className="fa fa-user"></i></span>
