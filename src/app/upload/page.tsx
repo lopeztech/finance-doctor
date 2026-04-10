@@ -39,7 +39,9 @@ export default function UploadPage() {
   const [importSaving, setImportSaving] = useState(false);
   const [importOwner, setImportOwner] = useState('');
   const [migrating, setMigrating] = useState(false);
-  const [migrateResult, setMigrateResult] = useState<{ total: number; fixedBasic: number; addedFY: number; setOwner: number; categorised: number } | null>(null);
+  const [migrateResult, setMigrateResult] = useState<{ total: number; fixed: number; addedFY: number; setOwner: number; needsCategorisation: number } | null>(null);
+  const [categorising, setCategorising] = useState(false);
+  const [categoriseProgress, setCategoriseProgress] = useState({ done: 0, remaining: 0 });
 
   const fetchExpenses = useCallback(async () => {
     setLoading(true);
@@ -223,6 +225,7 @@ export default function UploadPage() {
             disabled={migrating}
             onClick={async () => {
               setMigrating(true);
+              setMigrateResult(null);
               const res = await fetch('/api/expenses/migrate', { method: 'POST' });
               if (res.ok) {
                 const data = await res.json();
@@ -232,7 +235,7 @@ export default function UploadPage() {
               setMigrating(false);
             }}
           >
-            {migrating ? <><i className="fa fa-spinner fa-spin me-1"></i>Fixing &amp; categorising...</> : <><i className="fa fa-wrench me-1"></i>Fix Data</>}
+            {migrating ? <><i className="fa fa-spinner fa-spin me-1"></i>Fixing...</> : <><i className="fa fa-wrench me-1"></i>Fix Data</>}
           </button>
         </div>
       )}
@@ -241,10 +244,53 @@ export default function UploadPage() {
         <div className="alert alert-info">
           <i className="fa fa-info-circle me-2"></i>
           Scanned <strong>{migrateResult.total}</strong> expenses:
-          {migrateResult.addedFY > 0 && <span className="ms-2"><strong>{migrateResult.addedFY}</strong> FY backfilled</span>}
-          {migrateResult.setOwner > 0 && <span className="ms-2"><strong>{migrateResult.setOwner}</strong> owner set to Josh</span>}
-          {migrateResult.categorised > 0 && <span className="ms-2"><strong>{migrateResult.categorised}</strong> categorised by AI</span>}
-          {migrateResult.fixedBasic === 0 && migrateResult.categorised === 0 && <span className="ms-2">All data is up to date.</span>}
+          {migrateResult.addedFY > 0 && <span className="ms-2"><strong>{migrateResult.addedFY}</strong> FY backfilled.</span>}
+          {migrateResult.setOwner > 0 && <span className="ms-2"><strong>{migrateResult.setOwner}</strong> owner set to Josh.</span>}
+          {migrateResult.fixed === 0 && <span className="ms-2">All fields up to date.</span>}
+          {migrateResult.needsCategorisation > 0 && (
+            <span className="ms-2">
+              <strong>{migrateResult.needsCategorisation}</strong> expenses need AI categorisation.
+              <button
+                className="btn btn-sm btn-primary ms-2"
+                disabled={categorising}
+                onClick={async () => {
+                  setCategorising(true);
+                  let totalDone = 0;
+                  let remaining = migrateResult.needsCategorisation;
+                  setCategoriseProgress({ done: 0, remaining });
+                  while (remaining > 0) {
+                    const res = await fetch('/api/expenses/migrate', {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ batchSize: 50 }),
+                    });
+                    if (!res.ok) break;
+                    const data = await res.json();
+                    totalDone += data.categorised;
+                    remaining = data.remaining;
+                    setCategoriseProgress({ done: totalDone, remaining });
+                    if (data.categorised === 0 && data.remaining === 0) break;
+                  }
+                  setCategorising(false);
+                  fetchExpenses();
+                }}
+              >
+                {categorising
+                  ? <><i className="fa fa-spinner fa-spin me-1"></i>{categoriseProgress.done} done, {categoriseProgress.remaining} left...</>
+                  : <><i className="fa fa-robot me-1"></i>Categorise Now</>}
+              </button>
+            </span>
+          )}
+          {migrateResult.needsCategorisation === 0 && !categorising && categoriseProgress.done === 0 && (
+            <span className="ms-2">All categories assigned.</span>
+          )}
+        </div>
+      )}
+
+      {categoriseProgress.done > 0 && !categorising && (
+        <div className="alert alert-success">
+          <i className="fa fa-check-circle me-2"></i>
+          AI categorised <strong>{categoriseProgress.done}</strong> expenses into tax and spending categories.
         </div>
       )}
     </>

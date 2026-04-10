@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUserId } from '@/lib/auth-helpers';
 import { getDb } from '@/lib/firestore';
 import { getGeminiModel } from '@/lib/gemini';
@@ -38,6 +38,7 @@ function getFinancialYear(date: string): string {
   return `${year - 1}-${year}`;
 }
 
+// POST — Quick fixes (FY, owner, cleanup). No AI.
 export async function POST() {
   try {
     const userId = await getAuthUserId();
@@ -46,9 +47,8 @@ export async function POST() {
     const db = getDb();
     const snapshot = await db.collection('users').doc(userId).collection('expenses').get();
 
-    // Phase 1: Quick fixes (FY, owner, cleanup)
-    const batch1 = db.batch();
-    let fixedBasic = 0;
+    const batch = db.batch();
+    let fixed = 0;
     let addedFY = 0;
     let setOwner = 0;
 
@@ -71,80 +71,93 @@ export async function POST() {
       }
 
       if (Object.keys(updates).length > 0) {
-        batch1.update(doc.ref, updates);
-        fixedBasic++;
+        batch.update(doc.ref, updates);
+        fixed++;
       }
     }
 
-    if (fixedBasic > 0) await batch1.commit();
+    if (fixed > 0) await batch.commit();
 
-    // Phase 2: AI categorisation for expenses missing spendingCategory or with "Other Deductions"
+    // Count how many still need categorisation
+    const needsCategorisation = snapshot.docs.filter(doc => {
+      const data = doc.data();
+      return !data.spendingCategory || data.category === 'Other Deductions';
+    }).length;
+
+    return NextResponse.json({ total: snapshot.size, fixed, addedFY, setOwner, needsCategorisation });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Migration error:', message);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+// PUT — AI categorisation, processes one batch at a time. Call repeatedly.
+export async function PUT(req: NextRequest) {
+  try {
+    const userId = await getAuthUserId();
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const { batchSize = 50 } = await req.json().catch(() => ({}));
+    const db = getDb();
+    const snapshot = await db.collection('users').doc(userId).collection('expenses').get();
+
     const needsCategorisation = snapshot.docs.filter(doc => {
       const data = doc.data();
       return !data.spendingCategory || data.category === 'Other Deductions';
     });
 
-    let categorised = 0;
-    if (needsCategorisation.length > 0) {
-      // Process in batches of 100 to stay within Gemini limits
-      for (let i = 0; i < needsCategorisation.length; i += 100) {
-        const chunk = needsCategorisation.slice(i, i + 100);
-        const descriptions = chunk.map((doc, idx) => {
-          const d = doc.data();
-          return `${idx}. "${d.description}" ($${d.amount?.toFixed(2) || '0.00'})`;
-        }).join('\n');
-
-        const prompt = `Categorise these ${chunk.length} expense transactions:\n${descriptions}`;
-
-        try {
-          const model = await getGeminiModel();
-          const result = await model.generateContent({
-            contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            systemInstruction: { role: 'system', parts: [{ text: CATEGORISE_PROMPT }] },
-          });
-
-          const responseText = result.response?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
-          const cleaned = responseText.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
-          const categories: { index: number; category?: string; spendingCategory?: string }[] = JSON.parse(cleaned);
-
-          const batch2 = db.batch();
-          for (const cat of categories) {
-            if (cat.index < 0 || cat.index >= chunk.length) continue;
-            const doc = chunk[cat.index];
-            const data = doc.data();
-            const updates: Record<string, string> = {};
-
-            if (cat.spendingCategory && SPENDING_CATEGORIES.includes(cat.spendingCategory)) {
-              updates.spendingCategory = cat.spendingCategory;
-            }
-
-            if (data.category === 'Other Deductions' && cat.category && TAX_CATEGORIES.includes(cat.category)) {
-              updates.category = cat.category;
-            }
-
-            if (Object.keys(updates).length > 0) {
-              batch2.update(doc.ref, updates);
-              categorised++;
-            }
-          }
-          await batch2.commit();
-        } catch (err) {
-          console.error('Categorisation batch error:', err);
-        }
-      }
+    if (needsCategorisation.length === 0) {
+      return NextResponse.json({ categorised: 0, remaining: 0 });
     }
 
+    const chunk = needsCategorisation.slice(0, batchSize);
+    const descriptions = chunk.map((doc, idx) => {
+      const d = doc.data();
+      return `${idx}. "${d.description}" ($${d.amount?.toFixed(2) || '0.00'})`;
+    }).join('\n');
+
+    const model = await getGeminiModel();
+    const result = await model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: `Categorise these ${chunk.length} expense transactions:\n${descriptions}` }] }],
+      systemInstruction: { role: 'system', parts: [{ text: CATEGORISE_PROMPT }] },
+    });
+
+    const responseText = result.response?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+    const cleaned = responseText.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
+    const categories: { index: number; category?: string; spendingCategory?: string }[] = JSON.parse(cleaned);
+
+    const batch = db.batch();
+    let categorised = 0;
+    for (const cat of categories) {
+      if (cat.index < 0 || cat.index >= chunk.length) continue;
+      const doc = chunk[cat.index];
+      const data = doc.data();
+      const updates: Record<string, string> = {};
+
+      if (cat.spendingCategory && SPENDING_CATEGORIES.includes(cat.spendingCategory)) {
+        updates.spendingCategory = cat.spendingCategory;
+      }
+
+      if (data.category === 'Other Deductions' && cat.category && TAX_CATEGORIES.includes(cat.category)) {
+        updates.category = cat.category;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        batch.update(doc.ref, updates);
+        categorised++;
+      }
+    }
+    await batch.commit();
+
     return NextResponse.json({
-      total: snapshot.size,
-      fixedBasic,
-      addedFY,
-      setOwner,
       categorised,
-      needsCategorisation: needsCategorisation.length,
+      remaining: needsCategorisation.length - chunk.length,
+      batchProcessed: chunk.length,
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error';
-    console.error('Migration error:', message);
+    console.error('Categorisation error:', message);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
