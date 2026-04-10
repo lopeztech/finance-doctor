@@ -14,7 +14,8 @@ Your response style:
 - Use the "doctor" metaphor: give a Diagnosis (what you observe) and a Prescription (what to do)
 - Be specific with dollar amounts and percentages where possible
 - Reference ATO rules when relevant
-- Suggest deductions the user may be missing based on their profile
+- When a job title or industry is provided, tailor deduction suggestions to that occupation (e.g. nurses can claim uniforms/laundry, IT workers can claim home office equipment, teachers can claim self-education)
+- Suggest deductions the user may be missing based on their profile and occupation
 - Flag any red flags that could trigger an ATO audit
 - Keep advice actionable and concise
 - Format your response as clean HTML using semantic tags: <h4>, <h5>, <p>, <ul>/<ol> with <li>, <strong>, <em>, <hr>, and <span class="badge bg-success/bg-warning/bg-danger"> for status indicators
@@ -65,7 +66,7 @@ interface ExpenseInput {
   date: string;
 }
 
-export function buildTaxPrompt(expenses: ExpenseInput[], financialYear: string): string {
+export function buildTaxPrompt(expenses: ExpenseInput[], financialYear: string, familyMembers?: FamilyMemberInput[]): string {
   const totalDeductions = expenses.reduce((sum, e) => sum + e.amount, 0);
   const categoryTotals: Record<string, number> = {};
   expenses.forEach(e => {
@@ -81,8 +82,16 @@ export function buildTaxPrompt(expenses: ExpenseInput[], financialYear: string):
     .map(e => `- ${e.date}: ${e.description} ($${e.amount.toFixed(2)}) [${e.category}]`)
     .join('\n');
 
-  return `Analyse my tax deductions for FY ${financialYear} and provide your diagnosis and prescription.
+  let memberSection = '';
+  if (familyMembers && familyMembers.length > 0) {
+    const memberDetails = familyMembers.map(m =>
+      `- ${m.name}${m.job ? ` (${m.job})` : ''}: Salary $${m.salary.toLocaleString()}, Marginal rate: ${getTaxBracket(m.salary)}`
+    ).join('\n');
+    memberSection = `\nFamily members:\n${memberDetails}\n`;
+  }
 
+  return `Analyse my tax deductions for FY ${financialYear} and provide your diagnosis and prescription.
+${memberSection}
 Total deductions claimed: $${totalDeductions.toFixed(2)}
 Number of expenses: ${expenses.length}
 
@@ -94,9 +103,10 @@ ${recentExpenses}
 
 Please provide:
 1. A health assessment of my deduction claims
-2. Categories I may be under-claiming or missing entirely
-3. Any red flags or audit risks
-4. Specific actions to improve my tax position before EOFY`;
+2. Industry-specific deductions I may be missing based on my occupation
+3. Categories I may be under-claiming or missing entirely
+4. Any red flags or audit risks
+5. Specific actions to improve my tax position before EOFY`;
 }
 
 interface InvestmentInput {
@@ -115,6 +125,7 @@ interface InvestmentInput {
 interface FamilyMemberInput {
   name: string;
   salary: number;
+  job?: string;
 }
 
 function getTaxBracket(salary: number): string {
@@ -155,7 +166,7 @@ export function buildInvestmentPrompt(investments: InvestmentInput[], familyMemb
   let familySection = '';
   if (familyMembers && familyMembers.length > 0) {
     const memberDetails = familyMembers.map(m =>
-      `- ${m.name}: Salary $${m.salary.toLocaleString()}, Marginal tax rate: ${getTaxBracket(m.salary)} (+2% Medicare Levy)`
+      `- ${m.name}${m.job ? ` (${m.job})` : ''}: Salary $${m.salary.toLocaleString()}, Marginal tax rate: ${getTaxBracket(m.salary)} (+2% Medicare Levy)`
     ).join('\n');
 
     const ownershipByMember: Record<string, { value: number; gain: number }> = {};

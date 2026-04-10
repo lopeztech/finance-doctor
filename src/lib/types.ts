@@ -11,6 +11,7 @@ export interface FamilyMember {
   id: string;
   name: string;
   salary: number;
+  job?: string;
 }
 
 export interface Investment {

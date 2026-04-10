@@ -308,7 +308,7 @@ export default function InvestmentsPage() {
   const [adviceCollapsed, setAdviceCollapsed] = useState(false);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [showMemberForm, setShowMemberForm] = useState(false);
-  const [memberForm, setMemberForm] = useState({ name: '', salary: '' });
+  const [memberForm, setMemberForm] = useState({ name: '', salary: '', job: '' });
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
 
   const adviceHistoryRef = useRef(adviceHistory);
@@ -418,7 +418,7 @@ export default function InvestmentsPage() {
 
   const addOrUpdateMember = async (e: React.FormEvent) => {
     e.preventDefault();
-    const body = { name: memberForm.name, salary: parseFloat(memberForm.salary) };
+    const body = { name: memberForm.name, salary: parseFloat(memberForm.salary), ...(memberForm.job ? { job: memberForm.job } : {}) };
     if (editingMemberId) {
       const res = await fetch('/api/family-members', {
         method: 'PUT',
@@ -440,7 +440,7 @@ export default function InvestmentsPage() {
         setFamilyMembers(prev => [...prev, member]);
       }
     }
-    setMemberForm({ name: '', salary: '' });
+    setMemberForm({ name: '', salary: '', job: '' });
     setEditingMemberId(null);
     setShowMemberForm(false);
   };
@@ -666,7 +666,7 @@ export default function InvestmentsPage() {
         <PanelHeader noButton>
           <div className="d-flex align-items-center">
             <i className="fa fa-users me-2"></i>Family Members
-            <button className="btn btn-sm btn-success ms-auto" onClick={() => { setShowMemberForm(!showMemberForm); setEditingMemberId(null); setMemberForm({ name: '', salary: '' }); }}>
+            <button className="btn btn-sm btn-success ms-auto" onClick={() => { setShowMemberForm(!showMemberForm); setEditingMemberId(null); setMemberForm({ name: '', salary: '', job: '' }); }}>
               {showMemberForm ? <><i className="fa fa-times me-1"></i>Cancel</> : <><i className="fa fa-plus me-1"></i>Add Member</>}
             </button>
           </div>
@@ -674,16 +674,19 @@ export default function InvestmentsPage() {
         <PanelBody>
           {showMemberForm && (
             <form onSubmit={addOrUpdateMember} className="row g-2 mb-3 p-3 bg-light rounded">
-              <div className="col-md-4">
+              <div className="col-md-3">
                 <input type="text" className="form-control" placeholder="Name" value={memberForm.name} onChange={e => setMemberForm({ ...memberForm, name: e.target.value })} required />
               </div>
-              <div className="col-md-4">
+              <div className="col-md-3">
+                <input type="text" className="form-control" placeholder="Job title / industry" value={memberForm.job} onChange={e => setMemberForm({ ...memberForm, job: e.target.value })} />
+              </div>
+              <div className="col-md-3">
                 <div className="input-group">
                   <span className="input-group-text">$</span>
                   <input type="number" className="form-control" placeholder="Annual salary" step="1" min="0" value={memberForm.salary} onChange={e => setMemberForm({ ...memberForm, salary: e.target.value })} required />
                 </div>
               </div>
-              <div className="col-md-4">
+              <div className="col-md-3">
                 <button type="submit" className="btn btn-success w-100">
                   {editingMemberId ? <><i className="fa fa-check me-1"></i>Update</> : <><i className="fa fa-plus me-1"></i>Add</>}
                 </button>
@@ -705,14 +708,14 @@ export default function InvestmentsPage() {
                     <div className="card-body py-2 px-3">
                       <div className="d-flex align-items-center">
                         <div className="flex-grow-1">
-                          <div className="fw-bold">{m.name}</div>
+                          <div className="fw-bold">{m.name}{m.job ? <span className="fw-normal text-muted ms-1">— {m.job}</span> : ''}</div>
                           <div className="small text-muted">
                             Salary: ${m.salary.toLocaleString('en-AU')} <span className="badge bg-secondary ms-1">{bracket} + ML</span>
                           </div>
                           <div className="small text-muted">{memberInvestments.length} investments &middot; ${memberValue.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</div>
                         </div>
                         <div className="ms-2">
-                          <button className="btn btn-xs btn-primary me-1" onClick={() => { setMemberForm({ name: m.name, salary: String(m.salary) }); setEditingMemberId(m.id); setShowMemberForm(true); }} title="Edit">
+                          <button className="btn btn-xs btn-primary me-1" onClick={() => { setMemberForm({ name: m.name, salary: String(m.salary), job: m.job || '' }); setEditingMemberId(m.id); setShowMemberForm(true); }} title="Edit">
                             <i className="fa fa-pencil-alt"></i>
                           </button>
                           <button className="btn btn-xs btn-danger" onClick={() => removeMember(m.id)} title="Delete">

@@ -3,7 +3,7 @@ import { getAuthUserId } from '@/lib/auth-helpers';
 import { getDb } from '@/lib/firestore';
 import { getGeminiModel } from '@/lib/gemini';
 import { TAX_SYSTEM_PROMPT, buildTaxPrompt } from '@/lib/prompts';
-import type { Expense } from '@/lib/types';
+import type { Expense, FamilyMember } from '@/lib/types';
 
 interface ChatMessage {
   role: 'user' | 'model';
@@ -28,8 +28,14 @@ export async function POST(req: NextRequest) {
       return new Response('No expenses found for this financial year', { status: 400 });
     }
 
+    const membersSnapshot = await db
+      .collection('users').doc(userId)
+      .collection('family-members')
+      .get();
+    const familyMembers: FamilyMember[] = membersSnapshot.docs.map(doc => doc.data() as FamilyMember);
+
     const model = await getGeminiModel();
-    const initialPrompt = buildTaxPrompt(expenses, financialYear || '2025-2026');
+    const initialPrompt = buildTaxPrompt(expenses, financialYear || '2025-2026', familyMembers.length > 0 ? familyMembers : undefined);
 
     const contents: { role: string; parts: { text: string }[] }[] = [
       { role: 'user', parts: [{ text: initialPrompt }] },

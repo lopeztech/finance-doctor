@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const db = getDb();
   const ref = db.collection('users').doc(userId).collection('family-members').doc();
-  const member: FamilyMember = { id: ref.id, name: body.name, salary: body.salary };
+  const member: FamilyMember = { id: ref.id, name: body.name, salary: body.salary, ...(body.job ? { job: body.job } : {}) };
   await ref.set(member);
   return NextResponse.json(member, { status: 201 });
 }
