@@ -71,10 +71,10 @@ export default function ExpensesPage() {
 
   const fetchExpenses = useCallback(async () => {
     setLoading(true);
-    const res = await fetch(`/api/expenses?fy=${financialYear}`);
+    const res = await fetch('/api/expenses?fy=all');
     if (res.ok) setExpenses(await res.json());
     setLoading(false);
-  }, [financialYear]);
+  }, []);
 
   useEffect(() => {
     fetchExpenses();
@@ -99,7 +99,11 @@ export default function ExpensesPage() {
     }
   };
 
-  const filteredExpenses = selectedOwner ? expenses.filter(e => e.owner === selectedOwner) : expenses;
+  const filteredExpenses = expenses.filter(e => {
+    if (selectedOwner && e.owner !== selectedOwner) return false;
+    if (financialYear !== 'all' && e.financialYear !== financialYear) return false;
+    return true;
+  });
   const totalSpend = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
 
   // Use spendingCategory, fallback to 'Other' if not set
@@ -199,9 +203,9 @@ export default function ExpensesPage() {
           )}
           <select className="form-select" value={financialYear} onChange={(e) => setFinancialYear(e.target.value)}>
             <option value="all">All Years</option>
-            <option value="2025-2026">FY 2025-2026</option>
-            <option value="2024-2025">FY 2024-2025</option>
-            <option value="2023-2024">FY 2023-2024</option>
+            {[...new Set(expenses.map(e => e.financialYear).filter(Boolean))].sort().reverse().map(fy => (
+              <option key={fy} value={fy}>FY {fy}</option>
+            ))}
           </select>
         </div>
       </div>
