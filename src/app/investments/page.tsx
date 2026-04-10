@@ -63,6 +63,7 @@ interface FormState {
   buyPricePerUnit: string;
   currentValue: string;
   // Property
+  propertyType: string;
   purchasePrice: string;
   rentalIncome: string;
   liability: string;
@@ -81,7 +82,7 @@ interface FormState {
 const EMPTY_FORM: FormState = {
   name: '', type: INVESTMENT_TYPES[0], owner: '',
   units: '', buyPricePerUnit: '', currentValue: '',
-  purchasePrice: '', rentalIncome: '', liability: '',
+  propertyType: 'Investment', purchasePrice: '', rentalIncome: '', liability: '',
   amount: '', interestRate: '',
   faceValue: '', couponRate: '', maturityDate: '',
   balance: '', employerContribution: '',
@@ -97,7 +98,7 @@ function buildInvestment(form: FormState): Investment {
   }
   if (form.type === 'Property') {
     const pp = parseFloat(form.purchasePrice);
-    return { ...base, costBasis: pp, currentValue: parseFloat(form.currentValue), rentalIncomeAnnual: parseFloat(form.rentalIncome) || 0, liability: parseFloat(form.liability) || 0 };
+    return { ...base, propertyType: form.propertyType as 'Investment' | 'Owner Occupied', costBasis: pp, currentValue: parseFloat(form.currentValue), rentalIncomeAnnual: parseFloat(form.rentalIncome) || 0, liability: parseFloat(form.liability) || 0 };
   }
   if (form.type === 'Cash / Term Deposit') {
     const amt = parseFloat(form.amount);
@@ -158,6 +159,13 @@ function TypeSpecificFields({ form, setForm }: { form: FormState; setForm: (f: F
   if (type === 'Property') {
     return (
       <>
+        <div className="col-12">
+          <label className="form-label text-muted small mb-1">Property type</label>
+          <select className="form-select" value={form.propertyType} onChange={e => setForm({ ...form, propertyType: e.target.value })}>
+            <option value="Investment">Investment</option>
+            <option value="Owner Occupied">Owner / Occupied</option>
+          </select>
+        </div>
         <div className="col-12">
           <label className="form-label text-muted small mb-1">Purchase price</label>
           <CurrencyInput placeholder="0.00" value={form.purchasePrice} onChange={v => setForm({ ...form, purchasePrice: v })} required step="1" />
@@ -251,6 +259,11 @@ function getMarginalRate(salary: number): number {
 }
 
 function estimateCgt(inv: Investment, familyMembers: FamilyMember[]): { amount: number; label: string } | null {
+  // Owner Occupied properties are CGT exempt
+  if (inv.type === 'Property' && inv.propertyType === 'Owner Occupied') {
+    return { amount: 0, label: 'Exempt' };
+  }
+
   const gain = inv.currentValue - inv.costBasis;
   if (gain <= 0) return { amount: 0, label: '$0.00' };
 
@@ -284,7 +297,7 @@ function estimateCgt(inv: Investment, familyMembers: FamilyMember[]): { amount: 
 function formatDetail(inv: Investment): string {
   if (TRADED_TYPES.includes(inv.type) && inv.units) return `${inv.units} units @ $${inv.buyPricePerUnit?.toFixed(2)}`;
   if (inv.type === 'Property') {
-    const parts: string[] = [];
+    const parts: string[] = [inv.propertyType || 'Investment'];
     if (inv.liability) parts.push(`Mortgage: $${inv.liability.toLocaleString()}`);
     if (inv.rentalIncomeAnnual) parts.push(`Rental: $${inv.rentalIncomeAnnual.toLocaleString()}/yr`);
     return parts.join(' | ');
@@ -379,6 +392,7 @@ export default function InvestmentsPage() {
       f.buyPricePerUnit = String(inv.buyPricePerUnit || '');
       f.currentValue = String(inv.currentValue);
     } else if (inv.type === 'Property') {
+      f.propertyType = inv.propertyType || 'Investment';
       f.purchasePrice = String(inv.costBasis);
       f.currentValue = String(inv.currentValue);
       f.liability = String(inv.liability || '');

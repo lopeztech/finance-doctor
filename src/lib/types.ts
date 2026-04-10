@@ -24,6 +24,7 @@ export interface Investment {
   costBasis: number;
   units?: number;
   buyPricePerUnit?: number;
+  propertyType?: 'Investment' | 'Owner Occupied';
   rentalIncomeAnnual?: number;
   liability?: number;
   interestRate?: number;
