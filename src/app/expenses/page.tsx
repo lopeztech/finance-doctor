@@ -52,7 +52,15 @@ const SPENDING_COLORS: Record<string, string> = {
   'Other': '#6c757d',
 };
 
-const SPENDING_CATEGORIES = Object.keys(SPENDING_ICONS);
+const DEFAULT_SPENDING_CATEGORIES = Object.keys(SPENDING_ICONS);
+
+function getFinancialYear(date: string): string {
+  const [yearStr, monthStr] = date.split('-');
+  const year = parseInt(yearStr);
+  const month = parseInt(monthStr);
+  if (month >= 7) return `${year}-${year + 1}`;
+  return `${year - 1}-${year}`;
+}
 
 type SortField = 'date' | 'description' | 'amount';
 type SortDir = 'asc' | 'desc';
@@ -68,6 +76,9 @@ export default function ExpensesPage() {
   const [sortField, setSortField] = useState<SortField>('date');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
+  const [showNewCategory, setShowNewCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
 
   const fetchExpenses = useCallback(async () => {
     setLoading(true);
@@ -81,27 +92,51 @@ export default function ExpensesPage() {
     fetch('/api/family-members').then(r => r.ok ? r.json() : []).then(setFamilyMembers);
   }, [fetchExpenses]);
 
+  // All spending categories: defaults + custom + any from data
+  const allSpendingCategories = [...new Set([
+    ...DEFAULT_SPENDING_CATEGORIES,
+    ...customCategories,
+    ...expenses.map(e => e.spendingCategory).filter(Boolean) as string[],
+  ])];
+
+  const addCustomCategory = () => {
+    const name = newCategoryName.trim();
+    if (!name || allSpendingCategories.includes(name)) return;
+    setCustomCategories(prev => [...prev, name]);
+    setNewCategoryName('');
+    setShowNewCategory(false);
+  };
+
   const updateExpenseSpendingCategory = async (id: string, spendingCategory: string) => {
     const expense = expenses.find(e => e.id === id);
-    await fetch('/api/expenses', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, spendingCategory }),
-    });
-    setExpenses(prev => prev.map(e => e.id === id ? { ...e, spendingCategory } : e));
-    setEditingExpenseId(null);
-    if (expense) {
-      fetch('/api/category-rules', {
-        method: 'POST',
+    if (!expense) return;
+
+    // Apply to ALL expenses with the same description
+    const matching = expenses.filter(e => e.description === expense.description);
+    const updates = matching.map(e =>
+      fetch('/api/expenses', {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pattern: expense.description, spendingCategory }),
-      });
-    }
+        body: JSON.stringify({ id: e.id, spendingCategory }),
+      })
+    );
+    await Promise.all(updates);
+    setExpenses(prev => prev.map(e => e.description === expense.description ? { ...e, spendingCategory } : e));
+    setEditingExpenseId(null);
+
+    // Save rule for future imports
+    fetch('/api/category-rules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pattern: expense.description, spendingCategory }),
+    });
   };
+
+  const getExpenseFY = (e: Expense) => e.financialYear || (e.date ? getFinancialYear(e.date) : '');
 
   const filteredExpenses = expenses.filter(e => {
     if (selectedOwner && e.owner !== selectedOwner) return false;
-    if (financialYear !== 'all' && e.financialYear !== financialYear) return false;
+    if (financialYear !== 'all' && getExpenseFY(e) !== financialYear) return false;
     return true;
   });
   const totalSpend = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
@@ -203,7 +238,7 @@ export default function ExpensesPage() {
           )}
           <select className="form-select" value={financialYear} onChange={(e) => setFinancialYear(e.target.value)}>
             <option value="all">All Years</option>
-            {[...new Set(expenses.map(e => e.financialYear).filter(Boolean))].sort().reverse().map(fy => (
+            {[...new Set(expenses.map(e => getExpenseFY(e)).filter(Boolean))].sort().reverse().map(fy => (
               <option key={fy} value={fy}>FY {fy}</option>
             ))}
           </select>
@@ -251,9 +286,22 @@ export default function ExpensesPage() {
             <PanelHeader noButton>
               <div className="d-flex align-items-center">
                 <i className="fa fa-list me-2"></i>Expenses by Category
-                <button className="btn btn-sm btn-outline-primary ms-auto" onClick={reanalyse} disabled={reanalysing || filteredExpenses.length === 0}>
-                  {reanalysing ? <><i className="fa fa-spinner fa-spin me-1"></i>Re-analysing...</> : <><i className="fa fa-robot me-1"></i>Re-analyse</>}
-                </button>
+                <div className="ms-auto d-flex gap-2">
+                  {showNewCategory ? (
+                    <form className="d-flex gap-1" onSubmit={e => { e.preventDefault(); addCustomCategory(); }}>
+                      <input type="text" className="form-control form-control-sm" placeholder="Category name" value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} autoFocus style={{ width: '150px' }} />
+                      <button type="submit" className="btn btn-sm btn-success" disabled={!newCategoryName.trim()}><i className="fa fa-check"></i></button>
+                      <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setShowNewCategory(false)}><i className="fa fa-times"></i></button>
+                    </form>
+                  ) : (
+                    <button className="btn btn-sm btn-outline-success" onClick={() => setShowNewCategory(true)}>
+                      <i className="fa fa-plus me-1"></i>Category
+                    </button>
+                  )}
+                  <button className="btn btn-sm btn-outline-primary" onClick={reanalyse} disabled={reanalysing || filteredExpenses.length === 0}>
+                    {reanalysing ? <><i className="fa fa-spinner fa-spin me-1"></i>Re-analysing...</> : <><i className="fa fa-robot me-1"></i>Re-analyse</>}
+                  </button>
+                </div>
               </div>
             </PanelHeader>
             <PanelBody>
@@ -301,8 +349,8 @@ export default function ExpensesPage() {
                                     <td className="text-end small fw-bold">${e.amount.toFixed(2)}</td>
                                     <td>
                                       {editingExpenseId === e.id ? (
-                                        <select className="form-select form-select-sm" autoFocus value={getSpendingCat(e)} onChange={ev => updateExpenseSpendingCategory(e.id, ev.target.value)} onBlur={() => setEditingExpenseId(null)}>
-                                          {SPENDING_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                        <select className="form-select form-select-sm" autoFocus value={getSpendingCat(e)} onChange={ev => updateExpenseSpendingCategory(e.id, ev.target.value)} onBlur={() => setTimeout(() => setEditingExpenseId(null), 200)}>
+                                          {allSpendingCategories.map(c => <option key={c} value={c}>{c}</option>)}
                                         </select>
                                       ) : (
                                         <button className="btn btn-xs btn-outline-secondary" onClick={(ev) => { ev.stopPropagation(); setEditingExpenseId(e.id); }} title="Change category">

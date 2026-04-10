@@ -48,6 +48,14 @@ const CATEGORY_COLORS: Record<string, string> = {
   'Other Deductions': '#6c757d',
 };
 
+function getFinancialYear(date: string): string {
+  const [yearStr, monthStr] = date.split('-');
+  const year = parseInt(yearStr);
+  const month = parseInt(monthStr);
+  if (month >= 7) return `${year}-${year + 1}`;
+  return `${year - 1}-${year}`;
+}
+
 export default function TaxPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,21 +101,27 @@ export default function TaxPage() {
 
   const updateExpenseCategory = async (id: string, category: string) => {
     const expense = expenses.find(e => e.id === id);
-    await fetch('/api/expenses', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, category }),
-    });
-    setExpenses(prev => prev.map(e => e.id === id ? { ...e, category } : e));
-    setEditingExpenseId(null);
-    // Save rule for future imports
-    if (expense) {
-      fetch('/api/category-rules', {
-        method: 'POST',
+    if (!expense) return;
+
+    // Apply to ALL expenses with the same description
+    const matching = expenses.filter(e => e.description === expense.description);
+    const updates = matching.map(e =>
+      fetch('/api/expenses', {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pattern: expense.description, taxCategory: category }),
-      });
-    }
+        body: JSON.stringify({ id: e.id, category }),
+      })
+    );
+    await Promise.all(updates);
+    setExpenses(prev => prev.map(e => e.description === expense.description ? { ...e, category } : e));
+    setEditingExpenseId(null);
+
+    // Save rule for future imports
+    fetch('/api/category-rules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pattern: expense.description, taxCategory: category }),
+    });
   };
 
   const reanalyseOther = async () => {
@@ -194,9 +208,11 @@ export default function TaxPage() {
     <i className={`fa fa-sort${sortField === field ? (sortDir === 'asc' ? '-up' : '-down') : ''} ms-1 text-muted`} style={{ fontSize: '0.7rem' }}></i>
   );
 
+  const getExpenseFY = (e: Expense) => e.financialYear || (e.date ? getFinancialYear(e.date) : '');
+
   const filteredExpenses = expenses.filter(e => {
     if (selectedOwner && e.owner !== selectedOwner) return false;
-    if (financialYear !== 'all' && e.financialYear !== financialYear) return false;
+    if (financialYear !== 'all' && getExpenseFY(e) !== financialYear) return false;
     return true;
   });
 
@@ -232,7 +248,7 @@ export default function TaxPage() {
           )}
           <select className="form-select" value={financialYear} onChange={(e) => setFinancialYear(e.target.value)}>
             <option value="all">All Years</option>
-            {[...new Set(expenses.map(e => e.financialYear).filter(Boolean))].sort().reverse().map(fy => (
+            {[...new Set(expenses.map(e => getExpenseFY(e)).filter(Boolean))].sort().reverse().map(fy => (
               <option key={fy} value={fy}>FY {fy}</option>
             ))}
           </select>
