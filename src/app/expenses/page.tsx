@@ -20,6 +20,10 @@ const SPENDING_ICONS: Record<string, string> = {
   'Travel & Holidays': 'fa-plane',
   'Gifts & Donations': 'fa-gift',
   'Financial & Banking': 'fa-university',
+  'Cafe': 'fa-mug-hot',
+  'Bakery': 'fa-bread-slice',
+  'Car': 'fa-car-side',
+  'Personal Project': 'fa-lightbulb',
   'Other': 'fa-ellipsis',
 };
 
@@ -39,6 +43,10 @@ const SPENDING_COLORS: Record<string, string> = {
   'Travel & Holidays': '#17a2b8',
   'Gifts & Donations': '#e91e63',
   'Financial & Banking': '#607d8b',
+  'Cafe': '#8d6e63',
+  'Bakery': '#d4a373',
+  'Car': '#455a64',
+  'Personal Project': '#ff9800',
   'Other': '#6c757d',
 };
 

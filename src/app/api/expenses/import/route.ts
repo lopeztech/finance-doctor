@@ -33,6 +33,10 @@ const SPENDING_CATEGORIES = [
   'Travel & Holidays',
   'Gifts & Donations',
   'Financial & Banking',
+  'Cafe',
+  'Bakery',
+  'Car',
+  'Personal Project',
   'Other',
 ];
 
