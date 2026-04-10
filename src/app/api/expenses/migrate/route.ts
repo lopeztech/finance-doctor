@@ -13,7 +13,7 @@ const SPENDING_CATEGORIES = [
   'Groceries', 'Dining & Takeaway', 'Transport', 'Utilities & Bills',
   'Shopping', 'Healthcare', 'Entertainment', 'Subscriptions', 'Education',
   'Insurance', 'Home & Garden', 'Personal Care', 'Travel & Holidays',
-  'Gifts & Donations', 'Financial & Banking', 'Cafe', 'Bakery', 'Car', 'Personal Project', 'Other',
+  'Gifts & Donations', 'Financial & Banking', 'Cafe', 'Bakery', 'Car', 'Personal Project', 'Kids Entertainment', 'Other',
 ];
 
 const CATEGORISE_PROMPT = `You are a financial categorisation engine.

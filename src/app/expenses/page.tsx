@@ -24,6 +24,7 @@ const SPENDING_ICONS: Record<string, string> = {
   'Bakery': 'fa-bread-slice',
   'Car': 'fa-car-side',
   'Personal Project': 'fa-lightbulb',
+  'Kids Entertainment': 'fa-child',
   'Other': 'fa-ellipsis',
 };
 
@@ -47,6 +48,7 @@ const SPENDING_COLORS: Record<string, string> = {
   'Bakery': '#d4a373',
   'Car': '#455a64',
   'Personal Project': '#ff9800',
+  'Kids Entertainment': '#4caf50',
   'Other': '#6c757d',
 };
 

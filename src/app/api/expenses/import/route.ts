@@ -37,6 +37,7 @@ const SPENDING_CATEGORIES = [
   'Bakery',
   'Car',
   'Personal Project',
+  'Kids Entertainment',
   'Other',
 ];
 
