@@ -78,10 +78,9 @@ export async function POST() {
 
     if (fixed > 0) await batch.commit();
 
-    // Count how many still need categorisation
     const needsCategorisation = snapshot.docs.filter(doc => {
       const data = doc.data();
-      return !data.spendingCategory || data.category === 'Other Deductions';
+      return !data.spendingCategory;
     }).length;
 
     return NextResponse.json({ total: snapshot.size, fixed, addedFY, setOwner, needsCategorisation });
@@ -112,9 +111,11 @@ export async function PUT(req: NextRequest) {
 
     const snapshot = await db.collection('users').doc(userId).collection('expenses').get();
 
+    // Only target expenses missing spendingCategory — don't loop on "Other Deductions"
+    // tax category since AI/rules may legitimately leave it as Other
     const needsCategorisation = snapshot.docs.filter(doc => {
       const data = doc.data();
-      return !data.spendingCategory || data.category === 'Other Deductions';
+      return !data.spendingCategory;
     });
 
     if (needsCategorisation.length === 0) {
@@ -133,14 +134,10 @@ export async function PUT(req: NextRequest) {
       const rule = findRule(data.description || '');
       if (rule && (rule.taxCategory || rule.spendingCategory)) {
         const updates: Record<string, string> = {};
-        if (rule.spendingCategory && !data.spendingCategory) updates.spendingCategory = rule.spendingCategory;
+        updates.spendingCategory = rule.spendingCategory || 'Other';
         if (rule.taxCategory && data.category === 'Other Deductions') updates.category = rule.taxCategory;
-        if (Object.keys(updates).length > 0) {
-          ruleBatch.update(doc.ref, updates);
-          ruleApplied++;
-        } else {
-          needsAI.push({ doc, idx });
-        }
+        ruleBatch.update(doc.ref, updates);
+        ruleApplied++;
       } else {
         needsAI.push({ doc, idx });
       }
@@ -173,9 +170,7 @@ export async function PUT(req: NextRequest) {
         const data = doc.data();
         const updates: Record<string, string> = {};
 
-        if (cat.spendingCategory && SPENDING_CATEGORIES.includes(cat.spendingCategory)) {
-          updates.spendingCategory = cat.spendingCategory;
-        }
+        updates.spendingCategory = (cat.spendingCategory && SPENDING_CATEGORIES.includes(cat.spendingCategory)) ? cat.spendingCategory : 'Other';
         if (data.category === 'Other Deductions' && cat.category && TAX_CATEGORIES.includes(cat.category)) {
           updates.category = cat.category;
         }

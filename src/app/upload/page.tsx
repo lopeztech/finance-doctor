@@ -269,7 +269,7 @@ export default function UploadPage() {
                     totalDone += data.categorised;
                     remaining = data.remaining;
                     setCategoriseProgress({ done: totalDone, remaining });
-                    if (data.categorised === 0 && data.remaining === 0) break;
+                    if (data.remaining === 0 || (data.categorised === 0 && data.ruleApplied === 0)) break;
                   }
                   setCategorising(false);
                   fetchExpenses();
