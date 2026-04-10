@@ -7,14 +7,14 @@ describe('App Menu', () => {
     expect(header?.title).toBe('Finance Doctor');
   });
 
-  it('has Dashboard, Tax, and Investments items', () => {
+  it('has all navigation items', () => {
     const titles = Menu.filter((item: any) => !item.is_header).map((item: any) => item.title);
-    expect(titles).toEqual(['Dashboard', 'Tax', 'Investments']);
+    expect(titles).toEqual(['Dashboard', 'Family', 'Upload', 'Tax', 'Expenses', 'Family Portfolio', 'Settings']);
   });
 
   it('has correct paths', () => {
     const paths = Menu.filter((item: any) => !item.is_header).map((item: any) => item.path);
-    expect(paths).toEqual(['/', '/tax', '/investments']);
+    expect(paths).toEqual(['/', '/family', '/upload', '/tax', '/expenses', '/investments', '/settings']);
   });
 
   it('has icons for all nav items', () => {

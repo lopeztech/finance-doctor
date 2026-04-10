@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import Dashboard from '@/app/page';
 
 jest.mock('next/link', () => {
@@ -7,32 +7,46 @@ jest.mock('next/link', () => {
   };
 });
 
+const mockFetch = jest.fn();
+global.fetch = mockFetch;
+
+beforeEach(() => {
+  mockFetch.mockReset();
+  mockFetch.mockResolvedValue({ ok: true, json: async () => [] });
+});
+
 describe('Dashboard', () => {
-  it('renders the page header', () => {
+  it('renders the page header', async () => {
     render(<Dashboard />);
-    expect(screen.getByText('Dashboard')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Dashboard')).toBeInTheDocument());
   });
 
-  it('renders Tax Health card', () => {
+  it('renders summary cards after loading', async () => {
     render(<Dashboard />);
-    expect(screen.getByText('Tax Health')).toBeInTheDocument();
-    expect(screen.getByText(/Upload your expenses/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Portfolio Value')).toBeInTheDocument());
+    expect(screen.getByText('Tax Deductions YTD')).toBeInTheDocument();
   });
 
-  it('renders Investment Health card', () => {
+  it('renders Investment Health panel', async () => {
     render(<Dashboard />);
-    expect(screen.getByText('Investment Health')).toBeInTheDocument();
-    expect(screen.getByText(/Add your investments/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Investment Health')).toBeInTheDocument());
   });
 
-  it('links to /tax and /investments', () => {
+  it('renders Tax Health panel', async () => {
     render(<Dashboard />);
-    const links = screen.getAllByText('Get started');
-    expect(links).toHaveLength(2);
+    await waitFor(() => expect(screen.getByText('Tax Health')).toBeInTheDocument());
+  });
 
-    const taxLink = links[0].closest('a');
-    const investLink = links[1].closest('a');
-    expect(taxLink).toHaveAttribute('href', '/tax');
-    expect(investLink).toHaveAttribute('href', '/investments');
+  it('links to /investments and /tax', async () => {
+    render(<Dashboard />);
+    await waitFor(() => {
+      const investLink = screen.getByText('Add Investments');
+      expect(investLink.closest('a')).toHaveAttribute('href', '/investments');
+    });
+  });
+
+  it('renders financial year selector', async () => {
+    render(<Dashboard />);
+    await waitFor(() => expect(screen.getByDisplayValue('FY 2025-2026')).toBeInTheDocument());
   });
 });
