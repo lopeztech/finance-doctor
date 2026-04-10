@@ -166,10 +166,10 @@ export default function UploadPage() {
       body: JSON.stringify({ expenses: toSave }),
     });
     if (res.ok) {
-      const data = await res.json();
-      setExpenses(prev => [...data.saved, ...prev]);
       setImportPreview(null);
       setShowImport(false);
+      // Refetch to pick up all imported expenses (may span multiple FYs)
+      fetchExpenses();
     }
     setImportSaving(false);
   };

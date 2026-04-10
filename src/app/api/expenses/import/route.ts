@@ -236,8 +236,9 @@ export async function PUT(req: NextRequest) {
     const saved: Expense[] = [];
 
     for (const data of expenseData) {
+      const { duplicate: _dup, ...cleanData } = data as Record<string, unknown>;
       const ref = db.collection('users').doc(userId).collection('expenses').doc();
-      const expense: Expense = { id: ref.id, ...data };
+      const expense: Expense = { id: ref.id, ...cleanData } as Expense;
       batch.set(ref, expense);
       saved.push(expense);
     }
