@@ -43,7 +43,8 @@ export default function TaxPage() {
   const [adviceCollapsed, setAdviceCollapsed] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [importLoading, setImportLoading] = useState(false);
-  const [importPreview, setImportPreview] = useState<{ date: string; description: string; amount: number; category: string; financialYear: string }[] | null>(null);
+  const [importPreview, setImportPreview] = useState<{ date: string; description: string; amount: number; category: string; financialYear: string; duplicate?: boolean }[] | null>(null);
+  const [importDuplicateCount, setImportDuplicateCount] = useState(0);
   const [importSaving, setImportSaving] = useState(false);
 
   const adviceHistoryRef = useRef(adviceHistory);
@@ -105,12 +106,15 @@ export default function TaxPage() {
     if (!file) return;
     setImportLoading(true);
     setImportPreview(null);
+    setImportDuplicateCount(0);
     const formData = new FormData();
     formData.append('file', file);
     formData.append('financialYear', financialYear);
     const res = await fetch('/api/expenses/import', { method: 'POST', body: formData });
     if (res.ok) {
       const data = await res.json();
+      setImportDuplicateCount(data.duplicateCount || 0);
+      // Auto-exclude duplicates from preview
       setImportPreview(data.preview);
     } else {
       const err = await res.json().catch(() => ({ error: 'Import failed' }));
@@ -129,12 +133,13 @@ export default function TaxPage() {
   };
 
   const confirmImport = async () => {
-    if (!importPreview?.length) return;
+    const toSave = importPreview?.filter(r => !r.duplicate);
+    if (!toSave?.length) return;
     setImportSaving(true);
     const res = await fetch('/api/expenses/import', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ expenses: importPreview }),
+      body: JSON.stringify({ expenses: toSave }),
     });
     if (res.ok) {
       const data = await res.json();
@@ -281,11 +286,14 @@ export default function TaxPage() {
                     </div>
                   ) : (
                     <>
-                      <div className="d-flex align-items-center mb-2">
-                        <span className="badge bg-teal me-2">{importPreview.length} expenses</span>
+                      <div className="d-flex align-items-center flex-wrap gap-2 mb-2">
+                        <span className="badge bg-teal">{importPreview.filter(r => !r.duplicate).length} new</span>
+                        {importDuplicateCount > 0 && (
+                          <span className="badge bg-warning text-dark"><i className="fa fa-copy me-1"></i>{importDuplicateCount} duplicates skipped</span>
+                        )}
                         <span className="text-muted small">Review categories below, then confirm to import.</span>
-                        <button className="btn btn-sm btn-success ms-auto me-2" onClick={confirmImport} disabled={importSaving || importPreview.length === 0}>
-                          {importSaving ? <><i className="fa fa-spinner fa-spin me-1"></i>Saving...</> : <><i className="fa fa-check me-1"></i>Confirm Import</>}
+                        <button className="btn btn-sm btn-success ms-auto me-2" onClick={confirmImport} disabled={importSaving || importPreview.filter(r => !r.duplicate).length === 0}>
+                          {importSaving ? <><i className="fa fa-spinner fa-spin me-1"></i>Saving...</> : <><i className="fa fa-check me-1"></i>Confirm Import ({importPreview.filter(r => !r.duplicate).length})</>}
                         </button>
                         <button className="btn btn-sm btn-outline-secondary" onClick={() => setImportPreview(null)}>
                           <i className="fa fa-times me-1"></i>Cancel
@@ -295,6 +303,7 @@ export default function TaxPage() {
                         <table className="table table-sm table-hover mb-0">
                           <thead className="sticky-top bg-light">
                             <tr>
+                              <th></th>
                               <th>Date</th>
                               <th>Description</th>
                               <th className="text-end">Amount</th>
@@ -304,19 +313,28 @@ export default function TaxPage() {
                           </thead>
                           <tbody>
                             {importPreview.map((row, i) => (
-                              <tr key={i}>
+                              <tr key={i} className={row.duplicate ? 'text-muted' : ''} style={row.duplicate ? { opacity: 0.5 } : undefined}>
+                                <td>
+                                  {row.duplicate && <span className="badge bg-warning text-dark" title="Already exists"><i className="fa fa-copy"></i></span>}
+                                </td>
                                 <td className="small">{new Date(row.date).toLocaleDateString('en-AU')}</td>
                                 <td className="small">{row.description}</td>
                                 <td className="text-end small">${row.amount.toFixed(2)}</td>
                                 <td>
-                                  <select className="form-select form-select-sm" value={row.category} onChange={e => updatePreviewCategory(i, e.target.value)}>
-                                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                                  </select>
+                                  {row.duplicate ? (
+                                    <span className="small text-muted">Duplicate — will skip</span>
+                                  ) : (
+                                    <select className="form-select form-select-sm" value={row.category} onChange={e => updatePreviewCategory(i, e.target.value)}>
+                                      {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                    </select>
+                                  )}
                                 </td>
                                 <td>
-                                  <button className="btn btn-xs btn-outline-danger" onClick={() => removePreviewRow(i)} title="Remove">
-                                    <i className="fa fa-times"></i>
-                                  </button>
+                                  {!row.duplicate && (
+                                    <button className="btn btn-xs btn-outline-danger" onClick={() => removePreviewRow(i)} title="Remove">
+                                      <i className="fa fa-times"></i>
+                                    </button>
+                                  )}
                                 </td>
                               </tr>
                             ))}

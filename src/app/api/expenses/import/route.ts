@@ -168,6 +168,20 @@ export async function POST(req: NextRequest) {
       categoryMap.set(cat.index, validCategory);
     }
 
+    // Check for duplicates against existing expenses
+    const existingSnapshot = await db
+      .collection('users').doc(userId)
+      .collection('expenses')
+      .where('financialYear', '==', financialYear)
+      .get();
+
+    const existingSet = new Set(
+      existingSnapshot.docs.map(doc => {
+        const d = doc.data();
+        return `${d.date}|${d.description}|${d.amount}`;
+      })
+    );
+
     // Return preview — don't save yet, let user review
     const preview = parsed.map((p, i) => ({
       date: p.date,
@@ -175,9 +189,11 @@ export async function POST(req: NextRequest) {
       amount: p.amount,
       category: categoryMap.get(i) || 'Other Deductions',
       financialYear,
+      duplicate: existingSet.has(`${p.date}|${p.description}|${p.amount}`),
     }));
 
-    return NextResponse.json({ preview, total: preview.length });
+    const duplicateCount = preview.filter(p => p.duplicate).length;
+    return NextResponse.json({ preview, total: preview.length, duplicateCount });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('CSV import error:', message);
