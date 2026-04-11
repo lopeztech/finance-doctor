@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const type = req.nextUrl.searchParams.get('type');
-  if (!type || !['tax', 'investments'].includes(type)) {
+  if (!type || !['tax', 'investments', 'custom-spending-categories'].includes(type)) {
     return NextResponse.json({ error: 'Invalid type' }, { status: 400 });
   }
 
@@ -31,7 +31,7 @@ export async function PUT(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { type, history } = await req.json() as { type: string; history: ChatMessage[] };
-  if (!type || !['tax', 'investments'].includes(type)) {
+  if (!type || !['tax', 'investments', 'custom-spending-categories'].includes(type)) {
     return NextResponse.json({ error: 'Invalid type' }, { status: 400 });
   }
 
@@ -49,7 +49,7 @@ export async function DELETE(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const type = req.nextUrl.searchParams.get('type');
-  if (!type || !['tax', 'investments'].includes(type)) {
+  if (!type || !['tax', 'investments', 'custom-spending-categories'].includes(type)) {
     return NextResponse.json({ error: 'Invalid type' }, { status: 400 });
   }
 
