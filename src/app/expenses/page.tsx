@@ -69,6 +69,7 @@ export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedYear, setSelectedYear] = useState('all');
   const [selectedMonth, setSelectedMonth] = useState('all');
   const [selectedOwner, setSelectedOwner] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
@@ -132,11 +133,13 @@ export default function ExpensesPage() {
     });
   };
 
-  const getExpenseMonth = (e: Expense) => e.date ? e.date.substring(0, 7) : '';
+  const getExpenseYear = (e: Expense) => e.date ? e.date.substring(0, 4) : '';
+  const getExpenseMonthNum = (e: Expense) => e.date ? e.date.substring(5, 7) : '';
 
   const filteredExpenses = expenses.filter(e => {
     if (selectedOwner && e.owner !== selectedOwner) return false;
-    if (selectedMonth !== 'all' && getExpenseMonth(e) !== selectedMonth) return false;
+    if (selectedYear !== 'all' && getExpenseYear(e) !== selectedYear) return false;
+    if (selectedMonth !== 'all' && getExpenseMonthNum(e) !== selectedMonth) return false;
     return true;
   });
   const totalSpend = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
@@ -236,10 +239,16 @@ export default function ExpensesPage() {
               {familyMembers.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
             </select>
           )}
+          <select className="form-select" value={selectedYear} onChange={(e) => { setSelectedYear(e.target.value); }}>
+            <option value="all">All Years</option>
+            {[...new Set(expenses.map(e => getExpenseYear(e)).filter(Boolean))].sort().reverse().map(y => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
           <select className="form-select" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)}>
             <option value="all">All Months</option>
-            {[...new Set(expenses.map(e => getExpenseMonth(e)).filter(Boolean))].sort().reverse().map(m => (
-              <option key={m} value={m}>{new Date(m + '-01').toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })}</option>
+            {['01','02','03','04','05','06','07','08','09','10','11','12'].map(m => (
+              <option key={m} value={m}>{new Date(`2000-${m}-01`).toLocaleDateString('en-AU', { month: 'long' })}</option>
             ))}
           </select>
         </div>
