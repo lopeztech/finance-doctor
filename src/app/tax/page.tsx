@@ -5,16 +5,16 @@ import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { Expense, FamilyMember } from '@/lib/types';
 
 const CATEGORIES = [
-  'Work from Home',
-  'Vehicle & Travel',
   'Clothing & Laundry',
-  'Self-Education',
-  'Tools & Equipment',
-  'Professional Memberships',
-  'Phone & Internet',
   'Donations',
   'Investment Expenses',
   'Investment Property',
+  'Phone & Internet',
+  'Professional Memberships',
+  'Self-Education',
+  'Tools & Equipment',
+  'Vehicle & Travel',
+  'Work from Home',
   'Other Deductions',
 ];
 
@@ -227,7 +227,7 @@ export default function TaxPage() {
     acc[e.category] = (acc[e.category] || 0) + e.amount;
     return acc;
   }, {} as Record<string, number>);
-  const sortedCategories = Object.entries(categoryTotals).sort(([, a], [, b]) => b - a);
+  const sortedCategories = Object.entries(categoryTotals).sort(([a], [b]) => a.localeCompare(b));
 
   const expensesByCategory = deductionExpenses.reduce((acc, e) => {
     if (!acc[e.category]) acc[e.category] = [];

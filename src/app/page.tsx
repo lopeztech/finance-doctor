@@ -86,7 +86,7 @@ export default function Dashboard() {
     acc[e.category] = (acc[e.category] || 0) + e.amount;
     return acc;
   }, {} as Record<string, number>);
-  const sortedCategories = Object.entries(categoryTotals).sort(([, a], [, b]) => b - a);
+  const sortedCategories = Object.entries(categoryTotals).sort(([a], [b]) => a.localeCompare(b));
 
   const totalPortfolio = investments.reduce((sum, i) => sum + i.currentValue, 0);
   const totalCost = investments.reduce((sum, i) => sum + i.costBasis, 0);

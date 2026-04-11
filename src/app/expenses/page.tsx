@@ -5,50 +5,50 @@ import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { Expense, FamilyMember } from '@/lib/types';
 
 const SPENDING_ICONS: Record<string, string> = {
-  'Groceries': 'fa-cart-shopping',
-  'Dining & Takeaway': 'fa-utensils',
-  'Transport': 'fa-car',
-  'Utilities & Bills': 'fa-bolt',
-  'Shopping': 'fa-bag-shopping',
-  'Healthcare': 'fa-heart-pulse',
-  'Entertainment': 'fa-film',
-  'Subscriptions': 'fa-repeat',
-  'Education': 'fa-graduation-cap',
-  'Insurance': 'fa-shield',
-  'Home & Garden': 'fa-house',
-  'Personal Care': 'fa-spa',
-  'Travel & Holidays': 'fa-plane',
-  'Gifts & Donations': 'fa-gift',
-  'Financial & Banking': 'fa-university',
-  'Cafe': 'fa-mug-hot',
   'Bakery': 'fa-bread-slice',
+  'Cafe': 'fa-mug-hot',
   'Car': 'fa-car-side',
-  'Personal Project': 'fa-lightbulb',
+  'Dining & Takeaway': 'fa-utensils',
+  'Education': 'fa-graduation-cap',
+  'Entertainment': 'fa-film',
+  'Financial & Banking': 'fa-university',
+  'Gifts & Donations': 'fa-gift',
+  'Groceries': 'fa-cart-shopping',
+  'Healthcare': 'fa-heart-pulse',
+  'Home & Garden': 'fa-house',
+  'Insurance': 'fa-shield',
   'Kids Entertainment': 'fa-child',
+  'Personal Care': 'fa-spa',
+  'Personal Project': 'fa-lightbulb',
+  'Shopping': 'fa-bag-shopping',
+  'Subscriptions': 'fa-repeat',
+  'Transport': 'fa-car',
+  'Travel & Holidays': 'fa-plane',
+  'Utilities & Bills': 'fa-bolt',
   'Other': 'fa-ellipsis',
 };
 
 const SPENDING_COLORS: Record<string, string> = {
-  'Groceries': '#20c997',
-  'Dining & Takeaway': '#fd7e14',
-  'Transport': '#0d6efd',
-  'Utilities & Bills': '#ffc107',
-  'Shopping': '#e83e8c',
-  'Healthcare': '#dc3545',
-  'Entertainment': '#6f42c1',
-  'Subscriptions': '#6610f2',
-  'Education': '#0dcaf0',
-  'Insurance': '#198754',
-  'Home & Garden': '#795548',
-  'Personal Care': '#ff69b4',
-  'Travel & Holidays': '#17a2b8',
-  'Gifts & Donations': '#e91e63',
-  'Financial & Banking': '#607d8b',
-  'Cafe': '#8d6e63',
   'Bakery': '#d4a373',
+  'Cafe': '#8d6e63',
   'Car': '#455a64',
-  'Personal Project': '#ff9800',
+  'Dining & Takeaway': '#fd7e14',
+  'Education': '#0dcaf0',
+  'Entertainment': '#6f42c1',
+  'Financial & Banking': '#607d8b',
+  'Gifts & Donations': '#e91e63',
+  'Groceries': '#20c997',
+  'Healthcare': '#dc3545',
+  'Home & Garden': '#795548',
+  'Insurance': '#198754',
   'Kids Entertainment': '#4caf50',
+  'Personal Care': '#ff69b4',
+  'Personal Project': '#ff9800',
+  'Shopping': '#e83e8c',
+  'Subscriptions': '#6610f2',
+  'Transport': '#0d6efd',
+  'Travel & Holidays': '#17a2b8',
+  'Utilities & Bills': '#ffc107',
   'Other': '#6c757d',
 };
 
@@ -98,7 +98,7 @@ export default function ExpensesPage() {
     ...DEFAULT_SPENDING_CATEGORIES,
     ...customCategories,
     ...expenses.map(e => e.spendingCategory).filter(Boolean) as string[],
-  ])];
+  ])].sort((a, b) => a.localeCompare(b));
 
   const addCustomCategory = () => {
     const name = newCategoryName.trim();
@@ -152,7 +152,7 @@ export default function ExpensesPage() {
     acc[cat] = (acc[cat] || 0) + e.amount;
     return acc;
   }, {} as Record<string, number>);
-  const sortedCategories = Object.entries(categoryTotals).sort(([, a], [, b]) => b - a);
+  const sortedCategories = Object.entries(categoryTotals).sort(([a], [b]) => a.localeCompare(b));
 
   const expensesByCategory = filteredExpenses.reduce((acc, e) => {
     const cat = getSpendingCat(e);
@@ -403,7 +403,7 @@ export default function ExpensesPage() {
                           <span className="small fw-bold">${total.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</span>
                         </div>
                         <div className="d-flex" style={{ height: '12px', borderRadius: '4px', overflow: 'hidden' }}>
-                          {Object.entries(cats).sort(([, a], [, b]) => b - a).map(([cat, catTotal]) => (
+                          {Object.entries(cats).sort(([a], [b]) => a.localeCompare(b)).map(([cat, catTotal]) => (
                             <div
                               key={cat}
                               title={`${cat}: $${catTotal.toFixed(2)}`}
@@ -492,13 +492,13 @@ export default function ExpensesPage() {
               <div className="mb-2">
                 <div className="d-flex justify-content-between small">
                   <span className="text-muted">Top Category</span>
-                  <span className="fw-bold">{sortedCategories.length > 0 ? sortedCategories[0][0] : '—'}</span>
+                  <span className="fw-bold">{(() => { const top = sortedCategories.length > 0 ? [...sortedCategories].sort(([, a], [, b]) => b - a)[0] : null; return top ? top[0] : '—'; })()}</span>
                 </div>
               </div>
               <div>
                 <div className="d-flex justify-content-between small">
                   <span className="text-muted">Top Category %</span>
-                  <span className="fw-bold">{sortedCategories.length > 0 ? ((sortedCategories[0][1] / totalSpend) * 100).toFixed(1) + '%' : '—'}</span>
+                  <span className="fw-bold">{(() => { const top = sortedCategories.length > 0 ? [...sortedCategories].sort(([, a], [, b]) => b - a)[0] : null; return top ? ((top[1] / totalSpend) * 100).toFixed(1) + '%' : '—'; })()}</span>
                 </div>
               </div>
             </PanelBody>
