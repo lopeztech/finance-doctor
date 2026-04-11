@@ -311,11 +311,11 @@ export default function ExpensesPage() {
                 <i className="fa fa-list me-2"></i>Expenses by Category
                 <div className="ms-auto d-flex gap-2">
                   {showNewCategory ? (
-                    <form className="d-flex gap-1" onSubmit={e => { e.preventDefault(); addCustomCategory(); }}>
-                      <input type="text" className="form-control form-control-sm" placeholder="Category name" value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} autoFocus style={{ width: '150px' }} />
-                      <button type="submit" className="btn btn-sm btn-success" disabled={!newCategoryName.trim()}><i className="fa fa-check"></i></button>
+                    <div className="d-flex gap-1">
+                      <input type="text" className="form-control form-control-sm" placeholder="Category name" value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addCustomCategory(); }} autoFocus style={{ width: '150px' }} />
+                      <button type="button" className="btn btn-sm btn-success" disabled={!newCategoryName.trim()} onClick={addCustomCategory}><i className="fa fa-check"></i></button>
                       <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setShowNewCategory(false)}><i className="fa fa-times"></i></button>
-                    </form>
+                    </div>
                   ) : (
                     <button className="btn btn-sm btn-outline-success" onClick={() => setShowNewCategory(true)}>
                       <i className="fa fa-plus me-1"></i>Category
