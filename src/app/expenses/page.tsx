@@ -81,6 +81,13 @@ export default function ExpensesPage() {
   const [showNewCategory, setShowNewCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
 
+  // Load custom categories from Firestore
+  useEffect(() => {
+    fetch('/api/advice-chat?type=custom-spending-categories')
+      .then(r => r.ok ? r.json() : { history: [] })
+      .then(data => { if (data.history?.length) setCustomCategories(data.history); });
+  }, []);
+
   const fetchExpenses = useCallback(async () => {
     setLoading(true);
     const res = await fetch('/api/expenses?fy=all');
@@ -103,9 +110,16 @@ export default function ExpensesPage() {
   const addCustomCategory = () => {
     const name = newCategoryName.trim();
     if (!name || allSpendingCategories.includes(name)) return;
-    setCustomCategories(prev => [...prev, name]);
+    const updated = [...customCategories, name];
+    setCustomCategories(updated);
     setNewCategoryName('');
     setShowNewCategory(false);
+    // Persist to Firestore
+    fetch('/api/advice-chat', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'custom-spending-categories', history: updated }),
+    });
   };
 
   const updateExpenseSpendingCategory = async (id: string, spendingCategory: string) => {
