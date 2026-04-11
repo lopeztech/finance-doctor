@@ -17,11 +17,13 @@ export async function POST(req: NextRequest) {
 
     const { financialYear, history, followUp } = await req.json();
     const db = getDb();
-    const snapshot = await db
-      .collection('users').doc(userId)
-      .collection('expenses')
-      .where('financialYear', '==', financialYear || '2025-2026')
-      .get();
+    let snapshot;
+    if (financialYear && financialYear !== 'all') {
+      snapshot = await db.collection('users').doc(userId).collection('expenses')
+        .where('financialYear', '==', financialYear).get();
+    } else {
+      snapshot = await db.collection('users').doc(userId).collection('expenses').get();
+    }
 
     const expenses: Expense[] = snapshot.docs.map(doc => doc.data() as Expense);
     if (expenses.length === 0) {
