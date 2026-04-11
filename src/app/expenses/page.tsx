@@ -109,17 +109,19 @@ export default function ExpensesPage() {
 
   const addCustomCategory = () => {
     const name = newCategoryName.trim();
-    if (!name || allSpendingCategories.includes(name)) return;
-    const updated = [...customCategories, name];
-    setCustomCategories(updated);
+    if (!name) return;
+    if (!customCategories.includes(name)) {
+      const updated = [...customCategories, name];
+      setCustomCategories(updated);
+      // Persist to Firestore
+      fetch('/api/advice-chat', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'custom-spending-categories', history: updated }),
+      });
+    }
     setNewCategoryName('');
     setShowNewCategory(false);
-    // Persist to Firestore
-    fetch('/api/advice-chat', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'custom-spending-categories', history: updated }),
-    });
   };
 
   const updateExpenseSpendingCategory = async (id: string, spendingCategory: string) => {
