@@ -208,7 +208,7 @@ export default function TaxPage() {
     <i className={`fa fa-sort${sortField === field ? (sortDir === 'asc' ? '-up' : '-down') : ''} ms-1 text-muted`} style={{ fontSize: '0.7rem' }}></i>
   );
 
-  const getExpenseFY = (e: Expense) => e.financialYear || (e.date ? getFinancialYear(e.date) : '');
+  const getExpenseFY = (e: Expense) => e.date ? getFinancialYear(e.date) : (e.financialYear || '');
 
   const filteredExpenses = expenses.filter(e => {
     if (selectedOwner && e.owner !== selectedOwner) return false;
