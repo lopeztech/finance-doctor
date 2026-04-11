@@ -69,7 +69,7 @@ export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [loading, setLoading] = useState(true);
-  const [financialYear, setFinancialYear] = useState('all');
+  const [selectedMonth, setSelectedMonth] = useState('all');
   const [selectedOwner, setSelectedOwner] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [reanalysing, setReanalysing] = useState(false);
@@ -132,11 +132,11 @@ export default function ExpensesPage() {
     });
   };
 
-  const getExpenseFY = (e: Expense) => e.financialYear || (e.date ? getFinancialYear(e.date) : '');
+  const getExpenseMonth = (e: Expense) => e.date ? e.date.substring(0, 7) : '';
 
   const filteredExpenses = expenses.filter(e => {
     if (selectedOwner && e.owner !== selectedOwner) return false;
-    if (financialYear !== 'all' && getExpenseFY(e) !== financialYear) return false;
+    if (selectedMonth !== 'all' && getExpenseMonth(e) !== selectedMonth) return false;
     return true;
   });
   const totalSpend = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
@@ -210,7 +210,7 @@ export default function ExpensesPage() {
     const res = await fetch('/api/expenses/reanalyse', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ financialYear, type: 'spending' }),
+      body: JSON.stringify({ financialYear: 'all', type: 'spending' }),
     });
     if (res.ok) await fetchExpenses();
     setReanalysing(false);
@@ -236,10 +236,10 @@ export default function ExpensesPage() {
               {familyMembers.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
             </select>
           )}
-          <select className="form-select" value={financialYear} onChange={(e) => setFinancialYear(e.target.value)}>
-            <option value="all">All Years</option>
-            {[...new Set(expenses.map(e => getExpenseFY(e)).filter(Boolean))].sort().reverse().map(fy => (
-              <option key={fy} value={fy}>FY {fy}</option>
+          <select className="form-select" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)}>
+            <option value="all">All Months</option>
+            {[...new Set(expenses.map(e => getExpenseMonth(e)).filter(Boolean))].sort().reverse().map(m => (
+              <option key={m} value={m}>{new Date(m + '-01').toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })}</option>
             ))}
           </select>
         </div>
