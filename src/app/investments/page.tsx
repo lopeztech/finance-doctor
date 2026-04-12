@@ -474,6 +474,7 @@ export default function InvestmentsPage() {
 
   const totalValue = investments.reduce((sum, i) => sum + i.currentValue, 0);
   const totalCost = investments.reduce((sum, i) => sum + i.costBasis, 0);
+  const totalLiability = investments.reduce((sum, i) => sum + (i.type === 'Property' && i.liability ? i.liability : 0), 0);
   const totalGainLoss = investments.reduce((sum, i) => {
     return sum + (i.liability ? i.currentValue - i.liability : i.currentValue - i.costBasis);
   }, 0);
@@ -518,6 +519,14 @@ export default function InvestmentsPage() {
             <div className="card-body">
               <div className="text-white text-opacity-75 mb-1">Portfolio Value</div>
               <h3 className="text-white mb-0">${totalValue.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</h3>
+            </div>
+          </div>
+        </div>
+        <div className="col-lg-3">
+          <div className="card border-0 bg-danger text-white mb-3">
+            <div className="card-body">
+              <div className="text-white text-opacity-75 mb-1">Total Liability</div>
+              <h3 className="text-white mb-0">${totalLiability.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</h3>
             </div>
           </div>
         </div>
@@ -699,6 +708,7 @@ export default function InvestmentsPage() {
                         <th>Type</th>
                         <th>Details</th>
                         <th className="text-end">Cost Basis</th>
+                        <th className="text-end">Liability</th>
                         <th className="text-end">Current Value</th>
                         <th className="text-end">Gain / Loss</th>
                         <th className="text-end">Est. CGT</th>
@@ -724,6 +734,7 @@ export default function InvestmentsPage() {
                             </td>
                             <td className="text-muted small">{formatDetail(inv)}</td>
                             <td className="text-end">${inv.costBasis.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</td>
+                            <td className="text-end">{inv.type === 'Property' && inv.liability ? `$${inv.liability.toLocaleString('en-AU', { minimumFractionDigits: 2 })}` : '—'}</td>
                             <td className="text-end">${inv.currentValue.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</td>
                             <td className={`text-end fw-bold ${gainLoss >= 0 ? 'text-success' : 'text-danger'}`}>
                               {gainLoss >= 0 ? '+' : ''}{gainLoss.toLocaleString('en-AU', { minimumFractionDigits: 2 })}
@@ -753,6 +764,7 @@ export default function InvestmentsPage() {
                         return (
                           <tr className="fw-bold">
                             <td colSpan={5}>Total</td>
+                            <td className="text-end">${totalLiability.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</td>
                             <td className="text-end">${totalValue.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</td>
                             <td className={`text-end ${totalGainLoss >= 0 ? 'text-success' : 'text-danger'}`}>
                               {totalGainLoss >= 0 ? '+' : ''}{totalGainLoss.toLocaleString('en-AU', { minimumFractionDigits: 2 })}
