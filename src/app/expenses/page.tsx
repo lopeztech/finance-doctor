@@ -80,6 +80,8 @@ export default function ExpensesPage() {
   const [customCategories, setCustomCategories] = useState<string[]>([]);
   const [showNewCategory, setShowNewCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [editingCategoryName, setEditingCategoryName] = useState<string | null>(null);
+  const [editCategoryValue, setEditCategoryValue] = useState('');
 
   // Load custom categories from Firestore
   useEffect(() => {
@@ -122,6 +124,44 @@ export default function ExpensesPage() {
     }
     setNewCategoryName('');
     setShowNewCategory(false);
+  };
+
+  const renameCategory = async (oldName: string, newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed || trimmed === oldName) { setEditingCategoryName(null); return; }
+
+    // Update all expenses with the old category
+    const matching = expenses.filter(e => (e.spendingCategory || 'Other') === oldName);
+    const updates = matching.map(e =>
+      fetch('/api/expenses', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: e.id, spendingCategory: trimmed }),
+      })
+    );
+    await Promise.all(updates);
+    setExpenses(prev => prev.map(e => (e.spendingCategory || 'Other') === oldName ? { ...e, spendingCategory: trimmed } : e));
+
+    // Update custom categories list
+    if (customCategories.includes(oldName)) {
+      const updated = customCategories.map(c => c === oldName ? trimmed : c);
+      setCustomCategories(updated);
+      fetch('/api/advice-chat', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'custom-spending-categories', history: updated }),
+      });
+    } else if (!DEFAULT_SPENDING_CATEGORIES.includes(trimmed)) {
+      const updated = [...customCategories, trimmed];
+      setCustomCategories(updated);
+      fetch('/api/advice-chat', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'custom-spending-categories', history: updated }),
+      });
+    }
+
+    setEditingCategoryName(null);
   };
 
   const updateExpenseSpendingCategory = async (id: string, spendingCategory: string) => {
@@ -348,7 +388,20 @@ export default function ExpensesPage() {
                         >
                           <i className={`fa fa-chevron-${isExpanded ? 'down' : 'right'} me-2 text-muted`} style={{ width: '12px', fontSize: '0.7rem' }}></i>
                           <i className={`fa ${SPENDING_ICONS[category] || 'fa-ellipsis'} me-2`} style={{ color }}></i>
-                          <span className="fw-bold flex-grow-1">{category}</span>
+                          {editingCategoryName === category ? (
+                            <div className="d-flex gap-1 flex-grow-1 me-2" onClick={ev => ev.stopPropagation()}>
+                              <input type="text" className="form-control form-control-sm" value={editCategoryValue} onChange={ev => setEditCategoryValue(ev.target.value)} onKeyDown={ev => { if (ev.key === 'Enter') renameCategory(category, editCategoryValue); if (ev.key === 'Escape') setEditingCategoryName(null); }} autoFocus style={{ maxWidth: '200px' }} />
+                              <button className="btn btn-xs btn-success" onClick={() => renameCategory(category, editCategoryValue)}><i className="fa fa-check"></i></button>
+                              <button className="btn btn-xs btn-outline-secondary" onClick={() => setEditingCategoryName(null)}><i className="fa fa-times"></i></button>
+                            </div>
+                          ) : (
+                            <span className="fw-bold flex-grow-1">
+                              {category}
+                              <button className="btn btn-xs btn-link text-muted ms-1 p-0" onClick={ev => { ev.stopPropagation(); setEditingCategoryName(category); setEditCategoryValue(category); }} title="Rename category">
+                                <i className="fa fa-pen-to-square" style={{ fontSize: '0.7rem' }}></i>
+                              </button>
+                            </span>
+                          )}
                           <span className="badge bg-secondary me-2">{catExpenses.length}</span>
                           <span className="fw-bold me-2">${total.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</span>
                           <span className="small text-muted" style={{ width: '45px', textAlign: 'right' }}>{pct.toFixed(1)}%</span>
