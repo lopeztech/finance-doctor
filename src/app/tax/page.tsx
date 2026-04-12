@@ -99,6 +99,32 @@ export default function TaxPage() {
 
   useEffect(() => { fetchExpenses(); }, [fetchExpenses]);
 
+  const toggleNonDeductible = async (id: string) => {
+    const expense = expenses.find(e => e.id === id);
+    if (!expense) return;
+    const nonDeductible = !expense.nonDeductible;
+    await fetch('/api/expenses', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, nonDeductible }),
+    });
+    setExpenses(prev => prev.map(e => e.id === id ? { ...e, nonDeductible } : e));
+  };
+
+  const toggleCategoryNonDeductible = async (category: string, makeNonDeductible: boolean) => {
+    const matching = filteredExpenses.filter(e => e.category === category && e.category !== 'Other Deductions');
+    const updates = matching.map(e =>
+      fetch('/api/expenses', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: e.id, nonDeductible: makeNonDeductible }),
+      })
+    );
+    await Promise.all(updates);
+    const ids = new Set(matching.map(e => e.id));
+    setExpenses(prev => prev.map(e => ids.has(e.id) ? { ...e, nonDeductible: makeNonDeductible } : e));
+  };
+
   const updateExpenseCategory = async (id: string, category: string) => {
     const expense = expenses.find(e => e.id === id);
     if (!expense) return;
@@ -219,8 +245,10 @@ export default function TaxPage() {
   // Split into deductions (not Other) and Other Deductions
   const deductionExpenses = filteredExpenses.filter(e => e.category !== 'Other Deductions');
   const otherExpenses = filteredExpenses.filter(e => e.category === 'Other Deductions');
+  const nonDeductibleExpenses = filteredExpenses.filter(e => e.nonDeductible);
 
-  const totalDeductions = deductionExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const totalDeductions = deductionExpenses.filter(e => !e.nonDeductible).reduce((sum, e) => sum + e.amount, 0);
+  const totalNonDeductible = nonDeductibleExpenses.reduce((sum, e) => sum + e.amount, 0);
   const totalOther = otherExpenses.reduce((sum, e) => sum + e.amount, 0);
 
   const categoryTotals = deductionExpenses.reduce((acc, e) => {
@@ -256,42 +284,35 @@ export default function TaxPage() {
       </div>
 
       <div className="row mb-3">
-        <div className="col-lg-4">
+        <div className="col-lg-3">
           <div className="card border-0 bg-teal text-white mb-3">
             <div className="card-body">
-              <div className="d-flex align-items-center">
-                <div>
-                  <div className="text-white text-opacity-75 mb-1">Total Deductions</div>
-                  <h2 className="text-white mb-0">${totalDeductions.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</h2>
-                </div>
-                <div className="ms-auto"><i className="fa fa-receipt fa-3x text-white text-opacity-25"></i></div>
-              </div>
+              <div className="text-white text-opacity-75 mb-1">Total Deductions</div>
+              <h3 className="text-white mb-0">${totalDeductions.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</h3>
             </div>
           </div>
         </div>
-        <div className="col-lg-4">
+        <div className="col-lg-3">
           <div className="card border-0 bg-indigo text-white mb-3">
             <div className="card-body">
-              <div className="d-flex align-items-center">
-                <div>
-                  <div className="text-white text-opacity-75 mb-1">Categories Used</div>
-                  <h2 className="text-white mb-0">{sortedCategories.length} / {DEDUCTION_CATEGORIES.length}</h2>
-                </div>
-                <div className="ms-auto"><i className="fa fa-layer-group fa-3x text-white text-opacity-25"></i></div>
-              </div>
+              <div className="text-white text-opacity-75 mb-1">Categories Used</div>
+              <h3 className="text-white mb-0">{sortedCategories.length} / {DEDUCTION_CATEGORIES.length}</h3>
             </div>
           </div>
         </div>
-        <div className="col-lg-4">
+        <div className="col-lg-3">
+          <div className="card border-0 bg-danger text-white mb-3">
+            <div className="card-body">
+              <div className="text-white text-opacity-75 mb-1">Non-Deductible</div>
+              <h3 className="text-white mb-0">{nonDeductibleExpenses.length} <small className="fs-6">(${totalNonDeductible.toLocaleString('en-AU', { minimumFractionDigits: 2 })})</small></h3>
+            </div>
+          </div>
+        </div>
+        <div className="col-lg-3">
           <div className="card border-0 bg-warning text-dark mb-3">
             <div className="card-body">
-              <div className="d-flex align-items-center">
-                <div>
-                  <div className="text-dark text-opacity-75 mb-1">Uncategorised</div>
-                  <h2 className="text-dark mb-0">{otherExpenses.length} <small className="fs-6">(${totalOther.toLocaleString('en-AU', { minimumFractionDigits: 2 })})</small></h2>
-                </div>
-                <div className="ms-auto"><i className="fa fa-question-circle fa-3x text-dark text-opacity-25"></i></div>
-              </div>
+              <div className="text-dark text-opacity-75 mb-1">Uncategorised</div>
+              <h3 className="text-dark mb-0">{otherExpenses.length} <small className="fs-6">(${totalOther.toLocaleString('en-AU', { minimumFractionDigits: 2 })})</small></h3>
             </div>
           </div>
         </div>
@@ -331,6 +352,15 @@ export default function TaxPage() {
                           <i className={`fa fa-chevron-${isExpanded ? 'down' : 'right'} me-2 text-muted`} style={{ width: '12px', fontSize: '0.7rem' }}></i>
                           <i className={`fa ${CATEGORY_ICONS[category] || 'fa-receipt'} me-2`} style={{ color }}></i>
                           <span className="fw-bold flex-grow-1">{category}</span>
+                          {catExpenses.every(e => e.nonDeductible) ? (
+                            <button className="btn btn-xs btn-outline-success me-2" onClick={ev => { ev.stopPropagation(); toggleCategoryNonDeductible(category, false); }} title="Mark as deductible">
+                              <i className="fa fa-check me-1"></i>Deductible
+                            </button>
+                          ) : (
+                            <button className="btn btn-xs btn-outline-danger me-2" onClick={ev => { ev.stopPropagation(); toggleCategoryNonDeductible(category, true); }} title="Mark entire category as non-deductible">
+                              <i className="fa fa-ban me-1"></i>Non-deductible
+                            </button>
+                          )}
                           <span className="badge bg-secondary me-2">{catExpenses.length}</span>
                           <span className="fw-bold me-2">${total.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</span>
                           <span className="small text-muted" style={{ width: '45px', textAlign: 'right' }}>{pct.toFixed(1)}%</span>
@@ -349,14 +379,20 @@ export default function TaxPage() {
                               </thead>
                               <tbody>
                                 {catExpenses.map(e => (
-                                  <tr key={e.id}>
+                                  <tr key={e.id} style={e.nonDeductible ? { opacity: 0.5 } : undefined}>
                                     <td className="small text-muted">{new Date(e.date).toLocaleDateString('en-AU')}</td>
-                                    <td className="small">{e.description}</td>
+                                    <td className="small">
+                                      {e.nonDeductible && <span className="badge bg-danger me-1" style={{ fontSize: '0.6rem' }}>N/D</span>}
+                                      {e.description}
+                                    </td>
                                     {catExpenses.some(ex => ex.owner) && <td className="small text-muted">{e.owner || ''}</td>}
                                     <td className="text-end small fw-bold">${e.amount.toFixed(2)}</td>
-                                    <td style={{ width: '140px' }}>
+                                    <td style={{ width: '160px' }} className="text-nowrap">
+                                      <button className={`btn btn-xs ${e.nonDeductible ? 'btn-success' : 'btn-outline-danger'} me-1`} onClick={(ev) => { ev.stopPropagation(); toggleNonDeductible(e.id); }} title={e.nonDeductible ? 'Mark as deductible' : 'Mark as non-deductible'}>
+                                        <i className={`fa ${e.nonDeductible ? 'fa-check' : 'fa-ban'}`}></i>
+                                      </button>
                                       {editingExpenseId === e.id ? (
-                                        <select className="form-select form-select-sm" autoFocus value={e.category} onChange={ev => updateExpenseCategory(e.id, ev.target.value)} onBlur={() => setEditingExpenseId(null)}>
+                                        <select className="form-select form-select-sm d-inline-block" style={{ width: '110px' }} autoFocus value={e.category} onChange={ev => updateExpenseCategory(e.id, ev.target.value)} onBlur={() => setEditingExpenseId(null)}>
                                           {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                                         </select>
                                       ) : (

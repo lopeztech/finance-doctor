@@ -7,6 +7,7 @@ export interface Expense {
   spendingCategory?: string;
   financialYear: string;
   owner?: string;
+  nonDeductible?: boolean;
 }
 
 export interface FamilyMember {
