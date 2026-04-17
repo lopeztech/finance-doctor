@@ -10,13 +10,16 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
+const isBrowser = typeof window !== 'undefined';
 const hasConfig = Boolean(firebaseConfig.apiKey && firebaseConfig.projectId);
 
-if (!hasConfig) {
+if (isBrowser && !hasConfig) {
   console.warn('[firebase] NEXT_PUBLIC_FIREBASE_* env vars are not set; client SDK is disabled.');
 }
 
-export const app: FirebaseApp | null = hasConfig
+const shouldInit = isBrowser && hasConfig;
+
+export const app: FirebaseApp | null = shouldInit
   ? (getApps().length ? getApps()[0] : initializeApp(firebaseConfig))
   : null;
 

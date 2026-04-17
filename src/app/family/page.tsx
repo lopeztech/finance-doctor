@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { FamilyMember } from '@/lib/types';
+import { apiFetch } from '@/lib/api-client';
 
 function getTaxBracket(salary: number): string {
   if (salary <= 18200) return '0%';
@@ -21,7 +22,7 @@ export default function FamilyPage() {
 
   const fetchMembers = useCallback(async () => {
     setLoading(true);
-    const res = await fetch('/api/family-members');
+    const res = await apiFetch('/api/family-members');
     if (res.ok) setMembers(await res.json());
     setLoading(false);
   }, []);
@@ -32,7 +33,7 @@ export default function FamilyPage() {
     e.preventDefault();
     const body = { name: form.name, salary: parseFloat(form.salary), ...(form.job ? { job: form.job } : {}) };
     if (editingId) {
-      const res = await fetch('/api/family-members', {
+      const res = await apiFetch('/api/family-members', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: editingId, ...body }),
@@ -42,7 +43,7 @@ export default function FamilyPage() {
         setMembers(prev => prev.map(m => m.id === editingId ? updated : m));
       }
     } else {
-      const res = await fetch('/api/family-members', {
+      const res = await apiFetch('/api/family-members', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -68,7 +69,7 @@ export default function FamilyPage() {
   };
 
   const removeMember = async (id: string) => {
-    await fetch(`/api/family-members?id=${id}`, { method: 'DELETE' });
+    await apiFetch(`/api/family-members?id=${id}`, { method: 'DELETE' });
     setMembers(prev => prev.filter(m => m.id !== id));
   };
 

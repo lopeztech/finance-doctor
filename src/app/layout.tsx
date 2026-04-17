@@ -7,8 +7,8 @@ import 'react-perfect-scrollbar/dist/css/styles.css';
 import '@/styles/nextjs.scss';
 
 import { useEffect, useCallback } from 'react';
-import { SessionProvider } from 'next-auth/react';
 import '@/lib/firebase';
+import AuthGate from '@/components/auth-gate';
 import Header from '@/components/header/header';
 import TopMenu from '@/components/top-menu/top-menu';
 import Sidebar from '@/components/sidebar/sidebar';
@@ -113,11 +113,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     		<title>Finance Doctor</title>
     	</head>
       <body>
-      	<SessionProvider>
-					<AppSettingsProvider>
+				<AppSettingsProvider>
+					<AuthGate>
 						<Layout>{children}</Layout>
-					</AppSettingsProvider>
-				</SessionProvider>
+					</AuthGate>
+				</AppSettingsProvider>
       </body>
     </html>
   );

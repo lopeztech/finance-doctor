@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { Expense, FamilyMember } from '@/lib/types';
+import { apiFetch } from '@/lib/api-client';
 
 const SPENDING_ICONS: Record<string, string> = {
   'Bakery': 'fa-bread-slice',
@@ -86,21 +87,21 @@ export default function ExpensesPage() {
 
   // Load custom categories from Firestore
   useEffect(() => {
-    fetch('/api/advice-chat?type=custom-spending-categories')
+    apiFetch('/api/advice-chat?type=custom-spending-categories')
       .then(r => r.ok ? r.json() : { history: [] })
       .then(data => { if (data.history?.length) setCustomCategories(data.history); });
   }, []);
 
   const fetchExpenses = useCallback(async () => {
     setLoading(true);
-    const res = await fetch('/api/expenses?fy=all');
+    const res = await apiFetch('/api/expenses?fy=all');
     if (res.ok) setExpenses(await res.json());
     setLoading(false);
   }, []);
 
   useEffect(() => {
     fetchExpenses();
-    fetch('/api/family-members').then(r => r.ok ? r.json() : []).then(setFamilyMembers);
+    apiFetch('/api/family-members').then(r => r.ok ? r.json() : []).then(setFamilyMembers);
   }, [fetchExpenses]);
 
   // All spending categories: defaults + custom + any from data
@@ -117,7 +118,7 @@ export default function ExpensesPage() {
       const updated = [...customCategories, name];
       setCustomCategories(updated);
       // Persist to Firestore
-      fetch('/api/advice-chat', {
+      apiFetch('/api/advice-chat', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'custom-spending-categories', history: updated }),
@@ -134,7 +135,7 @@ export default function ExpensesPage() {
     // Update all expenses with the old category
     const matching = expenses.filter(e => (e.spendingCategory || 'Other') === oldName);
     const updates = matching.map(e =>
-      fetch('/api/expenses', {
+      apiFetch('/api/expenses', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: e.id, spendingCategory: trimmed }),
@@ -147,7 +148,7 @@ export default function ExpensesPage() {
     if (customCategories.includes(oldName)) {
       const updated = customCategories.map(c => c === oldName ? trimmed : c);
       setCustomCategories(updated);
-      fetch('/api/advice-chat', {
+      apiFetch('/api/advice-chat', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'custom-spending-categories', history: updated }),
@@ -155,7 +156,7 @@ export default function ExpensesPage() {
     } else if (!DEFAULT_SPENDING_CATEGORIES.includes(trimmed)) {
       const updated = [...customCategories, trimmed];
       setCustomCategories(updated);
-      fetch('/api/advice-chat', {
+      apiFetch('/api/advice-chat', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'custom-spending-categories', history: updated }),
@@ -172,7 +173,7 @@ export default function ExpensesPage() {
     // Apply to ALL expenses with the same description
     const matching = expenses.filter(e => e.description === expense.description);
     const updates = matching.map(e =>
-      fetch('/api/expenses', {
+      apiFetch('/api/expenses', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: e.id, spendingCategory }),
@@ -183,7 +184,7 @@ export default function ExpensesPage() {
     setEditingExpenseId(null);
 
     // Save rule for future imports
-    fetch('/api/category-rules', {
+    apiFetch('/api/category-rules', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pattern: expense.description, spendingCategory }),
@@ -198,7 +199,7 @@ export default function ExpensesPage() {
 
     const matching = expenses.filter(e => e.description === expense.description);
     await Promise.all(matching.map(e =>
-      fetch('/api/expenses', {
+      apiFetch('/api/expenses', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: e.id, spendingSubCategory: value }),
@@ -207,7 +208,7 @@ export default function ExpensesPage() {
     setExpenses(prev => prev.map(e => e.description === expense.description ? { ...e, spendingSubCategory: value } : e));
     setEditingSubCategoryId(null);
 
-    fetch('/api/category-rules', {
+    apiFetch('/api/category-rules', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pattern: expense.description, spendingSubCategory: value }),
@@ -302,7 +303,7 @@ export default function ExpensesPage() {
 
   const reanalyse = async () => {
     setReanalysing(true);
-    const res = await fetch('/api/expenses/reanalyse', {
+    const res = await apiFetch('/api/expenses/reanalyse', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ financialYear: 'all', type: 'spending' }),

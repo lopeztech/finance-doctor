@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { Expense, FamilyMember } from '@/lib/types';
+import { apiFetch } from '@/lib/api-client';
 
 const CATEGORIES = [
   'Clothing & Laundry',
@@ -76,7 +77,7 @@ export default function TaxPage() {
   adviceHistoryRef.current = adviceHistory;
 
   const saveChat = useCallback(async (history: { role: 'user' | 'model'; text: string }[]) => {
-    await fetch('/api/advice-chat', {
+    await apiFetch('/api/advice-chat', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: 'tax', history }),
@@ -84,15 +85,15 @@ export default function TaxPage() {
   }, []);
 
   useEffect(() => {
-    fetch('/api/family-members').then(r => r.ok ? r.json() : []).then(setFamilyMembers);
-    fetch('/api/advice-chat?type=tax')
+    apiFetch('/api/family-members').then(r => r.ok ? r.json() : []).then(setFamilyMembers);
+    apiFetch('/api/advice-chat?type=tax')
       .then(res => res.ok ? res.json() : { history: [] })
       .then(data => { if (data.history?.length) setAdviceHistory(data.history); });
   }, []);
 
   const fetchExpenses = useCallback(async () => {
     setLoading(true);
-    const res = await fetch('/api/expenses?fy=all');
+    const res = await apiFetch('/api/expenses?fy=all');
     if (res.ok) setExpenses(await res.json());
     setLoading(false);
   }, []);
@@ -107,7 +108,7 @@ export default function TaxPage() {
     // Apply to ALL expenses with the same description
     const matching = expenses.filter(e => e.description === expense.description);
     await Promise.all(matching.map(e =>
-      fetch('/api/expenses', {
+      apiFetch('/api/expenses', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: e.id, nonDeductible }),
@@ -117,7 +118,7 @@ export default function TaxPage() {
     setExpenses(prev => prev.map(e => ids.has(e.id) ? { ...e, nonDeductible } : e));
 
     // Save rule so future imports inherit the flag
-    fetch('/api/category-rules', {
+    apiFetch('/api/category-rules', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pattern: expense.description, nonDeductible }),
@@ -127,7 +128,7 @@ export default function TaxPage() {
   const toggleCategoryNonDeductible = async (category: string, makeNonDeductible: boolean) => {
     const matching = filteredExpenses.filter(e => e.category === category && e.category !== 'Other Deductions');
     const updates = matching.map(e =>
-      fetch('/api/expenses', {
+      apiFetch('/api/expenses', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: e.id, nonDeductible: makeNonDeductible }),
@@ -143,7 +144,7 @@ export default function TaxPage() {
     for (const e of matching) {
       if (seen.has(e.description)) continue;
       seen.add(e.description);
-      rulePosts.push(fetch('/api/category-rules', {
+      rulePosts.push(apiFetch('/api/category-rules', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pattern: e.description, nonDeductible: makeNonDeductible }),
@@ -159,7 +160,7 @@ export default function TaxPage() {
     // Apply to ALL expenses with the same description
     const matching = expenses.filter(e => e.description === expense.description);
     const updates = matching.map(e =>
-      fetch('/api/expenses', {
+      apiFetch('/api/expenses', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: e.id, category }),
@@ -170,7 +171,7 @@ export default function TaxPage() {
     setEditingExpenseId(null);
 
     // Save rule for future imports
-    fetch('/api/category-rules', {
+    apiFetch('/api/category-rules', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pattern: expense.description, taxCategory: category }),
@@ -179,7 +180,7 @@ export default function TaxPage() {
 
   const reanalyseOther = async () => {
     setReanalysing(true);
-    const res = await fetch('/api/expenses/reanalyse', {
+    const res = await apiFetch('/api/expenses/reanalyse', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ financialYear }),
@@ -190,7 +191,7 @@ export default function TaxPage() {
 
   const streamAdvice = async (history: { role: 'user' | 'model'; text: string }[], followUp?: string) => {
     setAdviceLoading(true);
-    const res = await fetch('/api/tax/advice', {
+    const res = await apiFetch('/api/tax/advice', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ financialYear, history, followUp }),

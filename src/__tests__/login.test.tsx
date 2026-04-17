@@ -1,10 +1,15 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { signIn } from 'next-auth/react';
+import { signInWithPopup } from 'firebase/auth';
 import LoginPage from '@/app/login/page';
 
-jest.mock('next-auth/react', () => ({
-  signIn: jest.fn(),
+jest.mock('firebase/auth', () => ({
+  signInWithPopup: jest.fn().mockResolvedValue({ user: { uid: 'test' } }),
+  GoogleAuthProvider: jest.fn().mockImplementation(() => ({})),
+}));
+
+jest.mock('@/lib/firebase', () => ({
+  auth: {},
 }));
 
 jest.mock('@/config/app-settings', () => ({
@@ -15,6 +20,8 @@ jest.mock('@/config/app-settings', () => ({
 }));
 
 describe('Login Page', () => {
+  beforeEach(() => jest.clearAllMocks());
+
   it('renders the brand name', () => {
     render(<LoginPage />);
     expect(screen.getByText('Finance')).toBeInTheDocument();
@@ -30,11 +37,11 @@ describe('Login Page', () => {
     expect(screen.getByText('Sign in with Google')).toBeInTheDocument();
   });
 
-  it('calls signIn when Google button is clicked', async () => {
+  it('calls signInWithPopup when Google button is clicked', async () => {
     const user = userEvent.setup();
     render(<LoginPage />);
 
     await user.click(screen.getByText('Sign in with Google'));
-    expect(signIn).toHaveBeenCalledWith('google', { callbackUrl: '/' });
+    expect(signInWithPopup).toHaveBeenCalled();
   });
 });

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { Expense, Investment, FamilyMember } from '@/lib/types';
+import { apiFetch } from '@/lib/api-client';
 
 interface DashboardTip {
   icon: string;
@@ -58,18 +59,18 @@ export default function Dashboard() {
   const [tipsLoading, setTipsLoading] = useState(true);
 
   const fetchExpenses = useCallback(async () => {
-    const res = await fetch(`/api/expenses?fy=${financialYear}`);
+    const res = await apiFetch(`/api/expenses?fy=${financialYear}`);
     if (res.ok) setExpenses(await res.json());
   }, [financialYear]);
 
   useEffect(() => {
     Promise.all([
       fetchExpenses(),
-      fetch('/api/investments').then(r => r.ok ? r.json() : []).then(setInvestments),
-      fetch('/api/family-members').then(r => r.ok ? r.json() : []).then(setFamilyMembers),
+      apiFetch('/api/investments').then(r => r.ok ? r.json() : []).then(setInvestments),
+      apiFetch('/api/family-members').then(r => r.ok ? r.json() : []).then(setFamilyMembers),
     ]).then(() => setLoading(false));
 
-    fetch('/api/dashboard/tips')
+    apiFetch('/api/dashboard/tips')
       .then(r => r.ok ? r.json() : { tips: [] })
       .then(data => { setTips(data.tips || []); setTipsLoading(false); })
       .catch(() => setTipsLoading(false));

@@ -1,10 +1,19 @@
 'use client';
 
-import { useSession, signOut } from 'next-auth/react';
+import { signOut } from 'firebase/auth';
+import { useRouter } from 'next/navigation';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
+import { auth } from '@/lib/firebase';
+import { useAuthUser } from '@/lib/use-auth-user';
 
 export default function SettingsPage() {
-  const { data: session } = useSession();
+  const { user } = useAuthUser();
+  const router = useRouter();
+
+  const handleSignOut = async () => {
+    if (auth) await signOut(auth);
+    router.replace('/login');
+  };
 
   return (
     <>
@@ -16,9 +25,9 @@ export default function SettingsPage() {
             <PanelHeader noButton>Profile</PanelHeader>
             <PanelBody>
               <div className="d-flex align-items-center mb-3">
-                {session?.user?.image ? (
+                {user?.photoURL ? (
                   <img
-                    src={session.user.image}
+                    src={user.photoURL}
                     alt=""
                     className="rounded-circle me-3"
                     width="64"
@@ -31,8 +40,8 @@ export default function SettingsPage() {
                   </div>
                 )}
                 <div>
-                  <h5 className="mb-1">{session?.user?.name || 'User'}</h5>
-                  <p className="text-muted mb-0">{session?.user?.email}</p>
+                  <h5 className="mb-1">{user?.displayName || 'User'}</h5>
+                  <p className="text-muted mb-0">{user?.email}</p>
                 </div>
               </div>
               <p className="text-muted small">Signed in via Google. Your data is stored securely and scoped to your account.</p>
@@ -46,7 +55,7 @@ export default function SettingsPage() {
             <PanelBody>
               <button
                 className="btn btn-outline-danger"
-                onClick={() => signOut({ callbackUrl: '/login' })}
+                onClick={handleSignOut}
               >
                 <i className="fa fa-sign-out-alt me-2"></i>Sign Out
               </button>

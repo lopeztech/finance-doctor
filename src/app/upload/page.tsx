@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { Expense, FamilyMember } from '@/lib/types';
+import { apiFetch } from '@/lib/api-client';
 
 const CATEGORIES = [
   'Work from Home',
@@ -47,14 +48,14 @@ export default function UploadPage() {
 
   const fetchExpenses = useCallback(async () => {
     setLoading(true);
-    const res = await fetch('/api/expenses?fy=all');
+    const res = await apiFetch('/api/expenses?fy=all');
     if (res.ok) setExpenses(await res.json());
     setLoading(false);
   }, []);
 
   useEffect(() => {
     fetchExpenses();
-    fetch('/api/family-members').then(r => r.ok ? r.json() : []).then(setFamilyMembers);
+    apiFetch('/api/family-members').then(r => r.ok ? r.json() : []).then(setFamilyMembers);
   }, [fetchExpenses]);
 
   const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -65,7 +66,7 @@ export default function UploadPage() {
     setImportDuplicateCount(0);
     const formData = new FormData();
     formData.append('file', file);
-    const res = await fetch('/api/expenses/import', { method: 'POST', body: formData });
+    const res = await apiFetch('/api/expenses/import', { method: 'POST', body: formData });
     if (res.ok) {
       const data = await res.json();
       setImportDuplicateCount(data.duplicateCount || 0);
@@ -100,7 +101,7 @@ export default function UploadPage() {
     }));
     if (!toSave?.length) return;
     setImportSaving(true);
-    const res = await fetch('/api/expenses/import', {
+    const res = await apiFetch('/api/expenses/import', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ expenses: toSave }),
@@ -230,7 +231,7 @@ export default function UploadPage() {
             onClick={async () => {
               setMigrating(true);
               setMigrateResult(null);
-              const res = await fetch('/api/expenses/migrate', { method: 'POST' });
+              const res = await apiFetch('/api/expenses/migrate', { method: 'POST' });
               if (res.ok) {
                 const data = await res.json();
                 setMigrateResult(data);
@@ -263,7 +264,7 @@ export default function UploadPage() {
                   let remaining = migrateResult.needsCategorisation;
                   setCategoriseProgress({ done: 0, remaining });
                   while (remaining > 0) {
-                    const res = await fetch('/api/expenses/migrate', {
+                    const res = await apiFetch('/api/expenses/migrate', {
                       method: 'PUT',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ batchSize: 50 }),

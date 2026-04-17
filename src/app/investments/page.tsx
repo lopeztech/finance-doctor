@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { Investment, FamilyMember } from '@/lib/types';
+import { apiFetch } from '@/lib/api-client';
 
 const INVESTMENT_TYPES = [
   'Australian Shares',
@@ -325,7 +326,7 @@ export default function InvestmentsPage() {
   adviceHistoryRef.current = adviceHistory;
 
   const saveChat = useCallback(async (history: { role: 'user' | 'model'; text: string }[]) => {
-    await fetch('/api/advice-chat', {
+    await apiFetch('/api/advice-chat', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: 'investments', history }),
@@ -333,20 +334,20 @@ export default function InvestmentsPage() {
   }, []);
 
   useEffect(() => {
-    fetch('/api/advice-chat?type=investments')
+    apiFetch('/api/advice-chat?type=investments')
       .then(res => res.ok ? res.json() : { history: [] })
       .then(data => { if (data.history?.length) setAdviceHistory(data.history); });
   }, []);
 
   const fetchInvestments = useCallback(async () => {
     setLoading(true);
-    const res = await fetch('/api/investments');
+    const res = await apiFetch('/api/investments');
     if (res.ok) setInvestments(await res.json());
     setLoading(false);
   }, []);
 
   const fetchFamilyMembers = useCallback(async () => {
-    const res = await fetch('/api/family-members');
+    const res = await apiFetch('/api/family-members');
     if (res.ok) setFamilyMembers(await res.json());
   }, []);
 
@@ -359,7 +360,7 @@ export default function InvestmentsPage() {
 
     if (editingId) {
       const { id: _unusedId, ...data } = inv;
-      const res = await fetch('/api/investments', {
+      const res = await apiFetch('/api/investments', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: editingId, ...data }),
@@ -371,7 +372,7 @@ export default function InvestmentsPage() {
       }
     } else {
       const { id: _unusedId, ...data } = inv;
-      const res = await fetch('/api/investments', {
+      const res = await apiFetch('/api/investments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -423,13 +424,13 @@ export default function InvestmentsPage() {
   };
 
   const removeInvestment = async (id: string) => {
-    await fetch(`/api/investments?id=${id}`, { method: 'DELETE' });
+    await apiFetch(`/api/investments?id=${id}`, { method: 'DELETE' });
     setInvestments(prev => prev.filter(i => i.id !== id));
   };
 
   const streamAdvice = async (history: { role: 'user' | 'model'; text: string }[], followUp?: string) => {
     setAdviceLoading(true);
-    const res = await fetch('/api/investments/advice', {
+    const res = await apiFetch('/api/investments/advice', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ history, followUp }),

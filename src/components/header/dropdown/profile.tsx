@@ -1,17 +1,27 @@
 'use client';
 
 import React from 'react';
-import { useSession, signOut } from 'next-auth/react';
+import { signOut } from 'firebase/auth';
+import { useRouter } from 'next/navigation';
+import { auth } from '@/lib/firebase';
+import { useAuthUser } from '@/lib/use-auth-user';
 
 export default function DropdownProfile() {
-  const { data: session } = useSession();
+  const { user } = useAuthUser();
+  const router = useRouter();
+
+  const handleSignOut = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (auth) await signOut(auth);
+    router.replace('/login');
+  };
 
   return (
     <div className="navbar-item navbar-user dropdown">
       <a href="#" className="navbar-link dropdown-toggle d-flex align-items-center" data-bs-toggle="dropdown">
-        {session?.user?.image ? (
+        {user?.photoURL ? (
           <img
-            src={session.user.image}
+            src={user.photoURL}
             alt=""
             className="rounded-circle"
             width="36"
@@ -24,7 +34,7 @@ export default function DropdownProfile() {
           </div>
         )}
         <span>
-          <span className="d-none d-md-inline fw-bold">{session?.user?.name || 'User'}</span>
+          <span className="d-none d-md-inline fw-bold">{user?.displayName || 'User'}</span>
           <b className="caret"></b>
         </span>
       </a>
@@ -32,7 +42,7 @@ export default function DropdownProfile() {
         <a
           href="#"
           className="dropdown-item"
-          onClick={(e) => { e.preventDefault(); signOut({ callbackUrl: '/login' }); }}
+          onClick={handleSignOut}
         >
           Log Out
         </a>

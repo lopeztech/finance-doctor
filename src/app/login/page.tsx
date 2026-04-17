@@ -1,11 +1,14 @@
 'use client';
 
-import { signIn } from "next-auth/react";
+import { useEffect, useState } from 'react';
+import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { useAppSettings } from '@/config/app-settings';
-import { useEffect } from 'react';
+import { auth } from '@/lib/firebase';
 
 export default function LoginPage() {
   const { updateSettings } = useAppSettings();
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     updateSettings({
@@ -23,6 +26,23 @@ export default function LoginPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleLogin = async () => {
+    if (!auth) {
+      setError('Firebase is not configured.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await signInWithPopup(auth, new GoogleAuthProvider());
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Sign-in failed';
+      setError(msg);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <div className="login login-v2 fw-bold">
@@ -54,13 +74,15 @@ export default function LoginPage() {
           </div>
           <div className="d-flex justify-content-center">
             <button
-              onClick={() => signIn("google", { callbackUrl: "/" })}
+              onClick={handleLogin}
+              disabled={busy}
               className="btn btn-outline-white btn-lg d-flex align-items-center gap-2"
             >
-              <i className="fab fa-google"></i>
+              {busy ? <i className="fa fa-spinner fa-spin"></i> : <i className="fab fa-google"></i>}
               Sign in with Google
             </button>
           </div>
+          {error && <div className="text-danger text-center mt-3 small">{error}</div>}
         </div>
       </div>
     </div>
