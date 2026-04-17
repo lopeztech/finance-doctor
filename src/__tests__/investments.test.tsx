@@ -8,6 +8,14 @@ jest.mock('@/lib/firebase', () => ({
   functions: null,
 }));
 
+const mockListInvestments = jest.fn();
+jest.mock('@/lib/investments-repo', () => ({
+  listInvestments: () => mockListInvestments(),
+  addInvestment: jest.fn(),
+  updateInvestment: jest.fn(),
+  deleteInvestment: jest.fn(),
+}));
+
 import InvestmentsPage from '@/app/investments/page';
 
 jest.mock('@/config/app-settings', () => ({
@@ -25,6 +33,8 @@ beforeEach(() => {
     }
     return Promise.resolve({ ok: true, json: async () => [] });
   });
+  mockListInvestments.mockReset();
+  mockListInvestments.mockResolvedValue([]);
 });
 
 describe('Investments Page', () => {
@@ -35,7 +45,7 @@ describe('Investments Page', () => {
 
   it('fetches investments on load', async () => {
     render(<InvestmentsPage />);
-    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/investments', expect.anything()));
+    await waitFor(() => expect(mockListInvestments).toHaveBeenCalled());
   });
 
   it('shows empty state after loading', async () => {
@@ -44,20 +54,9 @@ describe('Investments Page', () => {
   });
 
   it('shows investments from API', async () => {
-    mockFetch.mockImplementation((url: string) => {
-      if (typeof url === 'string' && url.includes('/api/investments') && !url.includes('advice')) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => [
-            { id: '1', name: 'VAS', type: 'Australian Shares', currentValue: 10000, costBasis: 9000, units: 100, buyPricePerUnit: 90 }
-          ],
-        });
-      }
-      if (typeof url === 'string' && url.includes('/api/advice-chat')) {
-        return Promise.resolve({ ok: true, json: async () => ({ history: [] }) });
-      }
-      return Promise.resolve({ ok: true, json: async () => [] });
-    });
+    mockListInvestments.mockResolvedValue([
+      { id: '1', name: 'VAS', type: 'Australian Shares', currentValue: 10000, costBasis: 9000, units: 100, buyPricePerUnit: 90 },
+    ]);
     render(<InvestmentsPage />);
     await waitFor(() => expect(screen.getByText('VAS')).toBeInTheDocument());
   });
@@ -93,20 +92,9 @@ describe('Investments Page', () => {
   });
 
   it('shows health assessment panel with AI advice button', async () => {
-    mockFetch.mockImplementation((url: string) => {
-      if (typeof url === 'string' && url.includes('/api/investments') && !url.includes('advice')) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => [
-            { id: '1', name: 'VAS', type: 'Australian Shares', currentValue: 10000, costBasis: 9000 }
-          ],
-        });
-      }
-      if (typeof url === 'string' && url.includes('/api/advice-chat')) {
-        return Promise.resolve({ ok: true, json: async () => ({ history: [] }) });
-      }
-      return Promise.resolve({ ok: true, json: async () => [] });
-    });
+    mockListInvestments.mockResolvedValue([
+      { id: '1', name: 'VAS', type: 'Australian Shares', currentValue: 10000, costBasis: 9000 },
+    ]);
     render(<InvestmentsPage />);
     await waitFor(() => expect(screen.getByText('VAS')).toBeInTheDocument());
     expect(screen.getByText('Investment Health Assessment')).toBeInTheDocument();

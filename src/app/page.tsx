@@ -6,6 +6,7 @@ import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { Expense, Investment, FamilyMember } from '@/lib/types';
 import { apiFetch } from '@/lib/api-client';
 import { listExpenses } from '@/lib/expenses-repo';
+import { listInvestments } from '@/lib/investments-repo';
 
 interface DashboardTip {
   icon: string;
@@ -66,7 +67,7 @@ export default function Dashboard() {
   useEffect(() => {
     Promise.all([
       fetchExpenses(),
-      apiFetch('/api/investments').then(r => r.ok ? r.json() : []).then(setInvestments),
+      listInvestments().then(setInvestments).catch(() => setInvestments([])),
       apiFetch('/api/family-members').then(r => r.ok ? r.json() : []).then(setFamilyMembers),
     ]).then(() => setLoading(false));
 

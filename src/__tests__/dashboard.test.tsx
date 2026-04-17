@@ -11,6 +11,10 @@ jest.mock('@/lib/expenses-repo', () => ({
   listExpenses: jest.fn().mockResolvedValue([]),
 }));
 
+jest.mock('@/lib/investments-repo', () => ({
+  listInvestments: jest.fn().mockResolvedValue([]),
+}));
+
 import Dashboard from '@/app/page';
 
 jest.mock('next/link', () => {

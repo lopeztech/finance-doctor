@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { Investment, FamilyMember } from '@/lib/types';
 import { apiFetch } from '@/lib/api-client';
+import { listInvestments, addInvestment, updateInvestment, deleteInvestment } from '@/lib/investments-repo';
 
 const INVESTMENT_TYPES = [
   'Australian Shares',
@@ -341,9 +342,11 @@ export default function InvestmentsPage() {
 
   const fetchInvestments = useCallback(async () => {
     setLoading(true);
-    const res = await apiFetch('/api/investments');
-    if (res.ok) setInvestments(await res.json());
-    setLoading(false);
+    try {
+      setInvestments(await listInvestments());
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   const fetchFamilyMembers = useCallback(async () => {
@@ -358,31 +361,15 @@ export default function InvestmentsPage() {
     setSaving(true);
     const inv = buildInvestment(form);
 
+    const { id: _unusedId, ...data } = inv;
     if (editingId) {
-      const { id: _unusedId, ...data } = inv;
-      const res = await apiFetch('/api/investments', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: editingId, ...data }),
-      });
-      if (res.ok) {
-        const updated = await res.json();
-        setInvestments(prev => prev.map(i => i.id === editingId ? updated : i));
-        cancelEdit();
-      }
+      await updateInvestment(editingId, data);
+      setInvestments(prev => prev.map(i => i.id === editingId ? { id: editingId, ...data } : i));
     } else {
-      const { id: _unusedId, ...data } = inv;
-      const res = await apiFetch('/api/investments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (res.ok) {
-        const saved = await res.json();
-        setInvestments(prev => [...prev, saved]);
-        cancelEdit();
-      }
+      const saved = await addInvestment(data);
+      setInvestments(prev => [...prev, saved]);
     }
+    cancelEdit();
     setSaving(false);
   };
 
@@ -424,7 +411,7 @@ export default function InvestmentsPage() {
   };
 
   const removeInvestment = async (id: string) => {
-    await apiFetch(`/api/investments?id=${id}`, { method: 'DELETE' });
+    await deleteInvestment(id);
     setInvestments(prev => prev.filter(i => i.id !== id));
   };
 
