@@ -5,13 +5,21 @@ import { signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { auth } from '@/lib/firebase';
 import { useAuthUser } from '@/lib/use-auth-user';
+import { useGuestMode } from '@/lib/use-guest-mode';
+import { exitGuest } from '@/lib/guest-store';
 
 export default function DropdownProfile() {
   const { user } = useAuthUser();
+  const { guest } = useGuestMode();
   const router = useRouter();
 
   const handleSignOut = async (e: React.MouseEvent) => {
     e.preventDefault();
+    if (guest) {
+      exitGuest();
+      router.replace('/login');
+      return;
+    }
     if (auth) await signOut(auth);
     router.replace('/login');
   };
@@ -30,11 +38,11 @@ export default function DropdownProfile() {
           />
         ) : (
           <div className="image image-icon bg-gray-800 text-gray-600">
-            <i className="fa fa-user"></i>
+            <i className={`fa ${guest ? 'fa-user-astronaut' : 'fa-user'}`}></i>
           </div>
         )}
         <span>
-          <span className="d-none d-md-inline fw-bold">{user?.displayName || 'User'}</span>
+          <span className="d-none d-md-inline fw-bold">{guest ? 'Guest' : (user?.displayName || 'User')}</span>
           <b className="caret"></b>
         </span>
       </a>
@@ -44,7 +52,7 @@ export default function DropdownProfile() {
           className="dropdown-item"
           onClick={handleSignOut}
         >
-          Log Out
+          {guest ? 'Exit Guest mode' : 'Log Out'}
         </a>
       </div>
     </div>

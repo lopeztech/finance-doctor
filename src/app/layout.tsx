@@ -10,6 +10,7 @@ import { useEffect, useCallback } from 'react';
 import '@/lib/firebase';
 import AuthGate from '@/components/auth-gate';
 import ErrorBoundary from '@/components/error-boundary';
+import GuestBanner from '@/components/guest-banner';
 import Header from '@/components/header/header';
 import TopMenu from '@/components/top-menu/top-menu';
 import Sidebar from '@/components/sidebar/sidebar';
@@ -76,7 +77,7 @@ function Layout({ children }: { children: React.ReactNode }) {
 			{settings.appTopMenu && (<TopMenu />)}
 			{!settings.appHeaderNone && (<Header />)}
 			{!settings.appSidebarNone && (<Sidebar />)}
-			{!settings.appContentNone && (<div className={'app-content '+ settings.appContentClass }><ErrorBoundary>{children}</ErrorBoundary></div>)}
+			{!settings.appContentNone && (<div className={'app-content '+ settings.appContentClass }><GuestBanner /><ErrorBoundary>{children}</ErrorBoundary></div>)}
 			{settings.appSidebarTwo && (<SidebarRight />)}
 			{settings.appContentNone && (<ErrorBoundary>{children}</ErrorBoundary>)}
 			    </div>

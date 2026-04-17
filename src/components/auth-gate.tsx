@@ -3,17 +3,21 @@
 import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuthUser } from '@/lib/use-auth-user';
+import { useGuestMode } from '@/lib/use-guest-mode';
 
 export default function AuthGate({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { user, ready } = useAuthUser();
+  const { user, ready: authReady } = useAuthUser();
+  const { guest, ready: guestReady } = useGuestMode();
+  const ready = authReady && guestReady;
+  const authenticated = Boolean(user) || guest;
 
   useEffect(() => {
     if (!ready) return;
-    if (!user && pathname !== '/login') router.replace('/login');
-    if (user && pathname === '/login') router.replace('/');
-  }, [ready, user, pathname, router]);
+    if (!authenticated && pathname !== '/login') router.replace('/login');
+    if (authenticated && pathname === '/login') router.replace('/');
+  }, [ready, authenticated, pathname, router]);
 
   if (!ready) {
     return (
@@ -23,7 +27,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!user && pathname !== '/login') return null;
+  if (!authenticated && pathname !== '/login') return null;
 
   return <>{children}</>;
 }

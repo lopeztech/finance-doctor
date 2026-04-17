@@ -9,6 +9,7 @@ import {
   type CollectionReference,
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
+import * as guest from './guest-store';
 
 export interface CategoryRule {
   id: string;
@@ -39,6 +40,7 @@ function categoryRulesCollection(): CollectionReference {
 }
 
 export async function listCategoryRules(): Promise<CategoryRule[]> {
+  if (guest.isGuest()) return guest.listCategoryRules();
   const snap = await getDocs(categoryRulesCollection());
   return snap.docs.map(d => ({ id: d.id, ...d.data() } as CategoryRule));
 }
@@ -46,6 +48,15 @@ export async function listCategoryRules(): Promise<CategoryRule[]> {
 export async function upsertCategoryRule(input: CategoryRuleInput): Promise<CategoryRule> {
   const { pattern, taxCategory, spendingCategory, spendingSubCategory, nonDeductible } = input;
   if (!pattern) throw new Error('Pattern required');
+  if (guest.isGuest()) {
+    return guest.upsertCategoryRule({
+      pattern: pattern.toLowerCase(),
+      ...(taxCategory ? { taxCategory } : {}),
+      ...(spendingCategory ? { spendingCategory } : {}),
+      ...(spendingSubCategory !== undefined ? { spendingSubCategory } : {}),
+      ...(nonDeductible !== undefined ? { nonDeductible } : {}),
+    });
+  }
   const col = categoryRulesCollection();
   const normalized = pattern.toLowerCase();
   const existing = await getDocs(query(col, where('pattern', '==', normalized)));

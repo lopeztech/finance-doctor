@@ -6,12 +6,20 @@ import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import DataManagement from '@/components/data-management';
 import { auth } from '@/lib/firebase';
 import { useAuthUser } from '@/lib/use-auth-user';
+import { useGuestMode } from '@/lib/use-guest-mode';
+import { exitGuest } from '@/lib/guest-store';
 
 export default function SettingsPage() {
   const { user } = useAuthUser();
+  const { guest } = useGuestMode();
   const router = useRouter();
 
   const handleSignOut = async () => {
+    if (guest) {
+      exitGuest();
+      router.replace('/login');
+      return;
+    }
     if (auth) await signOut(auth);
     router.replace('/login');
   };
@@ -37,15 +45,19 @@ export default function SettingsPage() {
                   />
                 ) : (
                   <div className="bg-gray-800 text-gray-600 rounded-circle d-flex align-items-center justify-content-center me-3" style={{ width: 64, height: 64 }}>
-                    <i className="fa fa-user fa-2x"></i>
+                    <i className={`fa ${guest ? 'fa-user-astronaut' : 'fa-user'} fa-2x`}></i>
                   </div>
                 )}
                 <div>
-                  <h5 className="mb-1">{user?.displayName || 'User'}</h5>
-                  <p className="text-muted mb-0">{user?.email}</p>
+                  <h5 className="mb-1">{guest ? 'Guest' : (user?.displayName || 'User')}</h5>
+                  <p className="text-muted mb-0">{guest ? 'Demo mode — not signed in' : user?.email}</p>
                 </div>
               </div>
-              <p className="text-muted small">Signed in via Google. Your data is stored securely and scoped to your account.</p>
+              <p className="text-muted small">
+                {guest
+                  ? 'You\'re exploring Finance Doctor with demo data. Sign in with Google to create your own account and save real data.'
+                  : 'Signed in via Google. Your data is stored securely and scoped to your account.'}
+              </p>
             </PanelBody>
           </Panel>
         </div>
@@ -58,7 +70,7 @@ export default function SettingsPage() {
                 className="btn btn-outline-danger"
                 onClick={handleSignOut}
               >
-                <i className="fa fa-sign-out-alt me-2"></i>Sign Out
+                <i className="fa fa-sign-out-alt me-2"></i>{guest ? 'Exit Guest mode' : 'Sign Out'}
               </button>
             </PanelBody>
           </Panel>

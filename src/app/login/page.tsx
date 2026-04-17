@@ -1,12 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { useAppSettings } from '@/config/app-settings';
 import { auth } from '@/lib/firebase';
+import { enableGuest } from '@/lib/guest-store';
 
 export default function LoginPage() {
   const { updateSettings } = useAppSettings();
+  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -72,7 +75,7 @@ export default function LoginPage() {
           <div className="text-white text-opacity-50 text-center mb-4">
             Sign in with your Google account to get started
           </div>
-          <div className="d-flex justify-content-center">
+          <div className="d-flex flex-column align-items-center gap-3">
             <button
               onClick={handleLogin}
               disabled={busy}
@@ -80,6 +83,14 @@ export default function LoginPage() {
             >
               {busy ? <i className="fa fa-spinner fa-spin"></i> : <i className="fab fa-google"></i>}
               Sign in with Google
+            </button>
+            <div className="text-white text-opacity-50 small">— or —</div>
+            <button
+              type="button"
+              onClick={() => { enableGuest(); router.replace('/'); }}
+              className="btn btn-link text-white text-decoration-none"
+            >
+              <i className="fa fa-user-astronaut me-2"></i>Try as Guest (demo data)
             </button>
           </div>
           {error && <div className="text-danger text-center mt-3 small">{error}</div>}

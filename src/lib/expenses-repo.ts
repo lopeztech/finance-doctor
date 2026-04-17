@@ -10,6 +10,7 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import type { Expense } from './types';
+import * as guest from './guest-store';
 
 function getUserKey(): string {
   const email = auth?.currentUser?.email;
@@ -23,6 +24,7 @@ function expensesCollection(): CollectionReference {
 }
 
 export async function listExpenses(fy: string = 'all'): Promise<Expense[]> {
+  if (guest.isGuest()) return guest.listExpenses(fy);
   const col = expensesCollection();
   const q = fy === 'all'
     ? query(col)
@@ -34,6 +36,7 @@ export async function listExpenses(fy: string = 'all'): Promise<Expense[]> {
 }
 
 export async function updateExpense(id: string, data: Partial<Expense>): Promise<void> {
+  if (guest.isGuest()) { guest.updateExpense(id, data); return; }
   if (!db) throw new Error('Firestore is not initialised');
   const ref = doc(db, 'users', getUserKey(), 'expenses', id);
   await updateDoc(ref, data as Record<string, unknown>);
