@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { Expense, FamilyMember } from '@/lib/types';
 import { apiFetch } from '@/lib/api-client';
+import { listExpenses } from '@/lib/expenses-repo';
 
 const CATEGORIES = [
   'Work from Home',
@@ -48,9 +49,11 @@ export default function UploadPage() {
 
   const fetchExpenses = useCallback(async () => {
     setLoading(true);
-    const res = await apiFetch('/api/expenses?fy=all');
-    if (res.ok) setExpenses(await res.json());
-    setLoading(false);
+    try {
+      setExpenses(await listExpenses('all'));
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {

@@ -7,6 +7,10 @@ jest.mock('@/lib/firebase', () => ({
   functions: null,
 }));
 
+jest.mock('@/lib/expenses-repo', () => ({
+  listExpenses: jest.fn().mockResolvedValue([]),
+}));
+
 import Dashboard from '@/app/page';
 
 jest.mock('next/link', () => {

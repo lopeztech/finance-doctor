@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { Expense, Investment, FamilyMember } from '@/lib/types';
 import { apiFetch } from '@/lib/api-client';
+import { listExpenses } from '@/lib/expenses-repo';
 
 interface DashboardTip {
   icon: string;
@@ -59,8 +60,7 @@ export default function Dashboard() {
   const [tipsLoading, setTipsLoading] = useState(true);
 
   const fetchExpenses = useCallback(async () => {
-    const res = await apiFetch(`/api/expenses?fy=${financialYear}`);
-    if (res.ok) setExpenses(await res.json());
+    setExpenses(await listExpenses(financialYear));
   }, [financialYear]);
 
   useEffect(() => {

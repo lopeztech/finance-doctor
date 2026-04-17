@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { Expense, FamilyMember } from '@/lib/types';
 import { apiFetch } from '@/lib/api-client';
+import { listExpenses, updateExpense } from '@/lib/expenses-repo';
 
 const SPENDING_ICONS: Record<string, string> = {
   'Bakery': 'fa-bread-slice',
@@ -94,9 +95,11 @@ export default function ExpensesPage() {
 
   const fetchExpenses = useCallback(async () => {
     setLoading(true);
-    const res = await apiFetch('/api/expenses?fy=all');
-    if (res.ok) setExpenses(await res.json());
-    setLoading(false);
+    try {
+      setExpenses(await listExpenses('all'));
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -134,14 +137,7 @@ export default function ExpensesPage() {
 
     // Update all expenses with the old category
     const matching = expenses.filter(e => (e.spendingCategory || 'Other') === oldName);
-    const updates = matching.map(e =>
-      apiFetch('/api/expenses', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: e.id, spendingCategory: trimmed }),
-      })
-    );
-    await Promise.all(updates);
+    await Promise.all(matching.map(e => updateExpense(e.id, { spendingCategory: trimmed })));
     setExpenses(prev => prev.map(e => (e.spendingCategory || 'Other') === oldName ? { ...e, spendingCategory: trimmed } : e));
 
     // Update custom categories list
@@ -172,14 +168,7 @@ export default function ExpensesPage() {
 
     // Apply to ALL expenses with the same description
     const matching = expenses.filter(e => e.description === expense.description);
-    const updates = matching.map(e =>
-      apiFetch('/api/expenses', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: e.id, spendingCategory }),
-      })
-    );
-    await Promise.all(updates);
+    await Promise.all(matching.map(e => updateExpense(e.id, { spendingCategory })));
     setExpenses(prev => prev.map(e => e.description === expense.description ? { ...e, spendingCategory } : e));
     setEditingExpenseId(null);
 
@@ -198,13 +187,7 @@ export default function ExpensesPage() {
     if (value === (expense.spendingSubCategory || '')) { setEditingSubCategoryId(null); return; }
 
     const matching = expenses.filter(e => e.description === expense.description);
-    await Promise.all(matching.map(e =>
-      apiFetch('/api/expenses', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: e.id, spendingSubCategory: value }),
-      })
-    ));
+    await Promise.all(matching.map(e => updateExpense(e.id, { spendingSubCategory: value })));
     setExpenses(prev => prev.map(e => e.description === expense.description ? { ...e, spendingSubCategory: value } : e));
     setEditingSubCategoryId(null);
 

@@ -7,6 +7,12 @@ jest.mock('@/lib/firebase', () => ({
   functions: null,
 }));
 
+const mockListExpenses = jest.fn();
+jest.mock('@/lib/expenses-repo', () => ({
+  listExpenses: (fy?: string) => mockListExpenses(fy),
+  updateExpense: jest.fn(),
+}));
+
 import TaxPage from '@/app/tax/page';
 
 jest.mock('@/config/app-settings', () => ({
@@ -24,6 +30,8 @@ beforeEach(() => {
     }
     return Promise.resolve({ ok: true, json: async () => [] });
   });
+  mockListExpenses.mockReset();
+  mockListExpenses.mockResolvedValue([]);
 });
 
 describe('Tax Page', () => {
@@ -34,7 +42,7 @@ describe('Tax Page', () => {
 
   it('fetches expenses on load', async () => {
     render(<TaxPage />);
-    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/expenses?fy=all', expect.anything()));
+    await waitFor(() => expect(mockListExpenses).toHaveBeenCalledWith('all'));
   });
 
   it('shows empty state after loading', async () => {
@@ -43,21 +51,10 @@ describe('Tax Page', () => {
   });
 
   it('shows expenses grouped by category', async () => {
-    mockFetch.mockImplementation((url: string) => {
-      if (typeof url === 'string' && url.includes('/api/expenses')) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => [
-            { id: '1', date: '2025-09-15', description: 'Office chair', amount: 450, category: 'Work from Home', financialYear: '2025-2026' },
-            { id: '2', date: '2025-10-01', description: 'Desk lamp', amount: 80, category: 'Work from Home', financialYear: '2025-2026' },
-          ],
-        });
-      }
-      if (typeof url === 'string' && url.includes('/api/advice-chat')) {
-        return Promise.resolve({ ok: true, json: async () => ({ history: [] }) });
-      }
-      return Promise.resolve({ ok: true, json: async () => [] });
-    });
+    mockListExpenses.mockResolvedValue([
+      { id: '1', date: '2025-09-15', description: 'Office chair', amount: 450, category: 'Work from Home', financialYear: '2025-2026' },
+      { id: '2', date: '2025-10-01', description: 'Desk lamp', amount: 80, category: 'Work from Home', financialYear: '2025-2026' },
+    ]);
     render(<TaxPage />);
     await waitFor(() => expect(screen.getByText('Work from Home')).toBeInTheDocument());
   });

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { Expense, FamilyMember } from '@/lib/types';
 import { apiFetch } from '@/lib/api-client';
+import { listExpenses, updateExpense } from '@/lib/expenses-repo';
 
 const CATEGORIES = [
   'Clothing & Laundry',
@@ -93,9 +94,11 @@ export default function TaxPage() {
 
   const fetchExpenses = useCallback(async () => {
     setLoading(true);
-    const res = await apiFetch('/api/expenses?fy=all');
-    if (res.ok) setExpenses(await res.json());
-    setLoading(false);
+    try {
+      setExpenses(await listExpenses('all'));
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { fetchExpenses(); }, [fetchExpenses]);
@@ -107,13 +110,7 @@ export default function TaxPage() {
 
     // Apply to ALL expenses with the same description
     const matching = expenses.filter(e => e.description === expense.description);
-    await Promise.all(matching.map(e =>
-      apiFetch('/api/expenses', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: e.id, nonDeductible }),
-      })
-    ));
+    await Promise.all(matching.map(e => updateExpense(e.id, { nonDeductible })));
     const ids = new Set(matching.map(e => e.id));
     setExpenses(prev => prev.map(e => ids.has(e.id) ? { ...e, nonDeductible } : e));
 
@@ -127,14 +124,7 @@ export default function TaxPage() {
 
   const toggleCategoryNonDeductible = async (category: string, makeNonDeductible: boolean) => {
     const matching = filteredExpenses.filter(e => e.category === category && e.category !== 'Other Deductions');
-    const updates = matching.map(e =>
-      apiFetch('/api/expenses', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: e.id, nonDeductible: makeNonDeductible }),
-      })
-    );
-    await Promise.all(updates);
+    await Promise.all(matching.map(e => updateExpense(e.id, { nonDeductible: makeNonDeductible })));
     const ids = new Set(matching.map(e => e.id));
     setExpenses(prev => prev.map(e => ids.has(e.id) ? { ...e, nonDeductible: makeNonDeductible } : e));
 
@@ -159,14 +149,7 @@ export default function TaxPage() {
 
     // Apply to ALL expenses with the same description
     const matching = expenses.filter(e => e.description === expense.description);
-    const updates = matching.map(e =>
-      apiFetch('/api/expenses', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: e.id, category }),
-      })
-    );
-    await Promise.all(updates);
+    await Promise.all(matching.map(e => updateExpense(e.id, { category })));
     setExpenses(prev => prev.map(e => e.description === expense.description ? { ...e, category } : e));
     setEditingExpenseId(null);
 
