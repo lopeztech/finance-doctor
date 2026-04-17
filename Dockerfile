@@ -18,6 +18,16 @@ RUN for dir in src/styles/default src/styles/apple src/styles/facebook src/style
       ln -s /app/node_modules "$dir/node_modules" 2>/dev/null || true; \
     done
 
+# Firebase Web App config — NEXT_PUBLIC_* are baked into the client bundle at build time
+ARG NEXT_PUBLIC_FIREBASE_API_KEY
+ARG NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+ARG NEXT_PUBLIC_FIREBASE_PROJECT_ID
+ARG NEXT_PUBLIC_FIREBASE_APP_ID
+ENV NEXT_PUBLIC_FIREBASE_API_KEY=$NEXT_PUBLIC_FIREBASE_API_KEY \
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=$NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN \
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID=$NEXT_PUBLIC_FIREBASE_PROJECT_ID \
+    NEXT_PUBLIC_FIREBASE_APP_ID=$NEXT_PUBLIC_FIREBASE_APP_ID
+
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 

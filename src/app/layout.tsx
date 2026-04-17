@@ -8,6 +8,7 @@ import '@/styles/nextjs.scss';
 
 import { useEffect, useCallback } from 'react';
 import { SessionProvider } from 'next-auth/react';
+import '@/lib/firebase';
 import Header from '@/components/header/header';
 import TopMenu from '@/components/top-menu/top-menu';
 import Sidebar from '@/components/sidebar/sidebar';

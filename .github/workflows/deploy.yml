@@ -31,9 +31,27 @@ jobs:
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
 
+      - name: Fetch Firebase Web App config from Secret Manager
+        id: firebase-config
+        run: |
+          fetch_secret() {
+            gcloud secrets versions access latest --secret="$1" --project="${{ env.PROJECT_ID }}" 2>/dev/null || echo ""
+          }
+          {
+            echo "api_key=$(fetch_secret firebase-web-api-key)"
+            echo "auth_domain=$(fetch_secret firebase-web-auth-domain)"
+            echo "project_id=$(fetch_secret firebase-web-project-id)"
+            echo "app_id=$(fetch_secret firebase-web-app-id)"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Build and push image
         run: |
-          docker build -t ${{ env.IMAGE }}:${{ github.sha }} -t ${{ env.IMAGE }}:latest .
+          docker build \
+            --build-arg NEXT_PUBLIC_FIREBASE_API_KEY="${{ steps.firebase-config.outputs.api_key }}" \
+            --build-arg NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="${{ steps.firebase-config.outputs.auth_domain }}" \
+            --build-arg NEXT_PUBLIC_FIREBASE_PROJECT_ID="${{ steps.firebase-config.outputs.project_id }}" \
+            --build-arg NEXT_PUBLIC_FIREBASE_APP_ID="${{ steps.firebase-config.outputs.app_id }}" \
+            -t ${{ env.IMAGE }}:${{ github.sha }} -t ${{ env.IMAGE }}:latest .
           docker push ${{ env.IMAGE }}:${{ github.sha }}
           docker push ${{ env.IMAGE }}:latest
 
