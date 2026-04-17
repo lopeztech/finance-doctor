@@ -5,6 +5,7 @@ import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { Investment, FamilyMember } from '@/lib/types';
 import { adviceChatGet, adviceChatPut, streamInvestmentsAdvice } from '@/lib/functions-client';
 import { listInvestments, addInvestment, updateInvestment, deleteInvestment } from '@/lib/investments-repo';
+import AllocationChart from '@/components/allocation-chart';
 import { listFamilyMembers } from '@/lib/family-members-repo';
 
 const INVESTMENT_TYPES = [
@@ -532,34 +533,6 @@ export default function InvestmentsPage() {
           </div>
         </div>
         <div className="col-lg-3">
-          <div className="card border-0 bg-indigo text-white mb-3">
-            <div className="card-body">
-              <div className="text-white text-opacity-75 mb-1">Asset Allocation</div>
-              {sortedAllocations.length === 0 ? (
-                <h3 className="text-white mb-0">---</h3>
-              ) : (
-                <div className="mt-2">
-                  {sortedAllocations.map(([type, value]) => {
-                    const pct = (value / totalValue) * 100;
-                    return (
-                      <div key={type} className="mb-2">
-                        <div className="d-flex align-items-center mb-1">
-                          <i className={`fa ${TYPE_ICONS[type] || 'fa-wallet'} me-2 text-white text-opacity-50`} style={{ fontSize: '0.75rem' }}></i>
-                          <span className="flex-grow-1 small">{type}</span>
-                          <span className="fw-bold small">{pct.toFixed(1)}%</span>
-                        </div>
-                        <div className="progress" style={{ height: '3px' }}>
-                          <div className="progress-bar bg-white bg-opacity-50" style={{ width: `${pct}%` }}></div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-        <div className="col-lg-3">
           <div className={`card border-0 ${health ? `bg-${health.color}` : 'bg-dark'} text-white mb-3`}>
             <div className="card-body">
               <div className="text-white text-opacity-75 mb-1">Portfolio Health</div>
@@ -572,6 +545,19 @@ export default function InvestmentsPage() {
           </div>
         </div>
       </div>
+
+      {sortedAllocations.length > 0 && (
+        <Panel className="mb-3">
+          <PanelHeader noButton>
+            <div className="d-flex align-items-center">
+              <i className="fa fa-chart-pie me-2"></i>Asset Allocation
+            </div>
+          </PanelHeader>
+          <PanelBody>
+            <AllocationChart allocations={sortedAllocations} height={320} />
+          </PanelBody>
+        </Panel>
+      )}
 
       {investments.length > 0 && (
         <Panel className="mb-3">

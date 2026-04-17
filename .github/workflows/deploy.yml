@@ -65,10 +65,10 @@ jobs:
       - name: Install Functions dependencies
         run: npm ci --prefix functions
 
-      - name: Deploy Hosting
+      - name: Deploy Hosting + Firestore indexes
         run: |
           npx -y firebase-tools@14 deploy \
-            --only hosting \
+            --only hosting,firestore:indexes \
             --project ${{ env.PROJECT_ID }} \
             --non-interactive \
             --force

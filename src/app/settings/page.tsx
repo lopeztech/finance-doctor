@@ -3,6 +3,7 @@
 import { signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
+import DataManagement from '@/components/data-management';
 import { auth } from '@/lib/firebase';
 import { useAuthUser } from '@/lib/use-auth-user';
 
@@ -84,6 +85,9 @@ export default function SettingsPage() {
           </Panel>
         </div>
       </div>
+
+      <h2 className="h4 mt-4 mb-3"><i className="fa fa-database me-2"></i>Data Management</h2>
+      <DataManagement />
     </>
   );
 }

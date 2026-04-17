@@ -180,9 +180,9 @@ export default function Dashboard() {
 
   return (
     <>
-      <div className="d-flex align-items-center mb-3">
+      <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
         <h1 className="page-header mb-0">Dashboard</h1>
-        <div className="ms-auto">
+        <div className="ms-sm-auto">
           <select className="form-select" value={financialYear} onChange={(e) => setFinancialYear(e.target.value)}>
             <option value="2025-2026">FY 2025-2026</option>
             <option value="2024-2025">FY 2024-2025</option>

@@ -265,9 +265,9 @@ export default function TaxPage() {
 
   return (
     <>
-      <div className="d-flex align-items-center mb-3">
+      <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
         <h1 className="page-header mb-0">Tax Health Check</h1>
-        <div className="ms-auto d-flex gap-2">
+        <div className="ms-sm-auto d-flex flex-wrap gap-2">
           {familyMembers.length > 0 && (
             <select className="form-select" value={selectedOwner} onChange={(e) => setSelectedOwner(e.target.value)}>
               <option value="">All Members</option>
@@ -360,7 +360,7 @@ export default function TaxPage() {
                           <span className="small text-muted" style={{ width: '45px', textAlign: 'right' }}>{pct.toFixed(1)}%</span>
                         </div>
                         {isExpanded && (
-                          <div className="ms-4 mt-1 mb-2">
+                          <div className="ms-4 mt-1 mb-2 table-responsive">
                             <table className="table table-sm table-hover mb-0">
                               <thead>
                                 <tr>

@@ -285,9 +285,9 @@ export default function ExpensesPage() {
 
   return (
     <>
-      <div className="d-flex align-items-center mb-3">
+      <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
         <h1 className="page-header mb-0">Expenses</h1>
-        <div className="ms-auto d-flex gap-2">
+        <div className="ms-sm-auto d-flex flex-wrap gap-2">
           {familyMembers.length > 0 && (
             <select className="form-select" value={selectedOwner} onChange={(e) => setSelectedOwner(e.target.value)}>
               <option value="">All Members</option>
@@ -348,9 +348,9 @@ export default function ExpensesPage() {
         <div className="col-xl-8">
           <Panel>
             <PanelHeader noButton>
-              <div className="d-flex align-items-center">
-                <i className="fa fa-list me-2"></i>Expenses by Category
-                <div className="ms-auto d-flex gap-2">
+              <div className="d-flex flex-wrap align-items-center gap-2">
+                <span><i className="fa fa-list me-2"></i>Expenses by Category</span>
+                <div className="ms-sm-auto d-flex flex-wrap gap-2">
                   {showNewCategory ? (
                     <div className="d-flex gap-1">
                       <input type="text" className="form-control form-control-sm" placeholder="Category name" value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addCustomCategory(); }} autoFocus style={{ width: '150px' }} />
@@ -406,7 +406,7 @@ export default function ExpensesPage() {
                           <span className="small text-muted" style={{ width: '45px', textAlign: 'right' }}>{pct.toFixed(1)}%</span>
                         </div>
                         {isExpanded && (
-                          <div className="ms-4 mt-1 mb-2">
+                          <div className="ms-4 mt-1 mb-2 table-responsive">
                             <datalist id={subCatListId(category)}>
                               {[...(subCategoriesByCategory[category] || [])].sort().map(sc => <option key={sc} value={sc} />)}
                             </datalist>

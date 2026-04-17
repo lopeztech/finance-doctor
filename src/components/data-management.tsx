@@ -33,13 +33,13 @@ interface ImportRow {
   duplicate?: boolean;
 }
 
-export default function UploadPage() {
+export default function DataManagement() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [showImport, setShowImport] = useState(false);
   const [importLoading, setImportLoading] = useState(false);
-  const [importPreview, setImportPreview] = useState<ImportRow[] | null>(null);
+  const [importPreviewRows, setImportPreviewRows] = useState<ImportRow[] | null>(null);
   const [importDuplicateCount, setImportDuplicateCount] = useState(0);
   const [importSaving, setImportSaving] = useState(false);
   const [importOwner, setImportOwner] = useState('');
@@ -66,13 +66,13 @@ export default function UploadPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     setImportLoading(true);
-    setImportPreview(null);
+    setImportPreviewRows(null);
     setImportDuplicateCount(0);
     try {
       const csvText = await file.text();
       const data = await callImportPreview(csvText);
       setImportDuplicateCount(data.duplicateCount || 0);
-      setImportPreview(data.preview);
+      setImportPreviewRows(data.preview);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Import failed');
     }
@@ -81,15 +81,15 @@ export default function UploadPage() {
   };
 
   const updatePreviewCategory = (index: number, category: string) => {
-    setImportPreview(prev => prev ? prev.map((item, i) => i === index ? { ...item, category } : item) : null);
+    setImportPreviewRows(prev => prev ? prev.map((item, i) => i === index ? { ...item, category } : item) : null);
   };
 
   const removePreviewRow = (index: number) => {
-    setImportPreview(prev => prev ? prev.filter((_, i) => i !== index) : null);
+    setImportPreviewRows(prev => prev ? prev.filter((_, i) => i !== index) : null);
   };
 
   const confirmImport = async () => {
-    const toSave = importPreview?.filter(r => !r.duplicate).map(r => ({
+    const toSave = importPreviewRows?.filter(r => !r.duplicate).map(r => ({
       date: r.date,
       description: r.description,
       amount: r.amount,
@@ -104,24 +104,22 @@ export default function UploadPage() {
     setImportSaving(true);
     try {
       await callImportSave(toSave);
-      setImportPreview(null);
+      setImportPreviewRows(null);
       setShowImport(false);
       fetchExpenses();
     } catch {}
     setImportSaving(false);
   };
 
-  const newCount = importPreview?.filter(r => !r.duplicate).length || 0;
+  const newCount = importPreviewRows?.filter(r => !r.duplicate).length || 0;
 
   return (
     <>
-      <h1 className="page-header">Upload & Manage</h1>
-
       <Panel className="mb-3">
         <PanelHeader noButton>
-          <div className="d-flex align-items-center">
-            <i className="fa fa-file-csv me-2"></i>Import CSV
-            <button className="btn btn-sm btn-outline-primary ms-auto" onClick={() => { setShowImport(!showImport); setImportPreview(null); }}>
+          <div className="d-flex flex-wrap align-items-center gap-2">
+            <span><i className="fa fa-file-csv me-2"></i>Import CSV</span>
+            <button className="btn btn-sm btn-outline-primary ms-sm-auto" onClick={() => { setShowImport(!showImport); setImportPreviewRows(null); }}>
               {showImport ? <><i className="fa fa-times me-1"></i>Close</> : <><i className="fa fa-upload me-1"></i>Import</>}
             </button>
           </div>
@@ -130,8 +128,8 @@ export default function UploadPage() {
           <PanelBody>
             <p className="text-muted small mb-3">Upload a CSV with Date, Amount, Description columns. Financial year is auto-detected from each expense date. Dr Finance will auto-categorise using AI.</p>
 
-            {!importPreview ? (
-              <div className="d-flex align-items-center gap-3">
+            {!importPreviewRows ? (
+              <div className="d-flex flex-wrap align-items-end gap-3">
                 {familyMembers.length > 0 && (
                   <div>
                     <label className="form-label text-muted small mb-1">Owner</label>
@@ -141,7 +139,7 @@ export default function UploadPage() {
                     </select>
                   </div>
                 )}
-                <div className="d-flex align-items-end">
+                <div>
                   <label className="btn btn-outline-primary" htmlFor="csv-upload">
                     {importLoading ? <><i className="fa fa-spinner fa-spin me-1"></i>Analysing...</> : <><i className="fa fa-upload me-1"></i>Choose File</>}
                   </label>
@@ -160,7 +158,7 @@ export default function UploadPage() {
                   <button className="btn btn-sm btn-success ms-auto me-2" onClick={confirmImport} disabled={importSaving || newCount === 0}>
                     {importSaving ? <><i className="fa fa-spinner fa-spin me-1"></i>Saving...</> : <><i className="fa fa-check me-1"></i>Confirm Import ({newCount})</>}
                   </button>
-                  <button className="btn btn-sm btn-outline-secondary" onClick={() => setImportPreview(null)}>
+                  <button className="btn btn-sm btn-outline-secondary" onClick={() => setImportPreviewRows(null)}>
                     <i className="fa fa-times me-1"></i>Cancel
                   </button>
                 </div>
@@ -178,7 +176,7 @@ export default function UploadPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {importPreview.map((row, i) => (
+                      {importPreviewRows.map((row, i) => (
                         <tr key={i} className={row.duplicate ? 'text-muted' : ''} style={row.duplicate ? { opacity: 0.5 } : undefined}>
                           <td>
                             {row.duplicate && <span className="badge bg-warning text-dark" title="Already exists"><i className="fa fa-copy"></i></span>}
@@ -215,15 +213,15 @@ export default function UploadPage() {
       </Panel>
 
       {loading ? (
-        <div className="text-center py-5"><i className="fa fa-spinner fa-spin fa-2x"></i></div>
+        <div className="text-center py-3"><i className="fa fa-spinner fa-spin fa-2x"></i></div>
       ) : expenses.length > 0 && (
-        <div className="alert alert-success d-flex align-items-center">
+        <div className="alert alert-success d-flex flex-wrap align-items-center gap-2">
           <div className="flex-grow-1">
             <i className="fa fa-check-circle me-2"></i>
-            <strong>{expenses.length}</strong> expenses uploaded. View them in <a href="/tax" className="alert-link">Tax</a> or <a href="/expenses" className="alert-link">Expenses</a>.
+            <strong>{expenses.length}</strong> expenses stored. View them in <a href="/tax" className="alert-link">Tax</a> or <a href="/expenses" className="alert-link">Expenses</a>.
           </div>
           <button
-            className="btn btn-sm btn-outline-dark ms-2"
+            className="btn btn-sm btn-outline-dark"
             disabled={migrating}
             onClick={async () => {
               setMigrating(true);

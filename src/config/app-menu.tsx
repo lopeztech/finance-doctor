@@ -2,7 +2,6 @@ const Menu = [
 	{ is_header: true, title: 'Finance Doctor' },
 	{ path: '/', icon: 'fa fa-heartbeat', title: 'Dashboard' },
 	{ path: '/family', icon: 'fa fa-users', title: 'Family' },
-	{ path: '/upload', icon: 'fa fa-upload', title: 'Upload' },
 	{ path: '/tax', icon: 'fa fa-file-invoice-dollar', title: 'Tax' },
 	{ path: '/expenses', icon: 'fa fa-wallet', title: 'Expenses' },
 	{ path: '/investments', icon: 'fa fa-chart-line', title: 'Family Portfolio' },

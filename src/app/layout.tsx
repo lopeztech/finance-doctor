@@ -9,6 +9,7 @@ import '@/styles/nextjs.scss';
 import { useEffect, useCallback } from 'react';
 import '@/lib/firebase';
 import AuthGate from '@/components/auth-gate';
+import ErrorBoundary from '@/components/error-boundary';
 import Header from '@/components/header/header';
 import TopMenu from '@/components/top-menu/top-menu';
 import Sidebar from '@/components/sidebar/sidebar';
@@ -75,9 +76,9 @@ function Layout({ children }: { children: React.ReactNode }) {
 			{settings.appTopMenu && (<TopMenu />)}
 			{!settings.appHeaderNone && (<Header />)}
 			{!settings.appSidebarNone && (<Sidebar />)}
-			{!settings.appContentNone && (<div className={'app-content '+ settings.appContentClass }>{children}</div>)}
+			{!settings.appContentNone && (<div className={'app-content '+ settings.appContentClass }><ErrorBoundary>{children}</ErrorBoundary></div>)}
 			{settings.appSidebarTwo && (<SidebarRight />)}
-			{settings.appContentNone && (<>{children}</>)}
+			{settings.appContentNone && (<ErrorBoundary>{children}</ErrorBoundary>)}
 			    </div>
   );
 }
@@ -111,6 +112,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="en" className={openSans.className}>
     	<head>
     		<title>Finance Doctor</title>
+    		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     	</head>
       <body>
 				<AppSettingsProvider>
