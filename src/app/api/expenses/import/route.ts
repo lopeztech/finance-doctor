@@ -195,7 +195,7 @@ export async function POST(req: NextRequest) {
 
     // Load saved category rules
     const rulesSnapshot = await db.collection('users').doc(userId).collection('category-rules').get();
-    const rules = rulesSnapshot.docs.map(doc => doc.data() as { pattern: string; taxCategory?: string; spendingCategory?: string });
+    const rules = rulesSnapshot.docs.map(doc => doc.data() as { pattern: string; taxCategory?: string; spendingCategory?: string; spendingSubCategory?: string; nonDeductible?: boolean });
 
     // Find matching rule for a description
     const findRule = (description: string) => {
@@ -216,12 +216,16 @@ export async function POST(req: NextRequest) {
     // Build category lookups — start with rules
     const categoryMap = new Map<number, string>();
     const spendingCategoryMap = new Map<number, string>();
+    const spendingSubCategoryMap = new Map<number, string>();
+    const nonDeductibleMap = new Map<number, boolean>();
 
     // Apply saved rules first
     parsed.forEach((p, i) => {
       const rule = findRule(p.description);
       if (rule?.taxCategory) categoryMap.set(i, rule.taxCategory);
       if (rule?.spendingCategory) spendingCategoryMap.set(i, rule.spendingCategory);
+      if (rule?.spendingSubCategory) spendingSubCategoryMap.set(i, rule.spendingSubCategory);
+      if (rule?.nonDeductible) nonDeductibleMap.set(i, true);
     });
 
     // Call Gemini for items without rules
@@ -270,6 +274,8 @@ export async function POST(req: NextRequest) {
       amount: p.amount,
       category: categoryMap.get(i) || 'Other Deductions',
       spendingCategory: spendingCategoryMap.get(i) || 'Other',
+      ...(spendingSubCategoryMap.get(i) ? { spendingSubCategory: spendingSubCategoryMap.get(i) } : {}),
+      ...(nonDeductibleMap.get(i) ? { nonDeductible: true } : {}),
       financialYear: getFinancialYear(p.date),
       duplicate: existingSet.has(`${p.date}|${p.description}|${p.amount}`),
     }));
@@ -308,8 +314,10 @@ export async function PUT(req: NextRequest) {
         amount: rest.amount as number,
         category: rest.category as string,
         ...(rest.spendingCategory ? { spendingCategory: rest.spendingCategory as string } : {}),
+        ...(rest.spendingSubCategory ? { spendingSubCategory: rest.spendingSubCategory as string } : {}),
         financialYear: rest.financialYear as string,
         ...(owner ? { owner: owner as string } : {}),
+        ...(rest.nonDeductible ? { nonDeductible: true } : {}),
       };
       batch.set(ref, expense);
       saved.push(expense);

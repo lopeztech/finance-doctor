@@ -5,6 +5,7 @@ export interface Expense {
   amount: number;
   category: string;
   spendingCategory?: string;
+  spendingSubCategory?: string;
   financialYear: string;
   owner?: string;
   nonDeductible?: boolean;

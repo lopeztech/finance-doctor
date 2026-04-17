@@ -23,6 +23,8 @@ interface ImportRow {
   amount: number;
   category: string;
   spendingCategory?: string;
+  spendingSubCategory?: string;
+  nonDeductible?: boolean;
   financialYear: string;
   owner?: string;
   duplicate?: boolean;
@@ -91,6 +93,8 @@ export default function UploadPage() {
       amount: r.amount,
       category: r.category,
       ...(r.spendingCategory ? { spendingCategory: r.spendingCategory } : {}),
+      ...(r.spendingSubCategory ? { spendingSubCategory: r.spendingSubCategory } : {}),
+      ...(r.nonDeductible ? { nonDeductible: true } : {}),
       financialYear: r.financialYear,
       ...(importOwner ? { owner: importOwner } : {}),
     }));

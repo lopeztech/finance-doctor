@@ -77,6 +77,7 @@ export default function ExpensesPage() {
   const [sortField, setSortField] = useState<SortField>('date');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
+  const [editingSubCategoryId, setEditingSubCategoryId] = useState<string | null>(null);
   const [customCategories, setCustomCategories] = useState<string[]>([]);
   const [showNewCategory, setShowNewCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -189,6 +190,30 @@ export default function ExpensesPage() {
     });
   };
 
+  const updateExpenseSubCategory = async (id: string, rawValue: string) => {
+    const expense = expenses.find(e => e.id === id);
+    if (!expense) { setEditingSubCategoryId(null); return; }
+    const value = rawValue.trim();
+    if (value === (expense.spendingSubCategory || '')) { setEditingSubCategoryId(null); return; }
+
+    const matching = expenses.filter(e => e.description === expense.description);
+    await Promise.all(matching.map(e =>
+      fetch('/api/expenses', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: e.id, spendingSubCategory: value }),
+      })
+    ));
+    setExpenses(prev => prev.map(e => e.description === expense.description ? { ...e, spendingSubCategory: value } : e));
+    setEditingSubCategoryId(null);
+
+    fetch('/api/category-rules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pattern: expense.description, spendingSubCategory: value }),
+    });
+  };
+
   const getExpenseYear = (e: Expense) => e.date ? e.date.substring(0, 4) : '';
   const getExpenseMonthNum = (e: Expense) => e.date ? e.date.substring(5, 7) : '';
 
@@ -216,6 +241,17 @@ export default function ExpensesPage() {
     acc[cat].push(e);
     return acc;
   }, {} as Record<string, Expense[]>);
+
+  const subCategoriesByCategory = expenses.reduce((acc, e) => {
+    const cat = getSpendingCat(e);
+    const sub = e.spendingSubCategory?.trim();
+    if (!sub) return acc;
+    if (!acc[cat]) acc[cat] = new Set();
+    acc[cat].add(sub);
+    return acc;
+  }, {} as Record<string, Set<string>>);
+
+  const subCatListId = (category: string) => `subcats-${category.replace(/[^a-zA-Z0-9]/g, '-')}`;
 
   // Monthly breakdown
   const monthlyTotals = filteredExpenses.reduce((acc, e) => {
@@ -408,14 +444,18 @@ export default function ExpensesPage() {
                         </div>
                         {isExpanded && (
                           <div className="ms-4 mt-1 mb-2">
+                            <datalist id={subCatListId(category)}>
+                              {[...(subCategoriesByCategory[category] || [])].sort().map(sc => <option key={sc} value={sc} />)}
+                            </datalist>
                             <table className="table table-sm table-hover mb-0">
                               <thead>
                                 <tr>
                                   <th style={{ width: '90px', cursor: 'pointer' }} onClick={(ev) => { ev.stopPropagation(); toggleSort('date'); }}>Date<SortIcon field="date" /></th>
                                   <th style={{ cursor: 'pointer' }} onClick={(ev) => { ev.stopPropagation(); toggleSort('description'); }}>Description<SortIcon field="description" /></th>
+                                  <th style={{ width: '140px' }}>Sub Category</th>
                                   {catExpenses.some(e => e.owner) && <th style={{ width: '80px' }}>Owner</th>}
                                   <th className="text-end" style={{ width: '90px', cursor: 'pointer' }} onClick={(ev) => { ev.stopPropagation(); toggleSort('amount'); }}>Amount<SortIcon field="amount" /></th>
-                                  <th style={{ width: '140px' }}></th>
+                                  <th style={{ width: '60px' }}></th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -423,6 +463,26 @@ export default function ExpensesPage() {
                                   <tr key={e.id}>
                                     <td className="small text-muted">{new Date(e.date).toLocaleDateString('en-AU')}</td>
                                     <td className="small">{e.description}</td>
+                                    <td className="small" onClick={ev => ev.stopPropagation()}>
+                                      {editingSubCategoryId === e.id ? (
+                                        <input
+                                          type="text"
+                                          list={subCatListId(category)}
+                                          className="form-control form-control-sm"
+                                          autoFocus
+                                          defaultValue={e.spendingSubCategory || ''}
+                                          onBlur={ev => updateExpenseSubCategory(e.id, ev.target.value)}
+                                          onKeyDown={ev => {
+                                            if (ev.key === 'Enter') updateExpenseSubCategory(e.id, (ev.target as HTMLInputElement).value);
+                                            if (ev.key === 'Escape') setEditingSubCategoryId(null);
+                                          }}
+                                        />
+                                      ) : (
+                                        <span role="button" className={e.spendingSubCategory ? '' : 'text-muted'} onClick={() => setEditingSubCategoryId(e.id)}>
+                                          {e.spendingSubCategory || <><i className="fa fa-plus me-1"></i>Add</>}
+                                        </span>
+                                      )}
+                                    </td>
                                     {catExpenses.some(ex => ex.owner) && <td className="small text-muted">{e.owner || ''}</td>}
                                     <td className="text-end small fw-bold">${e.amount.toFixed(2)}</td>
                                     <td>

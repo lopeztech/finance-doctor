@@ -7,6 +7,8 @@ export interface CategoryRule {
   pattern: string;
   taxCategory?: string;
   spendingCategory?: string;
+  spendingSubCategory?: string;
+  nonDeductible?: boolean;
 }
 
 export async function GET() {
@@ -24,7 +26,7 @@ export async function POST(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await req.json();
-  const { pattern, taxCategory, spendingCategory } = body;
+  const { pattern, taxCategory, spendingCategory, spendingSubCategory, nonDeductible } = body;
   if (!pattern) return NextResponse.json({ error: 'Pattern required' }, { status: 400 });
 
   const db = getDb();
@@ -35,9 +37,11 @@ export async function POST(req: NextRequest) {
   if (!existing.empty) {
     // Update existing rule
     const doc = existing.docs[0];
-    const updates: Record<string, string> = {};
+    const updates: Record<string, string | boolean> = {};
     if (taxCategory) updates.taxCategory = taxCategory;
     if (spendingCategory) updates.spendingCategory = spendingCategory;
+    if (spendingSubCategory !== undefined) updates.spendingSubCategory = spendingSubCategory;
+    if (nonDeductible !== undefined) updates.nonDeductible = nonDeductible;
     await doc.ref.update(updates);
     return NextResponse.json({ id: doc.id, ...doc.data(), ...updates });
   }
@@ -48,6 +52,8 @@ export async function POST(req: NextRequest) {
     pattern: pattern.toLowerCase(),
     ...(taxCategory ? { taxCategory } : {}),
     ...(spendingCategory ? { spendingCategory } : {}),
+    ...(spendingSubCategory ? { spendingSubCategory } : {}),
+    ...(nonDeductible !== undefined ? { nonDeductible } : {}),
   };
   await ref.set(rule);
   return NextResponse.json(rule, { status: 201 });
