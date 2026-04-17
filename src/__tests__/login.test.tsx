@@ -8,8 +8,17 @@ jest.mock('firebase/auth', () => ({
   GoogleAuthProvider: jest.fn().mockImplementation(() => ({})),
 }));
 
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: jest.fn(), push: jest.fn() }),
+}));
+
 jest.mock('@/lib/firebase', () => ({
   auth: {},
+}));
+
+jest.mock('@/lib/guest-store', () => ({
+  enableGuest: jest.fn(),
+  isGuest: () => false,
 }));
 
 jest.mock('@/config/app-settings', () => ({
