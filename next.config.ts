@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 import path from "path";
 
 const nextConfig: NextConfig = {
-  output: 'standalone',
+  output: 'export',
   env: {
     NEXT_PUBLIC_BUILD_TIME: new Date().toISOString(),
   },
