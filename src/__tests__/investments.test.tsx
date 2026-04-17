@@ -8,6 +8,11 @@ jest.mock('@/lib/firebase', () => ({
   functions: null,
 }));
 
+jest.mock('@/components/allocation-chart', () => ({
+  __esModule: true,
+  default: () => null,
+}));
+
 const mockListInvestments = jest.fn();
 jest.mock('@/lib/investments-repo', () => ({
   listInvestments: () => mockListInvestments(),
