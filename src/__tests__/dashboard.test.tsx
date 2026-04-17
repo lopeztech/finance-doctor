@@ -1,4 +1,12 @@
 import { render, screen, waitFor } from '@testing-library/react';
+
+jest.mock('@/lib/firebase', () => ({
+  auth: null,
+  db: null,
+  app: null,
+  functions: null,
+}));
+
 import Dashboard from '@/app/page';
 
 jest.mock('next/link', () => {

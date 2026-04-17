@@ -1,5 +1,13 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+
+jest.mock('@/lib/firebase', () => ({
+  auth: null,
+  db: null,
+  app: null,
+  functions: null,
+}));
+
 import InvestmentsPage from '@/app/investments/page';
 
 jest.mock('@/config/app-settings', () => ({
@@ -27,7 +35,7 @@ describe('Investments Page', () => {
 
   it('fetches investments on load', async () => {
     render(<InvestmentsPage />);
-    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/investments'));
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/investments', expect.anything()));
   });
 
   it('shows empty state after loading', async () => {

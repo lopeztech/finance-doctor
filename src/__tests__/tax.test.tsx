@@ -1,4 +1,12 @@
 import { render, screen, waitFor } from '@testing-library/react';
+
+jest.mock('@/lib/firebase', () => ({
+  auth: null,
+  db: null,
+  app: null,
+  functions: null,
+}));
+
 import TaxPage from '@/app/tax/page';
 
 jest.mock('@/config/app-settings', () => ({
@@ -26,7 +34,7 @@ describe('Tax Page', () => {
 
   it('fetches expenses on load', async () => {
     render(<TaxPage />);
-    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/expenses?fy=all'));
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/expenses?fy=all', expect.anything()));
   });
 
   it('shows empty state after loading', async () => {
