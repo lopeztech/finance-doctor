@@ -5,6 +5,8 @@ import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { Expense, FamilyMember } from '@/lib/types';
 import { apiFetch } from '@/lib/api-client';
 import { listExpenses, updateExpense } from '@/lib/expenses-repo';
+import { listFamilyMembers } from '@/lib/family-members-repo';
+import { upsertCategoryRule } from '@/lib/category-rules-repo';
 
 const SPENDING_ICONS: Record<string, string> = {
   'Bakery': 'fa-bread-slice',
@@ -104,7 +106,7 @@ export default function ExpensesPage() {
 
   useEffect(() => {
     fetchExpenses();
-    apiFetch('/api/family-members').then(r => r.ok ? r.json() : []).then(setFamilyMembers);
+    listFamilyMembers().then(setFamilyMembers).catch(() => setFamilyMembers([]));
   }, [fetchExpenses]);
 
   // All spending categories: defaults + custom + any from data
@@ -173,11 +175,7 @@ export default function ExpensesPage() {
     setEditingExpenseId(null);
 
     // Save rule for future imports
-    apiFetch('/api/category-rules', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pattern: expense.description, spendingCategory }),
-    });
+    upsertCategoryRule({ pattern: expense.description, spendingCategory }).catch(() => {});
   };
 
   const updateExpenseSubCategory = async (id: string, rawValue: string) => {
@@ -191,11 +189,7 @@ export default function ExpensesPage() {
     setExpenses(prev => prev.map(e => e.description === expense.description ? { ...e, spendingSubCategory: value } : e));
     setEditingSubCategoryId(null);
 
-    apiFetch('/api/category-rules', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pattern: expense.description, spendingSubCategory: value }),
-    });
+    upsertCategoryRule({ pattern: expense.description, spendingSubCategory: value }).catch(() => {});
   };
 
   const getExpenseYear = (e: Expense) => e.date ? e.date.substring(0, 4) : '';

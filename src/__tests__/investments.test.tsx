@@ -16,6 +16,10 @@ jest.mock('@/lib/investments-repo', () => ({
   deleteInvestment: jest.fn(),
 }));
 
+jest.mock('@/lib/family-members-repo', () => ({
+  listFamilyMembers: jest.fn().mockResolvedValue([]),
+}));
+
 import InvestmentsPage from '@/app/investments/page';
 
 jest.mock('@/config/app-settings', () => ({

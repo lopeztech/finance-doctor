@@ -7,6 +7,7 @@ import type { Expense, Investment, FamilyMember } from '@/lib/types';
 import { apiFetch } from '@/lib/api-client';
 import { listExpenses } from '@/lib/expenses-repo';
 import { listInvestments } from '@/lib/investments-repo';
+import { listFamilyMembers } from '@/lib/family-members-repo';
 
 interface DashboardTip {
   icon: string;
@@ -68,7 +69,7 @@ export default function Dashboard() {
     Promise.all([
       fetchExpenses(),
       listInvestments().then(setInvestments).catch(() => setInvestments([])),
-      apiFetch('/api/family-members').then(r => r.ok ? r.json() : []).then(setFamilyMembers),
+      listFamilyMembers().then(setFamilyMembers).catch(() => setFamilyMembers([])),
     ]).then(() => setLoading(false));
 
     apiFetch('/api/dashboard/tips')

@@ -5,6 +5,8 @@ import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { Expense, FamilyMember } from '@/lib/types';
 import { apiFetch } from '@/lib/api-client';
 import { listExpenses, updateExpense } from '@/lib/expenses-repo';
+import { listFamilyMembers } from '@/lib/family-members-repo';
+import { upsertCategoryRule } from '@/lib/category-rules-repo';
 
 const CATEGORIES = [
   'Clothing & Laundry',
@@ -86,7 +88,7 @@ export default function TaxPage() {
   }, []);
 
   useEffect(() => {
-    apiFetch('/api/family-members').then(r => r.ok ? r.json() : []).then(setFamilyMembers);
+    listFamilyMembers().then(setFamilyMembers).catch(() => setFamilyMembers([]));
     apiFetch('/api/advice-chat?type=tax')
       .then(res => res.ok ? res.json() : { history: [] })
       .then(data => { if (data.history?.length) setAdviceHistory(data.history); });
@@ -115,11 +117,7 @@ export default function TaxPage() {
     setExpenses(prev => prev.map(e => ids.has(e.id) ? { ...e, nonDeductible } : e));
 
     // Save rule so future imports inherit the flag
-    apiFetch('/api/category-rules', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pattern: expense.description, nonDeductible }),
-    });
+    upsertCategoryRule({ pattern: expense.description, nonDeductible }).catch(() => {});
   };
 
   const toggleCategoryNonDeductible = async (category: string, makeNonDeductible: boolean) => {
@@ -130,15 +128,11 @@ export default function TaxPage() {
 
     // Save a rule per unique description so future imports inherit the flag
     const seen = new Set<string>();
-    const rulePosts: Promise<Response>[] = [];
+    const rulePosts: Promise<unknown>[] = [];
     for (const e of matching) {
       if (seen.has(e.description)) continue;
       seen.add(e.description);
-      rulePosts.push(apiFetch('/api/category-rules', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pattern: e.description, nonDeductible: makeNonDeductible }),
-      }));
+      rulePosts.push(upsertCategoryRule({ pattern: e.description, nonDeductible: makeNonDeductible }).catch(() => {}));
     }
     Promise.all(rulePosts);
   };
@@ -154,11 +148,7 @@ export default function TaxPage() {
     setEditingExpenseId(null);
 
     // Save rule for future imports
-    apiFetch('/api/category-rules', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pattern: expense.description, taxCategory: category }),
-    });
+    upsertCategoryRule({ pattern: expense.description, taxCategory: category }).catch(() => {});
   };
 
   const reanalyseOther = async () => {

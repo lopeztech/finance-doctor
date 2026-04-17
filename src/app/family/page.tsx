@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { FamilyMember } from '@/lib/types';
-import { apiFetch } from '@/lib/api-client';
+import { listFamilyMembers, addFamilyMember, updateFamilyMember, deleteFamilyMember } from '@/lib/family-members-repo';
 
 function getTaxBracket(salary: number): string {
   if (salary <= 18200) return '0%';
@@ -22,9 +22,11 @@ export default function FamilyPage() {
 
   const fetchMembers = useCallback(async () => {
     setLoading(true);
-    const res = await apiFetch('/api/family-members');
-    if (res.ok) setMembers(await res.json());
-    setLoading(false);
+    try {
+      setMembers(await listFamilyMembers());
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { fetchMembers(); }, [fetchMembers]);
@@ -33,25 +35,11 @@ export default function FamilyPage() {
     e.preventDefault();
     const body = { name: form.name, salary: parseFloat(form.salary), ...(form.job ? { job: form.job } : {}) };
     if (editingId) {
-      const res = await apiFetch('/api/family-members', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: editingId, ...body }),
-      });
-      if (res.ok) {
-        const updated = await res.json();
-        setMembers(prev => prev.map(m => m.id === editingId ? updated : m));
-      }
+      await updateFamilyMember(editingId, body);
+      setMembers(prev => prev.map(m => m.id === editingId ? { ...m, ...body } : m));
     } else {
-      const res = await apiFetch('/api/family-members', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (res.ok) {
-        const member = await res.json();
-        setMembers(prev => [...prev, member]);
-      }
+      const member = await addFamilyMember(body);
+      setMembers(prev => [...prev, member]);
     }
     cancelEdit();
   };
@@ -69,7 +57,7 @@ export default function FamilyPage() {
   };
 
   const removeMember = async (id: string) => {
-    await apiFetch(`/api/family-members?id=${id}`, { method: 'DELETE' });
+    await deleteFamilyMember(id);
     setMembers(prev => prev.filter(m => m.id !== id));
   };
 

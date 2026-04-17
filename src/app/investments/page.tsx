@@ -5,6 +5,7 @@ import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { Investment, FamilyMember } from '@/lib/types';
 import { apiFetch } from '@/lib/api-client';
 import { listInvestments, addInvestment, updateInvestment, deleteInvestment } from '@/lib/investments-repo';
+import { listFamilyMembers } from '@/lib/family-members-repo';
 
 const INVESTMENT_TYPES = [
   'Australian Shares',
@@ -350,8 +351,11 @@ export default function InvestmentsPage() {
   }, []);
 
   const fetchFamilyMembers = useCallback(async () => {
-    const res = await apiFetch('/api/family-members');
-    if (res.ok) setFamilyMembers(await res.json());
+    try {
+      setFamilyMembers(await listFamilyMembers());
+    } catch {
+      setFamilyMembers([]);
+    }
   }, []);
 
   useEffect(() => { fetchInvestments(); fetchFamilyMembers(); }, [fetchInvestments, fetchFamilyMembers]);

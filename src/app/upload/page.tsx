@@ -5,6 +5,7 @@ import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { Expense, FamilyMember } from '@/lib/types';
 import { apiFetch } from '@/lib/api-client';
 import { listExpenses } from '@/lib/expenses-repo';
+import { listFamilyMembers } from '@/lib/family-members-repo';
 
 const CATEGORIES = [
   'Work from Home',
@@ -58,7 +59,7 @@ export default function UploadPage() {
 
   useEffect(() => {
     fetchExpenses();
-    apiFetch('/api/family-members').then(r => r.ok ? r.json() : []).then(setFamilyMembers);
+    listFamilyMembers().then(setFamilyMembers).catch(() => setFamilyMembers([]));
   }, [fetchExpenses]);
 
   const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -13,6 +13,14 @@ jest.mock('@/lib/expenses-repo', () => ({
   updateExpense: jest.fn(),
 }));
 
+jest.mock('@/lib/family-members-repo', () => ({
+  listFamilyMembers: jest.fn().mockResolvedValue([]),
+}));
+
+jest.mock('@/lib/category-rules-repo', () => ({
+  upsertCategoryRule: jest.fn().mockResolvedValue({}),
+}));
+
 import TaxPage from '@/app/tax/page';
 
 jest.mock('@/config/app-settings', () => ({
