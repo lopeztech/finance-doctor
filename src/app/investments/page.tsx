@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { Investment, FamilyMember } from '@/lib/types';
-import { apiFetch } from '@/lib/api-client';
+import { adviceChatGet, adviceChatPut, streamInvestmentsAdvice } from '@/lib/functions-client';
 import { listInvestments, addInvestment, updateInvestment, deleteInvestment } from '@/lib/investments-repo';
 import { listFamilyMembers } from '@/lib/family-members-repo';
 
@@ -328,17 +328,13 @@ export default function InvestmentsPage() {
   adviceHistoryRef.current = adviceHistory;
 
   const saveChat = useCallback(async (history: { role: 'user' | 'model'; text: string }[]) => {
-    await apiFetch('/api/advice-chat', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'investments', history }),
-    });
+    try { await adviceChatPut('investments', history); } catch {}
   }, []);
 
   useEffect(() => {
-    apiFetch('/api/advice-chat?type=investments')
-      .then(res => res.ok ? res.json() : { history: [] })
-      .then(data => { if (data.history?.length) setAdviceHistory(data.history); });
+    adviceChatGet('investments')
+      .then(history => { if (history.length) setAdviceHistory(history); })
+      .catch(() => {});
   }, []);
 
   const fetchInvestments = useCallback(async () => {
@@ -421,28 +417,30 @@ export default function InvestmentsPage() {
 
   const streamAdvice = async (history: { role: 'user' | 'model'; text: string }[], followUp?: string) => {
     setAdviceLoading(true);
-    const res = await apiFetch('/api/investments/advice', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ history, followUp }),
-    });
-    if (!res.ok || !res.body) {
-      const errText = await res.text().catch(() => '');
-      const errorMsg = `Unable to generate advice: ${errText || res.statusText}`;
+    let handle;
+    try {
+      handle = await streamInvestmentsAdvice({ history, followUp });
+    } catch (err) {
+      const errorMsg = `Unable to generate advice: ${err instanceof Error ? err.message : 'Unknown error'}`;
       const updated = [...history, ...(followUp ? [{ role: 'user' as const, text: followUp }] : []), { role: 'model' as const, text: errorMsg }];
       setAdviceHistory(updated);
       setAdviceLoading(false);
       return;
     }
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
     let text = '';
     setAdviceHistory(prev => [...prev, { role: 'model', text: '' }]);
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      text += decoder.decode(value, { stream: true });
+    try {
+      for await (const chunk of handle.stream) {
+        text += chunk;
+        setAdviceHistory(prev => [...prev.slice(0, -1), { role: 'model', text }]);
+      }
+      text = await handle.final;
       setAdviceHistory(prev => [...prev.slice(0, -1), { role: 'model', text }]);
+    } catch (err) {
+      const errorMsg = `Unable to generate advice: ${err instanceof Error ? err.message : 'Unknown error'}`;
+      setAdviceHistory(prev => [...prev.slice(0, -1), { role: 'model', text: errorMsg }]);
+      setAdviceLoading(false);
+      return;
     }
     setAdviceLoading(false);
     const finalHistory = [...history, ...(followUp ? [{ role: 'user' as const, text: followUp }] : []), { role: 'model' as const, text }];

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { Expense, FamilyMember } from '@/lib/types';
-import { apiFetch } from '@/lib/api-client';
+import { adviceChatGet, adviceChatPut, reanalyseExpenses } from '@/lib/functions-client';
 import { listExpenses, updateExpense } from '@/lib/expenses-repo';
 import { listFamilyMembers } from '@/lib/family-members-repo';
 import { upsertCategoryRule } from '@/lib/category-rules-repo';
@@ -90,9 +90,9 @@ export default function ExpensesPage() {
 
   // Load custom categories from Firestore
   useEffect(() => {
-    apiFetch('/api/advice-chat?type=custom-spending-categories')
-      .then(r => r.ok ? r.json() : { history: [] })
-      .then(data => { if (data.history?.length) setCustomCategories(data.history); });
+    adviceChatGet<string>('custom-spending-categories')
+      .then(history => { if (history.length) setCustomCategories(history); })
+      .catch(() => {});
   }, []);
 
   const fetchExpenses = useCallback(async () => {
@@ -122,12 +122,7 @@ export default function ExpensesPage() {
     if (!customCategories.includes(name)) {
       const updated = [...customCategories, name];
       setCustomCategories(updated);
-      // Persist to Firestore
-      apiFetch('/api/advice-chat', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'custom-spending-categories', history: updated }),
-      });
+      adviceChatPut<string>('custom-spending-categories', updated).catch(() => {});
     }
     setNewCategoryName('');
     setShowNewCategory(false);
@@ -146,19 +141,11 @@ export default function ExpensesPage() {
     if (customCategories.includes(oldName)) {
       const updated = customCategories.map(c => c === oldName ? trimmed : c);
       setCustomCategories(updated);
-      apiFetch('/api/advice-chat', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'custom-spending-categories', history: updated }),
-      });
+      adviceChatPut<string>('custom-spending-categories', updated).catch(() => {});
     } else if (!DEFAULT_SPENDING_CATEGORIES.includes(trimmed)) {
       const updated = [...customCategories, trimmed];
       setCustomCategories(updated);
-      apiFetch('/api/advice-chat', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'custom-spending-categories', history: updated }),
-      });
+      adviceChatPut<string>('custom-spending-categories', updated).catch(() => {});
     }
 
     setEditingCategoryName(null);
@@ -280,12 +267,10 @@ export default function ExpensesPage() {
 
   const reanalyse = async () => {
     setReanalysing(true);
-    const res = await apiFetch('/api/expenses/reanalyse', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ financialYear: 'all', type: 'spending' }),
-    });
-    if (res.ok) await fetchExpenses();
+    try {
+      await reanalyseExpenses({ financialYear: 'all', type: 'spending' });
+      await fetchExpenses();
+    } catch {}
     setReanalysing(false);
   };
 

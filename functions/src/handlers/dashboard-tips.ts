@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getAuthUserId } from '@/lib/auth-helpers';
-import { getDb } from '@/lib/firestore';
-import { getGeminiModel } from '@/lib/gemini';
-import type { Expense, Investment, FamilyMember } from '@/lib/types';
+import { onCall, type CallableRequest } from 'firebase-functions/v2/https';
+import { getDb } from '../lib/firestore';
+import { getGeminiModel } from '../lib/gemini';
+import { requireUserEmail } from '../lib/auth';
+import type { Expense, Investment, FamilyMember } from '../lib/types';
 
 const SYSTEM_PROMPT = `You are "Dr Finance", an Australian tax and investment advisor.
 Given a snapshot of a user's financial data, generate exactly 3 short, actionable tips.
@@ -17,29 +17,27 @@ Rules:
 - icon must be a valid FontAwesome 6 class (e.g. fa-lightbulb, fa-triangle-exclamation, fa-piggy-bank, fa-chart-line, fa-shield, fa-calendar)
 - Do NOT wrap in markdown code fences, return raw JSON only`;
 
-export async function GET(req: NextRequest) {
-  try {
-    const userId = await getAuthUserId();
-    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-    // Check cache first (tips refresh once per day)
+export const dashboardTips = onCall(
+  { region: 'australia-southeast1', serviceAccount: 'finance-doctor-functions' },
+  async (request: CallableRequest<unknown>) => {
+    const email = requireUserEmail(request);
     const db = getDb();
-    const cacheRef = db.collection('users').doc(userId).collection('advice-chats').doc('dashboard-tips');
+
+    const cacheRef = db.collection('users').doc(email).collection('advice-chats').doc('dashboard-tips');
     const cached = await cacheRef.get();
     if (cached.exists) {
       const data = cached.data();
       const cachedDate = data?.generatedAt?.split('T')[0];
       const today = new Date().toISOString().split('T')[0];
       if (cachedDate === today && data?.tips?.length) {
-        return NextResponse.json({ tips: data.tips, cached: true });
+        return { tips: data.tips, cached: true };
       }
     }
 
-    // Fetch all user data in parallel
     const [expSnap, invSnap, memberSnap] = await Promise.all([
-      db.collection('users').doc(userId).collection('expenses').where('financialYear', '==', '2025-2026').get(),
-      db.collection('users').doc(userId).collection('investments').get(),
-      db.collection('users').doc(userId).collection('family-members').get(),
+      db.collection('users').doc(email).collection('expenses').where('financialYear', '==', '2025-2026').get(),
+      db.collection('users').doc(email).collection('investments').get(),
+      db.collection('users').doc(email).collection('family-members').get(),
     ]);
 
     const expenses: Expense[] = expSnap.docs.map(d => d.data() as Expense);
@@ -47,10 +45,9 @@ export async function GET(req: NextRequest) {
     const familyMembers: FamilyMember[] = memberSnap.docs.map(d => d.data() as FamilyMember);
 
     if (expenses.length === 0 && investments.length === 0) {
-      return NextResponse.json({ tips: [] });
+      return { tips: [] };
     }
 
-    // Build context snapshot
     const totalDeductions = expenses.reduce((s, e) => s + e.amount, 0);
     const categories = [...new Set(expenses.map(e => e.category))];
     const allCategories = ['Work from Home', 'Vehicle & Travel', 'Clothing & Laundry', 'Self-Education', 'Tools & Equipment', 'Professional Memberships', 'Phone & Internet', 'Donations', 'Investment Expenses', 'Investment Property', 'Other Deductions'];
@@ -84,27 +81,18 @@ Family members: ${familyMembers.length > 0 ? familyMembers.map(m => `${m.name} (
 
 Generate 3 tips as JSON.`;
 
-    const model = await getGeminiModel();
+    const model = getGeminiModel();
     const result = await model.generateContent({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       systemInstruction: { role: 'system', parts: [{ text: SYSTEM_PROMPT }] },
     });
 
     const text = result.response?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
-    // Strip markdown fences if present
     const cleaned = text.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
     const tips = JSON.parse(cleaned);
 
-    // Cache for the day
-    await cacheRef.set({
-      tips,
-      generatedAt: new Date().toISOString(),
-    });
+    await cacheRef.set({ tips, generatedAt: new Date().toISOString() });
 
-    return NextResponse.json({ tips });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    console.error('Dashboard tips error:', message);
-    return NextResponse.json({ tips: [], error: message }, { status: 500 });
+    return { tips };
   }
-}
+);

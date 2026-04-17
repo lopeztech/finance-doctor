@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getAuthUserId } from '@/lib/auth-helpers';
-import { getDb } from '@/lib/firestore';
-import { getGeminiModel } from '@/lib/gemini';
-import type { Expense } from '@/lib/types';
+import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/https';
+import { getDb } from '../lib/firestore';
+import { getGeminiModel } from '../lib/gemini';
+import { requireUserEmail } from '../lib/auth';
+import type { Expense } from '../lib/types';
 
 const TAX_CATEGORIES = [
   'Work from Home',
@@ -64,32 +64,32 @@ Rules:
 - Consider Australian context — e.g. "Coles" is "Groceries", "Uber" is "Transport", "Netflix" is "Subscriptions"
 - Do NOT wrap in markdown code fences, return raw JSON only`;
 
-export async function POST(req: NextRequest) {
-  try {
-    const userId = await getAuthUserId();
-    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+interface ExpensesReanalyseData {
+  financialYear?: string;
+  type?: 'tax' | 'spending';
+}
 
-    const { financialYear, type } = await req.json();
+export const expensesReanalyse = onCall<ExpensesReanalyseData>(
+  { region: 'australia-southeast1', serviceAccount: 'finance-doctor-functions' },
+  async (request: CallableRequest<ExpensesReanalyseData>) => {
+    const email = requireUserEmail(request);
+    const { financialYear, type } = request.data;
     const isSpending = type === 'spending';
     const db = getDb();
 
-    let snapshot;
-    if (financialYear && financialYear !== 'all') {
-      snapshot = await db.collection('users').doc(userId).collection('expenses')
-        .where('financialYear', '==', financialYear).get();
-    } else {
-      snapshot = await db.collection('users').doc(userId).collection('expenses').get();
-    }
+    const snap = financialYear && financialYear !== 'all'
+      ? await db.collection('users').doc(email).collection('expenses').where('financialYear', '==', financialYear).get()
+      : await db.collection('users').doc(email).collection('expenses').get();
 
-    const expenses: Expense[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Expense));
+    const expenses: Expense[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as Expense));
     if (expenses.length === 0) {
-      return NextResponse.json({ error: 'No expenses to re-analyse' }, { status: 400 });
+      throw new HttpsError('failed-precondition', 'No expenses to re-analyse.');
     }
 
     const descriptions = expenses.map((e, i) => `${i}. [id:${e.id}] "${e.description}" ($${e.amount.toFixed(2)})`).join('\n');
     const prompt = `Re-categorise these ${expenses.length} expense transactions:\n${descriptions}`;
 
-    const model = await getGeminiModel();
+    const model = getGeminiModel();
     const result = await model.generateContent({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       systemInstruction: { role: 'system', parts: [{ text: isSpending ? SPENDING_PROMPT : TAX_PROMPT }] },
@@ -102,13 +102,13 @@ export async function POST(req: NextRequest) {
     try {
       results = JSON.parse(cleaned);
     } catch {
-      return NextResponse.json({ error: 'Failed to parse AI response' }, { status: 500 });
+      throw new HttpsError('internal', 'Failed to parse AI response.');
     }
 
     const batch = db.batch();
     let updated = 0;
     for (const item of results) {
-      const ref = db.collection('users').doc(userId).collection('expenses').doc(item.id);
+      const ref = db.collection('users').doc(email).collection('expenses').doc(item.id);
       if (isSpending) {
         const valid = SPENDING_CATEGORIES.includes(item.spendingCategory || '') ? item.spendingCategory : null;
         if (!valid) continue;
@@ -122,10 +122,6 @@ export async function POST(req: NextRequest) {
     }
     await batch.commit();
 
-    return NextResponse.json({ updated, total: expenses.length });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    console.error('Re-analyse error:', message);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return { updated, total: expenses.length };
   }
-}
+);

@@ -4,16 +4,10 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { Expense, Investment, FamilyMember } from '@/lib/types';
-import { apiFetch } from '@/lib/api-client';
+import { fetchDashboardTips, type DashboardTip } from '@/lib/functions-client';
 import { listExpenses } from '@/lib/expenses-repo';
 import { listInvestments } from '@/lib/investments-repo';
 import { listFamilyMembers } from '@/lib/family-members-repo';
-
-interface DashboardTip {
-  icon: string;
-  tip: string;
-  type: 'tax' | 'investment' | 'strategy';
-}
 
 const CATEGORY_ICONS: Record<string, string> = {
   'Work from Home': 'fa-house-laptop',
@@ -72,9 +66,8 @@ export default function Dashboard() {
       listFamilyMembers().then(setFamilyMembers).catch(() => setFamilyMembers([])),
     ]).then(() => setLoading(false));
 
-    apiFetch('/api/dashboard/tips')
-      .then(r => r.ok ? r.json() : { tips: [] })
-      .then(data => { setTips(data.tips || []); setTipsLoading(false); })
+    fetchDashboardTips()
+      .then(result => { setTips(result); setTipsLoading(false); })
       .catch(() => setTipsLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

@@ -25,4 +25,4 @@ export const app: FirebaseApp | null = shouldInit
 
 export const auth: Auth | null = app ? getAuth(app) : null;
 export const db: Firestore | null = app ? getFirestore(app) : null;
-export const functions: Functions | null = app ? getFunctions(app) : null;
+export const functions: Functions | null = app ? getFunctions(app, 'australia-southeast1') : null;

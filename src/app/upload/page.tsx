@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { Expense, FamilyMember } from '@/lib/types';
-import { apiFetch } from '@/lib/api-client';
+import { importPreview as callImportPreview, importSave as callImportSave, migrateFix, migrateCategorise, type MigrateFixResult } from '@/lib/functions-client';
 import { listExpenses } from '@/lib/expenses-repo';
 import { listFamilyMembers } from '@/lib/family-members-repo';
 
@@ -44,7 +44,7 @@ export default function UploadPage() {
   const [importSaving, setImportSaving] = useState(false);
   const [importOwner, setImportOwner] = useState('');
   const [migrating, setMigrating] = useState(false);
-  const [migrateResult, setMigrateResult] = useState<{ total: number; fixed: number; addedFY: number; setOwner: number; needsCategorisation: number } | null>(null);
+  const [migrateResult, setMigrateResult] = useState<MigrateFixResult | null>(null);
   const [categorising, setCategorising] = useState(false);
   const [categoriseProgress, setCategoriseProgress] = useState({ done: 0, remaining: 0 });
 
@@ -68,16 +68,13 @@ export default function UploadPage() {
     setImportLoading(true);
     setImportPreview(null);
     setImportDuplicateCount(0);
-    const formData = new FormData();
-    formData.append('file', file);
-    const res = await apiFetch('/api/expenses/import', { method: 'POST', body: formData });
-    if (res.ok) {
-      const data = await res.json();
+    try {
+      const csvText = await file.text();
+      const data = await callImportPreview(csvText);
       setImportDuplicateCount(data.duplicateCount || 0);
       setImportPreview(data.preview);
-    } else {
-      const err = await res.json().catch(() => ({ error: 'Import failed' }));
-      alert(err.error || 'Import failed');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Import failed');
     }
     setImportLoading(false);
     e.target.value = '';
@@ -105,16 +102,12 @@ export default function UploadPage() {
     }));
     if (!toSave?.length) return;
     setImportSaving(true);
-    const res = await apiFetch('/api/expenses/import', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ expenses: toSave }),
-    });
-    if (res.ok) {
+    try {
+      await callImportSave(toSave);
       setImportPreview(null);
       setShowImport(false);
       fetchExpenses();
-    }
+    } catch {}
     setImportSaving(false);
   };
 
@@ -235,12 +228,11 @@ export default function UploadPage() {
             onClick={async () => {
               setMigrating(true);
               setMigrateResult(null);
-              const res = await apiFetch('/api/expenses/migrate', { method: 'POST' });
-              if (res.ok) {
-                const data = await res.json();
+              try {
+                const data = await migrateFix();
                 setMigrateResult(data);
                 if (data.fixed > 0) fetchExpenses();
-              }
+              } catch {}
               setMigrating(false);
             }}
           >
@@ -268,17 +260,15 @@ export default function UploadPage() {
                   let remaining = migrateResult.needsCategorisation;
                   setCategoriseProgress({ done: 0, remaining });
                   while (remaining > 0) {
-                    const res = await apiFetch('/api/expenses/migrate', {
-                      method: 'PUT',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ batchSize: 50 }),
-                    });
-                    if (!res.ok) break;
-                    const data = await res.json();
-                    totalDone += data.categorised;
-                    remaining = data.remaining;
-                    setCategoriseProgress({ done: totalDone, remaining });
-                    if (data.remaining === 0 || (data.categorised === 0 && data.ruleApplied === 0)) break;
+                    try {
+                      const data = await migrateCategorise(50);
+                      totalDone += data.categorised;
+                      remaining = data.remaining;
+                      setCategoriseProgress({ done: totalDone, remaining });
+                      if (data.remaining === 0 || (data.categorised === 0 && data.ruleApplied === 0)) break;
+                    } catch {
+                      break;
+                    }
                   }
                   setCategorising(false);
                   fetchExpenses();
