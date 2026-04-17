@@ -11,7 +11,7 @@ interface InvestmentsAdviceData {
 }
 
 export const investmentsAdvice = onCall<InvestmentsAdviceData, Promise<{ text: string }>>(
-  { region: 'australia-southeast1', serviceAccount: 'finance-doctor-functions' },
+  { region: 'australia-southeast1', serviceAccount: 'finance-doctor-functions@' },
   async (request: CallableRequest<InvestmentsAdviceData>, response?: CallableResponse<string>) => {
     const email = requireUserEmail(request);
     const { history, followUp } = request.data;

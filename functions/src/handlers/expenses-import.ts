@@ -177,7 +177,7 @@ function parseCSV(text: string): { date: string; description: string; amount: nu
 }
 
 export const expensesImport = onCall<ExpensesImportData>(
-  { region: 'australia-southeast1', serviceAccount: 'finance-doctor-functions' },
+  { region: 'australia-southeast1', serviceAccount: 'finance-doctor-functions@' },
   async (request: CallableRequest<ExpensesImportData>) => {
     const email = requireUserEmail(request);
     const db = getDb();

@@ -70,7 +70,7 @@ interface ExpensesReanalyseData {
 }
 
 export const expensesReanalyse = onCall<ExpensesReanalyseData>(
-  { region: 'australia-southeast1', serviceAccount: 'finance-doctor-functions' },
+  { region: 'australia-southeast1', serviceAccount: 'finance-doctor-functions@' },
   async (request: CallableRequest<ExpensesReanalyseData>) => {
     const email = requireUserEmail(request);
     const { financialYear, type } = request.data;

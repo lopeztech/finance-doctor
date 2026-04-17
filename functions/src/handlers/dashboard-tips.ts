@@ -18,7 +18,7 @@ Rules:
 - Do NOT wrap in markdown code fences, return raw JSON only`;
 
 export const dashboardTips = onCall(
-  { region: 'australia-southeast1', serviceAccount: 'finance-doctor-functions' },
+  { region: 'australia-southeast1', serviceAccount: 'finance-doctor-functions@' },
   async (request: CallableRequest<unknown>) => {
     const email = requireUserEmail(request);
     const db = getDb();

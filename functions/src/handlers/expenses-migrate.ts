@@ -51,7 +51,7 @@ interface CategoriseData {
 type ExpensesMigrateData = FixData | CategoriseData;
 
 export const expensesMigrate = onCall<ExpensesMigrateData>(
-  { region: 'australia-southeast1', serviceAccount: 'finance-doctor-functions' },
+  { region: 'australia-southeast1', serviceAccount: 'finance-doctor-functions@' },
   async (request: CallableRequest<ExpensesMigrateData>) => {
     const email = requireUserEmail(request);
     const db = getDb();

@@ -13,7 +13,7 @@ interface AdviceChatData {
 }
 
 export const adviceChat = onCall(
-  { region: 'australia-southeast1', serviceAccount: 'finance-doctor-functions' },
+  { region: 'australia-southeast1', serviceAccount: 'finance-doctor-functions@' },
   async (request: CallableRequest<AdviceChatData>) => {
     const email = requireUserEmail(request);
     const { action, type, history } = request.data;

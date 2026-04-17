@@ -12,7 +12,7 @@ interface TaxAdviceData {
 }
 
 export const taxAdvice = onCall<TaxAdviceData, Promise<{ text: string }>>(
-  { region: 'australia-southeast1', serviceAccount: 'finance-doctor-functions' },
+  { region: 'australia-southeast1', serviceAccount: 'finance-doctor-functions@' },
   async (request: CallableRequest<TaxAdviceData>, response?: CallableResponse<string>) => {
     const email = requireUserEmail(request);
     const { financialYear, history, followUp } = request.data;
