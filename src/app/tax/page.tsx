@@ -73,6 +73,7 @@ export default function TaxPage() {
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [selectedOwner, setSelectedOwner] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [expandedNonDeductible, setExpandedNonDeductible] = useState<Set<string>>(new Set());
   const [reanalysing, setReanalysing] = useState(false);
   const [sortField, setSortField] = useState<'date' | 'description' | 'amount'>('date');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -214,6 +215,15 @@ export default function TaxPage() {
     });
   };
 
+  const toggleNonDeductibleCategory = (category: string) => {
+    setExpandedNonDeductible(prev => {
+      const next = new Set(prev);
+      if (next.has(category)) next.delete(category);
+      else next.add(category);
+      return next;
+    });
+  };
+
   const toggleSort = (field: 'date' | 'description' | 'amount') => {
     if (sortField === field) setSortDir(prev => prev === 'asc' ? 'desc' : 'asc');
     else { setSortField(field); setSortDir(field === 'amount' ? 'desc' : 'asc'); }
@@ -263,7 +273,16 @@ export default function TaxPage() {
     return acc;
   }, {} as Record<string, Expense[]>);
 
-  const sortedNonDeductible = sortExpenses(nonDeductibleExpenses);
+  const nonDeductibleTotals = nonDeductibleExpenses.reduce((acc, e) => {
+    acc[e.category] = (acc[e.category] || 0) + e.amount;
+    return acc;
+  }, {} as Record<string, number>);
+  const sortedNonDeductibleCategories = Object.entries(nonDeductibleTotals).sort(([a], [b]) => a.localeCompare(b));
+  const nonDeductibleByCategory = nonDeductibleExpenses.reduce((acc, e) => {
+    if (!acc[e.category]) acc[e.category] = [];
+    acc[e.category].push(e);
+    return acc;
+  }, {} as Record<string, Expense[]>);
 
   // YoY uses all expenses regardless of FY filter (but respects owner filter)
   const allDeductibleExpenses = expenses.filter(e => {
@@ -502,33 +521,63 @@ export default function TaxPage() {
               </PanelHeader>
               <PanelBody>
                 <p className="text-muted small mb-2">These expenses are recorded as non-deductible so future imports with the same description are skipped automatically.</p>
-                <div className="table-responsive" style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                  <table className="table table-sm table-hover mb-0">
-                    <thead className="sticky-top bg-white">
-                      <tr>
-                        <th style={{ width: '90px' }}>Date</th>
-                        <th>Description</th>
-                        <th style={{ width: '140px' }}>Category</th>
-                        <th className="text-end" style={{ width: '90px' }}>Amount</th>
-                        <th style={{ width: '60px' }}></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sortedNonDeductible.map(e => (
-                        <tr key={e.id}>
-                          <td className="small text-muted">{new Date(e.date).toLocaleDateString('en-AU')}</td>
-                          <td className="small">{e.description}</td>
-                          <td className="small text-muted">{e.category}</td>
-                          <td className="text-end small fw-bold">${e.amount.toFixed(2)}</td>
-                          <td>
-                            <button className="btn btn-xs btn-outline-success" onClick={() => toggleNonDeductible(e.id)} title="Mark as deductible">
-                              <i className="fa fa-check"></i>
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div>
+                  {sortedNonDeductibleCategories.map(([category, total]) => {
+                    const pct = totalNonDeductible > 0 ? (total / totalNonDeductible) * 100 : 0;
+                    const color = CATEGORY_COLORS[category] || '#6c757d';
+                    const isExpanded = expandedNonDeductible.has(category);
+                    const catExpenses = sortExpenses(nonDeductibleByCategory[category] || []);
+                    return (
+                      <div key={category} className="mb-2">
+                        <div
+                          className="d-flex align-items-center p-2 rounded"
+                          style={{ cursor: 'pointer', backgroundColor: isExpanded ? 'var(--bs-light)' : 'transparent' }}
+                          onClick={() => toggleNonDeductibleCategory(category)}
+                        >
+                          <i className={`fa fa-chevron-${isExpanded ? 'down' : 'right'} me-2 text-muted`} style={{ width: '12px', fontSize: '0.7rem' }}></i>
+                          <i className={`fa ${CATEGORY_ICONS[category] || 'fa-receipt'} me-2`} style={{ color }}></i>
+                          <span className="fw-bold flex-grow-1">{category}</span>
+                          <span className="badge bg-secondary me-2">{catExpenses.length}</span>
+                          <span className="fw-bold me-2">${total.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</span>
+                          <span className="small text-muted" style={{ width: '45px', textAlign: 'right' }}>{pct.toFixed(1)}%</span>
+                        </div>
+                        {isExpanded && (
+                          <div className="ms-4 mt-1 mb-2 table-responsive">
+                            <table className="table table-sm table-hover mb-0">
+                              <thead>
+                                <tr>
+                                  <th style={{ width: '90px' }}>Date</th>
+                                  <th>Description</th>
+                                  {catExpenses.some(ex => ex.owner) && <th style={{ width: '80px' }}>Owner</th>}
+                                  <th className="text-end" style={{ width: '90px' }}>Amount</th>
+                                  <th style={{ width: '60px' }}></th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {catExpenses.map(e => (
+                                  <tr key={e.id}>
+                                    <td className="small text-muted">{new Date(e.date).toLocaleDateString('en-AU')}</td>
+                                    <td className="small">{e.description}</td>
+                                    {catExpenses.some(ex => ex.owner) && <td className="small text-muted">{e.owner || ''}</td>}
+                                    <td className="text-end small fw-bold">${e.amount.toFixed(2)}</td>
+                                    <td>
+                                      <button className="btn btn-xs btn-outline-success" onClick={ev => { ev.stopPropagation(); toggleNonDeductible(e.id); }} title="Mark as deductible">
+                                        <i className="fa fa-check"></i>
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  <div className="border-top pt-2 mt-2 d-flex align-items-center fw-bold">
+                    <span className="flex-grow-1">Total Non-Deductible</span>
+                    <span>${totalNonDeductible.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</span>
+                  </div>
                 </div>
               </PanelBody>
             </Panel>
@@ -564,9 +613,22 @@ export default function TaxPage() {
                           <td className="small">{e.description}</td>
                           <td className="text-end small fw-bold">${e.amount.toFixed(2)}</td>
                           <td>
-                            <select className="form-select form-select-sm" value="Other Deductions" onChange={ev => updateExpenseCategory(e.id, ev.target.value)}>
+                            <select
+                              className="form-select form-select-sm"
+                              value="Other Deductions"
+                              onChange={ev => {
+                                const v = ev.target.value;
+                                if (v === '__non_deductible__') toggleNonDeductible(e.id);
+                                else if (v !== 'Other Deductions') updateExpenseCategory(e.id, v);
+                              }}
+                            >
                               <option value="Other Deductions">— Select —</option>
-                              {DEDUCTION_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                              <optgroup label="Deductible">
+                                {DEDUCTION_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                              </optgroup>
+                              <optgroup label="Non-deductible">
+                                <option value="__non_deductible__">Mark as Non-deductible</option>
+                              </optgroup>
                             </select>
                           </td>
                         </tr>
