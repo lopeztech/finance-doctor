@@ -119,7 +119,23 @@ function getFinancialYear(date: string): string {
   return `${year - 1}-${year}`;
 }
 
-function parseCSV(text: string): { date: string; description: string; amount: number }[] {
+interface ParsedRow {
+  date: string;
+  description: string;
+  amount: number;
+  explicitCategory?: string;
+  explicitDeductible?: boolean;
+}
+
+function parseBoolean(raw: string): boolean | undefined {
+  const v = raw.trim().toLowerCase();
+  if (!v) return undefined;
+  if (['true', 'yes', 'y', '1', 'deductible', 'tax deductible'].includes(v)) return true;
+  if (['false', 'no', 'n', '0', 'non-deductible', 'nondeductible', 'not deductible', 'non deductible'].includes(v)) return false;
+  return undefined;
+}
+
+function parseCSV(text: string): ParsedRow[] {
   const lines = text.trim().split('\n');
   if (lines.length < 1) return [];
 
@@ -129,11 +145,13 @@ function parseCSV(text: string): { date: string; description: string; amount: nu
     (firstRowLower.some(c => c.includes('description') || c.includes('narration') || c.includes('memo') || c.includes('amount') || c.includes('debit')));
 
   const dataLines = hasHeader ? lines.slice(1) : lines;
-  const results: { date: string; description: string; amount: number }[] = [];
+  const results: ParsedRow[] = [];
 
   let dateCol = 0;
   let amountCol = 1;
   let descCols: number[] = [2, 3];
+  let categoryCol = -1;
+  let deductibleCol = -1;
 
   if (hasHeader) {
     const dateIdx = firstRowLower.findIndex(c => c.includes('date'));
@@ -149,6 +167,9 @@ function parseCSV(text: string): { date: string; description: string; amount: nu
     if (dateIdx >= 0) dateCol = dateIdx;
     if (amountIdx >= 0) amountCol = amountIdx;
     if (headerDescCols.length > 0) descCols = headerDescCols;
+
+    deductibleCol = firstRowLower.findIndex(c => c.includes('deductible'));
+    categoryCol = firstRowLower.findIndex((c, i) => c === 'category' || (c.includes('category') && i !== deductibleCol && !c.includes('sub')));
   }
 
   for (const line of dataLines) {
@@ -171,7 +192,10 @@ function parseCSV(text: string): { date: string; description: string; amount: nu
     const date = normaliseDate(rawDate);
     if (!date) continue;
 
-    results.push({ date, description, amount });
+    const explicitCategory = categoryCol >= 0 ? cols[categoryCol]?.trim() || undefined : undefined;
+    const explicitDeductible = deductibleCol >= 0 ? parseBoolean(cols[deductibleCol] || '') : undefined;
+
+    results.push({ date, description, amount, explicitCategory, explicitDeductible });
   }
 
   return results;
@@ -201,28 +225,67 @@ export const expensesImport = onCall<ExpensesImportData>(
         return rules.find(r => lower.includes(r.pattern));
       };
 
-      const needsAI = parsed.filter(p => { const r = findRule(p.description); return !r || (!r.taxCategory && !r.spendingCategory); });
-      const aiIndexMap = new Map<number, number>();
-      let aiIdx = 0;
-      parsed.forEach((p, i) => { const r = findRule(p.description); if (!r || (!r.taxCategory && !r.spendingCategory)) { aiIndexMap.set(aiIdx++, i); } });
-
-      const descriptions = needsAI.map((p, i) => `${i}. "${p.description}" ($${p.amount.toFixed(2)})`).join('\n');
-      const prompt = needsAI.length > 0 ? `Categorise these ${needsAI.length} expense transactions:\n${descriptions}` : '';
-
+      // Per-row resolved values. Priority: explicit CSV column > saved rule > AI.
       const categoryMap = new Map<number, string>();
       const spendingCategoryMap = new Map<number, string>();
       const spendingSubCategoryMap = new Map<number, string>();
       const nonDeductibleMap = new Map<number, boolean>();
+      const newRules: { pattern: string; taxCategory?: string; spendingCategory?: string; nonDeductible?: boolean }[] = [];
 
       parsed.forEach((p, i) => {
+        // 1. Explicit Tax Deductible column
+        if (p.explicitDeductible === false) {
+          nonDeductibleMap.set(i, true);
+          // Non-deductible rows go into the Other Deductions tax bucket by convention
+          categoryMap.set(i, 'Other Deductions');
+        }
+
+        // 2. Explicit Category column — match against tax, then spending, then treat as custom spending
+        if (p.explicitCategory) {
+          const exact = CATEGORIES.find(c => c.toLowerCase() === p.explicitCategory!.toLowerCase());
+          const exactSpending = SPENDING_CATEGORIES.find(c => c.toLowerCase() === p.explicitCategory!.toLowerCase());
+          if (exact) {
+            if (!nonDeductibleMap.has(i)) categoryMap.set(i, exact);
+          } else if (exactSpending) {
+            spendingCategoryMap.set(i, exactSpending);
+          } else {
+            // Treat as a custom spending category (user-defined, e.g. "Kids")
+            spendingCategoryMap.set(i, p.explicitCategory);
+          }
+        }
+
+        // Capture a rule to persist for future imports when anything was explicit
+        if (p.explicitCategory || p.explicitDeductible !== undefined) {
+          newRules.push({
+            pattern: p.description.toLowerCase(),
+            ...(categoryMap.get(i) ? { taxCategory: categoryMap.get(i) } : {}),
+            ...(spendingCategoryMap.get(i) ? { spendingCategory: spendingCategoryMap.get(i) } : {}),
+            ...(p.explicitDeductible === false ? { nonDeductible: true } : {}),
+          });
+        }
+
+        // 3. Existing saved rules — only fill gaps
         const rule = findRule(p.description);
-        if (rule?.taxCategory) categoryMap.set(i, rule.taxCategory);
-        if (rule?.spendingCategory) spendingCategoryMap.set(i, rule.spendingCategory);
-        if (rule?.spendingSubCategory) spendingSubCategoryMap.set(i, rule.spendingSubCategory);
-        if (rule?.nonDeductible) nonDeductibleMap.set(i, true);
+        if (rule?.taxCategory && !categoryMap.has(i)) categoryMap.set(i, rule.taxCategory);
+        if (rule?.spendingCategory && !spendingCategoryMap.has(i)) spendingCategoryMap.set(i, rule.spendingCategory);
+        if (rule?.spendingSubCategory && !spendingSubCategoryMap.has(i)) spendingSubCategoryMap.set(i, rule.spendingSubCategory);
+        if (rule?.nonDeductible && !nonDeductibleMap.has(i)) {
+          nonDeductibleMap.set(i, true);
+          if (!categoryMap.has(i)) categoryMap.set(i, 'Other Deductions');
+        }
+      });
+
+      // 4. AI fills what's still missing. A row needs AI if any of: tax category (unless non-deductible) or spending category is absent.
+      const needsAI: { row: ParsedRow; idx: number }[] = [];
+      parsed.forEach((p, i) => {
+        const needsTax = !nonDeductibleMap.get(i) && !categoryMap.has(i);
+        const needsSpending = !spendingCategoryMap.has(i);
+        if (needsTax || needsSpending) needsAI.push({ row: p, idx: i });
       });
 
       if (needsAI.length > 0) {
+        const descriptions = needsAI.map(({ row }, i) => `${i}. "${row.description}" ($${row.amount.toFixed(2)})`).join('\n');
+        const prompt = `Categorise these ${needsAI.length} expense transactions:\n${descriptions}`;
         const model = getGeminiModel();
         const result = await model.generateContent({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
@@ -232,19 +295,36 @@ export const expensesImport = onCall<ExpensesImportData>(
         const responseText = result.response?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
         const cleaned = responseText.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
 
-        let categories: { index: number; category: string; spendingCategory?: string }[] = [];
+        let aiCategories: { index: number; category: string; spendingCategory?: string }[] = [];
         try {
-          categories = JSON.parse(cleaned);
+          aiCategories = JSON.parse(cleaned);
         } catch {
-          categories = needsAI.map((_, i) => ({ index: i, category: 'Other Deductions' }));
+          aiCategories = needsAI.map((_, i) => ({ index: i, category: 'Other Deductions' }));
         }
 
-        for (const cat of categories) {
-          const origIdx = aiIndexMap.get(cat.index);
-          if (origIdx === undefined) continue;
+        for (const cat of aiCategories) {
+          const entry = needsAI[cat.index];
+          if (!entry) continue;
+          const origIdx = entry.idx;
           if (!categoryMap.has(origIdx)) categoryMap.set(origIdx, CATEGORIES.includes(cat.category) ? cat.category : 'Other Deductions');
           if (!spendingCategoryMap.has(origIdx)) spendingCategoryMap.set(origIdx, SPENDING_CATEGORIES.includes(cat.spendingCategory || '') ? cat.spendingCategory! : 'Other');
         }
+      }
+
+      // Persist rules derived from explicit columns (one per unique description)
+      if (newRules.length > 0) {
+        const seenPatterns = new Set<string>();
+        const ruleCol = db.collection('users').doc(email).collection('category-rules');
+        const ruleBatch = db.batch();
+        let wrote = 0;
+        for (const r of newRules) {
+          if (seenPatterns.has(r.pattern)) continue;
+          seenPatterns.add(r.pattern);
+          const ref = ruleCol.doc();
+          ruleBatch.set(ref, { id: ref.id, ...r });
+          wrote++;
+        }
+        if (wrote > 0) await ruleBatch.commit();
       }
 
       const existingSnap = await db.collection('users').doc(email).collection('expenses').get();
@@ -266,6 +346,7 @@ export const expensesImport = onCall<ExpensesImportData>(
       }));
 
       const duplicateCount = preview.filter(p => p.duplicate).length;
+      const explicitCount = parsed.filter(p => p.explicitCategory || p.explicitDeductible !== undefined).length;
       auditLog({
         endpoint: 'expensesImport',
         email,
@@ -273,8 +354,9 @@ export const expensesImport = onCall<ExpensesImportData>(
         action: 'preview',
         geminiCalled: needsAI.length > 0,
         rowCount: parsed.length,
+        explicitRowCount: explicitCount,
         aiCategorised: needsAI.length,
-        ruleCategorised: parsed.length - needsAI.length,
+        ruleCategorised: parsed.length - needsAI.length - explicitCount,
         duplicateCount,
       });
       return { preview, total: preview.length, duplicateCount };

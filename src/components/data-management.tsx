@@ -126,7 +126,11 @@ export default function DataManagement() {
         </PanelHeader>
         {showImport && (
           <PanelBody>
-            <p className="text-muted small mb-3">Upload a CSV with Date, Amount, Description columns. Financial year is auto-detected from each expense date. Dr Finance will auto-categorise using AI.</p>
+            <p className="text-muted small mb-3">
+              Upload a CSV with <strong>Date</strong>, <strong>Amount</strong>, <strong>Description</strong> columns. Financial year is auto-detected from each expense date.
+              {' '}Optional columns: <strong>Category</strong> (a tax category like &quot;Work from Home&quot;, a spending category like &quot;Groceries&quot;, or any custom label) and <strong>Tax Deductible</strong> (TRUE/FALSE, Yes/No, or 1/0).
+              {' '}Dr Finance will auto-categorise anything you don&apos;t fill in using AI.
+            </p>
 
             {!importPreviewRows ? (
               <div className="d-flex flex-wrap align-items-end gap-3">
@@ -171,7 +175,8 @@ export default function DataManagement() {
                         <th>FY</th>
                         <th>Description</th>
                         <th className="text-end">Amount</th>
-                        <th>Category (AI)</th>
+                        <th>Tax Category</th>
+                        <th>Spending</th>
                         <th style={{ width: '30px' }}></th>
                       </tr>
                     </thead>
@@ -180,6 +185,7 @@ export default function DataManagement() {
                         <tr key={i} className={row.duplicate ? 'text-muted' : ''} style={row.duplicate ? { opacity: 0.5 } : undefined}>
                           <td>
                             {row.duplicate && <span className="badge bg-warning text-dark" title="Already exists"><i className="fa fa-copy"></i></span>}
+                            {row.nonDeductible && !row.duplicate && <span className="badge bg-danger ms-1" title="Non-deductible"><i className="fa fa-ban"></i></span>}
                           </td>
                           <td className="small">{new Date(row.date).toLocaleDateString('en-AU')}</td>
                           <td className="small text-muted">{row.financialYear}</td>
@@ -194,6 +200,7 @@ export default function DataManagement() {
                               </select>
                             )}
                           </td>
+                          <td className="small text-muted">{row.spendingCategory || '—'}</td>
                           <td>
                             {!row.duplicate && (
                               <button className="btn btn-xs btn-outline-danger" onClick={() => removePreviewRow(i)} title="Remove">
