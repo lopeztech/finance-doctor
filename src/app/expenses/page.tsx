@@ -4,10 +4,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { Expense, FamilyMember } from '@/lib/types';
 import { adviceChatGet, adviceChatPut, reanalyseExpenses } from '@/lib/functions-client';
-import { listExpenses, updateExpense, addExpenses } from '@/lib/expenses-repo';
+import { listExpenses, updateExpense, addExpenses, deleteExpense } from '@/lib/expenses-repo';
 import { listFamilyMembers } from '@/lib/family-members-repo';
 import { upsertCategoryRule } from '@/lib/category-rules-repo';
 import RecurringModal from '@/components/recurring-modal';
+import BulkActionsBar from '@/components/bulk-actions-bar';
 
 const SPENDING_ICONS: Record<string, string> = {
   'Bakery': 'fa-bread-slice',
@@ -89,6 +90,27 @@ export default function ExpensesPage() {
   const [editingCategoryName, setEditingCategoryName] = useState<string | null>(null);
   const [editCategoryValue, setEditCategoryValue] = useState('');
   const [recurringFor, setRecurringFor] = useState<Expense | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllInCategory = (expenses: Expense[], checked: boolean) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      for (const e of expenses) {
+        if (checked) next.add(e.id); else next.delete(e.id);
+      }
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
 
   // Load custom categories from Firestore
   useEffect(() => {
@@ -165,6 +187,22 @@ export default function ExpensesPage() {
 
     // Save rule for future imports
     upsertCategoryRule({ pattern: expense.description, spendingCategory }).catch(() => {});
+  };
+
+  const bulkChangeCategory = async (spendingCategory: string) => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    await Promise.all(ids.map(id => updateExpense(id, { spendingCategory })));
+    setExpenses(prev => prev.map(e => selectedIds.has(e.id) ? { ...e, spendingCategory } : e));
+    clearSelection();
+  };
+
+  const bulkDelete = async () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    await Promise.all(ids.map(id => deleteExpense(id)));
+    setExpenses(prev => prev.filter(e => !selectedIds.has(e.id)));
+    clearSelection();
   };
 
   const updateExpenseSubCategory = async (id: string, rawValue: string) => {
@@ -346,6 +384,17 @@ export default function ExpensesPage() {
         </div>
       </div>
 
+      {selectedIds.size > 0 && (
+        <BulkActionsBar
+          count={selectedIds.size}
+          categories={allSpendingCategories}
+          changeCategoryLabel="Move to"
+          onChangeCategory={bulkChangeCategory}
+          onDelete={bulkDelete}
+          onClear={clearSelection}
+        />
+      )}
+
       <div className="row">
         <div className="col-xl-8">
           <Panel>
@@ -415,6 +464,16 @@ export default function ExpensesPage() {
                             <table className="table table-sm table-hover mb-0">
                               <thead>
                                 <tr>
+                                  <th style={{ width: '32px' }} onClick={ev => ev.stopPropagation()}>
+                                    <input
+                                      type="checkbox"
+                                      className="form-check-input"
+                                      checked={catExpenses.length > 0 && catExpenses.every(e => selectedIds.has(e.id))}
+                                      ref={el => { if (el) el.indeterminate = catExpenses.some(e => selectedIds.has(e.id)) && !catExpenses.every(e => selectedIds.has(e.id)); }}
+                                      onChange={ev => selectAllInCategory(catExpenses, ev.target.checked)}
+                                      aria-label={`Select all in ${category}`}
+                                    />
+                                  </th>
                                   <th style={{ width: '90px', cursor: 'pointer' }} onClick={(ev) => { ev.stopPropagation(); toggleSort('date'); }}>Date<SortIcon field="date" /></th>
                                   <th style={{ cursor: 'pointer' }} onClick={(ev) => { ev.stopPropagation(); toggleSort('description'); }}>Description<SortIcon field="description" /></th>
                                   <th style={{ width: '140px' }}>Sub Category</th>
@@ -425,7 +484,16 @@ export default function ExpensesPage() {
                               </thead>
                               <tbody>
                                 {catExpenses.map(e => (
-                                  <tr key={e.id}>
+                                  <tr key={e.id} className={selectedIds.has(e.id) ? 'table-active' : ''}>
+                                    <td onClick={ev => ev.stopPropagation()}>
+                                      <input
+                                        type="checkbox"
+                                        className="form-check-input"
+                                        checked={selectedIds.has(e.id)}
+                                        onChange={() => toggleSelected(e.id)}
+                                        aria-label={`Select ${e.description}`}
+                                      />
+                                    </td>
                                     <td className="small text-muted">{new Date(e.date).toLocaleDateString('en-AU')}</td>
                                     <td className="small">{e.description}</td>
                                     <td className="small" onClick={ev => ev.stopPropagation()}>
