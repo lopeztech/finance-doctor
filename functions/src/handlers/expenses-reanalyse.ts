@@ -83,8 +83,29 @@ interface ExpensesReanalyseData {
   type?: 'tax' | 'spending' | 'sub-category';
 }
 
+function parseJsonArray<T>(raw: string): T[] {
+  const stripped = raw
+    .replace(/```(?:json|JSON)?/g, '')
+    .replace(/```/g, '')
+    .trim();
+  try {
+    const direct = JSON.parse(stripped);
+    if (Array.isArray(direct)) return direct as T[];
+  } catch { /* fall through to substring extraction */ }
+  const first = stripped.indexOf('[');
+  const last = stripped.lastIndexOf(']');
+  if (first !== -1 && last !== -1 && last > first) {
+    const slice = stripped.slice(first, last + 1);
+    try {
+      const parsed = JSON.parse(slice);
+      if (Array.isArray(parsed)) return parsed as T[];
+    } catch { /* give up */ }
+  }
+  return [];
+}
+
 export const expensesReanalyse = onCall<ExpensesReanalyseData>(
-  { region: 'australia-southeast1', serviceAccount: 'finance-doctor-functions@' },
+  { region: 'australia-southeast1', serviceAccount: 'finance-doctor-functions@', timeoutSeconds: 540, memory: '512MiB' },
   async (request: CallableRequest<ExpensesReanalyseData>) => {
     const start = Date.now();
     const email = requireUserEmail(request);
@@ -133,32 +154,36 @@ export const expensesReanalyse = onCall<ExpensesReanalyseData>(
       }
 
       const entries = [...groups.values()];
-      const prompt = `Propose a short sub-category for each of these ${entries.length} unique descriptions:\n`
-        + entries.map((g, i) => `${i + 1}. "${g.description}" [${g.spendingCategory}] × ${g.count}`).join('\n');
-
       const model = getGeminiModel();
-      const result = await model.generateContent({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        systemInstruction: { role: 'system', parts: [{ text: SUB_CATEGORY_PROMPT }] },
-      });
+      const CHUNK_SIZE = 60;
+      const chunks: typeof entries[] = [];
+      for (let i = 0; i < entries.length; i += CHUNK_SIZE) chunks.push(entries.slice(i, i + CHUNK_SIZE));
 
-      const responseText = result.response?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
-      const cleaned = responseText.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
-
-      let parsed: { description?: string; subCategory?: string }[] = [];
-      try {
-        parsed = JSON.parse(cleaned);
-      } catch {
-        throw new HttpsError('internal', 'Failed to parse AI response.');
-      }
+      const chunkResponses = await Promise.all(chunks.map(async chunk => {
+        const prompt = `Propose a short sub-category for each of these ${chunk.length} unique descriptions:\n`
+          + chunk.map((g, i) => `${i + 1}. "${g.description}" [${g.spendingCategory}] × ${g.count}`).join('\n');
+        const result = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          systemInstruction: { role: 'system', parts: [{ text: SUB_CATEGORY_PROMPT }] },
+        });
+        const responseText = result.response?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+        return parseJsonArray<{ description?: string; subCategory?: string }>(responseText);
+      }));
 
       const mapping = new Map<string, string>();
-      for (const item of parsed) {
-        const desc = (item.description || '').trim();
-        const sub = (item.subCategory || '').trim();
-        if (!desc || !sub) continue;
-        const clipped = sub.length > 40 ? sub.slice(0, 40) : sub;
-        mapping.set(desc, clipped);
+      for (const parsed of chunkResponses) {
+        for (const item of parsed) {
+          const desc = (item.description || '').trim();
+          const sub = (item.subCategory || '').trim();
+          if (!desc || !sub) continue;
+          if (!groups.has(desc)) continue;
+          const clipped = sub.length > 40 ? sub.slice(0, 40) : sub;
+          mapping.set(desc, clipped);
+        }
+      }
+
+      if (mapping.size === 0) {
+        throw new HttpsError('internal', 'AI returned no usable sub-categories. Try again.');
       }
 
       const descToIds = new Map<string, string[]>();
@@ -182,16 +207,24 @@ export const expensesReanalyse = onCall<ExpensesReanalyseData>(
 
       if (mapping.size > 0) {
         const ruleCol = db.collection('users').doc(email).collection('category-rules');
-        for (const [desc, sub] of mapping) {
-          const pattern = desc.toLowerCase();
-          const existingRules = await ruleCol.where('pattern', '==', pattern).limit(1).get();
-          if (existingRules.empty) {
+        const patternToSub = new Map<string, string>();
+        for (const [desc, sub] of mapping) patternToSub.set(desc.toLowerCase(), sub);
+
+        const existingLookups = await Promise.all(
+          [...patternToSub.keys()].map(p => ruleCol.where('pattern', '==', p).limit(1).get())
+        );
+        const ruleBatch = db.batch();
+        let idx = 0;
+        for (const [pattern, sub] of patternToSub) {
+          const snap = existingLookups[idx++];
+          if (snap.empty) {
             const ref = ruleCol.doc();
-            await ref.set({ id: ref.id, pattern, spendingSubCategory: sub });
+            ruleBatch.set(ref, { id: ref.id, pattern, spendingSubCategory: sub });
           } else {
-            await existingRules.docs[0].ref.update({ spendingSubCategory: sub });
+            ruleBatch.update(snap.docs[0].ref, { spendingSubCategory: sub });
           }
         }
+        await ruleBatch.commit();
       }
 
       auditLog({
@@ -219,14 +252,7 @@ export const expensesReanalyse = onCall<ExpensesReanalyseData>(
     });
 
     const responseText = result.response?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
-    const cleaned = responseText.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
-
-    let results: { id: string; category?: string; spendingCategory?: string }[] = [];
-    try {
-      results = JSON.parse(cleaned);
-    } catch {
-      throw new HttpsError('internal', 'Failed to parse AI response.');
-    }
+    const results = parseJsonArray<{ id: string; category?: string; spendingCategory?: string }>(responseText);
 
     const batch = db.batch();
     let updated = 0;
