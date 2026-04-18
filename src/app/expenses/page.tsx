@@ -101,6 +101,8 @@ export default function ExpensesPage() {
   const [recurringFor, setRecurringFor] = useState<Expense | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [focusUncategorised, setFocusUncategorised] = useState(false);
+  const [subCategorising, setSubCategorising] = useState(false);
+  const [subCategoriseMessage, setSubCategoriseMessage] = useState<string | null>(null);
   const [adviceHistory, setAdviceHistory] = useState<{ role: 'user' | 'model'; text: string }[]>([]);
   const [adviceLoading, setAdviceLoading] = useState(false);
   const [followUpInput, setFollowUpInput] = useState('');
@@ -359,6 +361,23 @@ export default function ExpensesPage() {
     setReanalysing(false);
   };
 
+  const aiSubCategorise = async () => {
+    setSubCategorising(true);
+    setSubCategoriseMessage(null);
+    try {
+      const res = await reanalyseExpenses({ financialYear: 'all', type: 'sub-category' });
+      await fetchExpenses();
+      if (res.updated === 0) {
+        setSubCategoriseMessage('AI had nothing to add — all visible items already have a sub-category.');
+      } else {
+        setSubCategoriseMessage(`AI added sub-categories to ${res.updated} expense${res.updated === 1 ? '' : 's'}.`);
+      }
+    } catch (err) {
+      setSubCategoriseMessage(`AI sub-categorisation failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+    setSubCategorising(false);
+  };
+
   const saveAdviceChat = useCallback(async (history: { role: 'user' | 'model'; text: string }[]) => {
     try { await adviceChatPut('expenses', history); } catch {}
   }, []);
@@ -537,6 +556,18 @@ export default function ExpensesPage() {
                       <span className={`badge ms-1 ${focusUncategorised ? 'bg-dark text-warning' : 'bg-warning text-dark'}`}>{uncategorisedCount}</span>
                     )}
                   </button>
+                  {focusUncategorised && (
+                    <button
+                      className="btn btn-sm btn-success"
+                      onClick={aiSubCategorise}
+                      disabled={subCategorising || uncategorisedCount === 0}
+                      title="Ask AI to propose a sub-category for every uncategorised expense"
+                    >
+                      {subCategorising
+                        ? <><i className="fa fa-spinner fa-spin me-1"></i>AI working...</>
+                        : <><i className="fa fa-wand-magic-sparkles me-1"></i>AI Categorise</>}
+                    </button>
+                  )}
                   <button className="btn btn-sm btn-outline-primary" onClick={reanalyse} disabled={reanalysing || filteredExpenses.length === 0}>
                     {reanalysing ? <><i className="fa fa-spinner fa-spin me-1"></i>Re-analysing...</> : <><i className="fa fa-robot me-1"></i>Re-analyse</>}
                   </button>
@@ -544,6 +575,13 @@ export default function ExpensesPage() {
               </div>
             </PanelHeader>
             <PanelBody>
+              {subCategoriseMessage && (
+                <div className="alert alert-info alert-dismissible d-flex align-items-center py-2 mb-3" role="alert">
+                  <i className="fa fa-wand-magic-sparkles me-2"></i>
+                  <span className="flex-grow-1 small">{subCategoriseMessage}</span>
+                  <button type="button" className="btn-close btn-sm" aria-label="Dismiss" onClick={() => setSubCategoriseMessage(null)}></button>
+                </div>
+              )}
               {sortedCategories.length === 0 ? (
                 <div className="text-center py-4 text-muted">No expense data yet.</div>
               ) : (

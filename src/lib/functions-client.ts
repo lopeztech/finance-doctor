@@ -129,7 +129,7 @@ export async function migrateCategorise(batchSize = 50): Promise<MigrateCategori
   return res.data;
 }
 
-export async function reanalyseExpenses(payload: { financialYear?: string; type?: 'tax' | 'spending' }): Promise<{ updated: number; total: number }> {
+export async function reanalyseExpenses(payload: { financialYear?: string; type?: 'tax' | 'spending' | 'sub-category' }): Promise<{ updated: number; total: number }> {
   if (guest.isGuest()) return { updated: 0, total: 0 };
   const fn = httpsCallable<typeof payload, { updated: number; total: number }>(assertFunctions(), 'expensesReanalyse');
   const res = await fn(payload);
