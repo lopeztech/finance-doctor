@@ -79,6 +79,15 @@ export default function ExpensesPage() {
   const [selectedMonth, setSelectedMonth] = useState('all');
   const [selectedOwner, setSelectedOwner] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [expandedSubs, setExpandedSubs] = useState<Set<string>>(new Set());
+
+  const toggleSub = (key: string) => {
+    setExpandedSubs(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
   const [reanalysing, setReanalysing] = useState(false);
   const [sortField, setSortField] = useState<SortField>('date');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
@@ -240,12 +249,33 @@ export default function ExpensesPage() {
   }, {} as Record<string, number>);
   const sortedCategories = Object.entries(categoryTotals).sort(([a], [b]) => a.localeCompare(b));
 
+  const NO_SUB = '— No sub-category —';
+  const getSub = (e: Expense) => e.spendingSubCategory?.trim() || NO_SUB;
+
   const expensesByCategory = filteredExpenses.reduce((acc, e) => {
     const cat = getSpendingCat(e);
     if (!acc[cat]) acc[cat] = [];
     acc[cat].push(e);
     return acc;
   }, {} as Record<string, Expense[]>);
+
+  // Group per category into sub-category buckets, plus totals per sub
+  const subBucketsByCategory = Object.fromEntries(
+    Object.entries(expensesByCategory).map(([cat, items]) => {
+      const buckets: Record<string, Expense[]> = {};
+      for (const e of items) {
+        const s = getSub(e);
+        if (!buckets[s]) buckets[s] = [];
+        buckets[s].push(e);
+      }
+      const sorted = Object.entries(buckets).sort(([a], [b]) => {
+        if (a === NO_SUB) return 1;
+        if (b === NO_SUB) return -1;
+        return a.localeCompare(b);
+      });
+      return [cat, sorted];
+    })
+  ) as Record<string, [string, Expense[]][]>;
 
   const subCategoriesByCategory = expenses.reduce((acc, e) => {
     const cat = getSpendingCat(e);
@@ -457,88 +487,115 @@ export default function ExpensesPage() {
                           <span className="small text-muted" style={{ width: '45px', textAlign: 'right' }}>{pct.toFixed(1)}%</span>
                         </div>
                         {isExpanded && (
-                          <div className="ms-4 mt-1 mb-2 table-responsive">
+                          <div className="ms-4 mt-1 mb-2">
                             <datalist id={subCatListId(category)}>
                               {[...(subCategoriesByCategory[category] || [])].sort().map(sc => <option key={sc} value={sc} />)}
                             </datalist>
-                            <table className="table table-sm table-hover mb-0">
-                              <thead>
-                                <tr>
-                                  <th style={{ width: '32px' }} onClick={ev => ev.stopPropagation()}>
-                                    <input
-                                      type="checkbox"
-                                      className="form-check-input"
-                                      checked={catExpenses.length > 0 && catExpenses.every(e => selectedIds.has(e.id))}
-                                      ref={el => { if (el) el.indeterminate = catExpenses.some(e => selectedIds.has(e.id)) && !catExpenses.every(e => selectedIds.has(e.id)); }}
-                                      onChange={ev => selectAllInCategory(catExpenses, ev.target.checked)}
-                                      aria-label={`Select all in ${category}`}
-                                    />
-                                  </th>
-                                  <th style={{ width: '90px', cursor: 'pointer' }} onClick={(ev) => { ev.stopPropagation(); toggleSort('date'); }}>Date<SortIcon field="date" /></th>
-                                  <th style={{ cursor: 'pointer' }} onClick={(ev) => { ev.stopPropagation(); toggleSort('description'); }}>Description<SortIcon field="description" /></th>
-                                  <th style={{ width: '140px' }}>Sub Category</th>
-                                  {catExpenses.some(e => e.owner) && <th style={{ width: '80px' }}>Owner</th>}
-                                  <th className="text-end" style={{ width: '90px', cursor: 'pointer' }} onClick={(ev) => { ev.stopPropagation(); toggleSort('amount'); }}>Amount<SortIcon field="amount" /></th>
-                                  <th style={{ width: '60px' }}></th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {catExpenses.map(e => (
-                                  <tr key={e.id} className={selectedIds.has(e.id) ? 'table-active' : ''}>
-                                    <td onClick={ev => ev.stopPropagation()}>
-                                      <input
-                                        type="checkbox"
-                                        className="form-check-input"
-                                        checked={selectedIds.has(e.id)}
-                                        onChange={() => toggleSelected(e.id)}
-                                        aria-label={`Select ${e.description}`}
-                                      />
-                                    </td>
-                                    <td className="small text-muted">{new Date(e.date).toLocaleDateString('en-AU')}</td>
-                                    <td className="small">{e.description}</td>
-                                    <td className="small" onClick={ev => ev.stopPropagation()}>
-                                      {editingSubCategoryId === e.id ? (
-                                        <input
-                                          type="text"
-                                          list={subCatListId(category)}
-                                          className="form-control form-control-sm"
-                                          autoFocus
-                                          defaultValue={e.spendingSubCategory || ''}
-                                          onBlur={ev => updateExpenseSubCategory(e.id, ev.target.value)}
-                                          onKeyDown={ev => {
-                                            if (ev.key === 'Enter') updateExpenseSubCategory(e.id, (ev.target as HTMLInputElement).value);
-                                            if (ev.key === 'Escape') setEditingSubCategoryId(null);
-                                          }}
-                                        />
-                                      ) : (
-                                        <span role="button" className={e.spendingSubCategory ? '' : 'text-muted'} onClick={() => setEditingSubCategoryId(e.id)}>
-                                          {e.spendingSubCategory || <><i className="fa fa-plus me-1"></i>Add</>}
-                                        </span>
-                                      )}
-                                    </td>
-                                    {catExpenses.some(ex => ex.owner) && <td className="small text-muted">{e.owner || ''}</td>}
-                                    <td className="text-end small fw-bold">
-                                      ${e.amount.toFixed(2)}
-                                      {e.recurrenceGroupId && <i className="fa fa-repeat ms-1 text-muted" title="Part of a recurring series" style={{ fontSize: '0.7rem' }}></i>}
-                                    </td>
-                                    <td className="text-nowrap">
-                                      <button className="btn btn-xs btn-outline-primary me-1" onClick={(ev) => { ev.stopPropagation(); setRecurringFor(e); }} title="Make recurring">
-                                        <i className="fa fa-repeat"></i>
-                                      </button>
-                                      {editingExpenseId === e.id ? (
-                                        <select className="form-select form-select-sm d-inline-block" style={{ width: 'auto' }} autoFocus value={getSpendingCat(e)} onChange={ev => updateExpenseSpendingCategory(e.id, ev.target.value)} onBlur={() => setTimeout(() => setEditingExpenseId(null), 200)}>
-                                          {allSpendingCategories.map(c => <option key={c} value={c}>{c}</option>)}
-                                        </select>
-                                      ) : (
-                                        <button className="btn btn-xs btn-outline-secondary" onClick={(ev) => { ev.stopPropagation(); setEditingExpenseId(e.id); }} title="Change category">
-                                          <i className="fa fa-pen-to-square"></i>
-                                        </button>
-                                      )}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
+                            {(subBucketsByCategory[category] || []).map(([sub, subExpenses]) => {
+                              const subKey = `${category}::${sub}`;
+                              const subExpanded = expandedSubs.has(subKey);
+                              const subTotal = subExpenses.reduce((s, e) => s + e.amount, 0);
+                              const subPct = total > 0 ? (subTotal / total) * 100 : 0;
+                              const sortedSubExpenses = sortExpenses(subExpenses);
+                              const isNoSub = sub === NO_SUB;
+                              return (
+                                <div key={subKey} className="mb-1">
+                                  <div
+                                    className="d-flex align-items-center px-2 py-1 rounded"
+                                    style={{ cursor: 'pointer', backgroundColor: subExpanded ? 'var(--bs-light)' : 'transparent', fontSize: '0.9rem' }}
+                                    onClick={() => toggleSub(subKey)}
+                                  >
+                                    <i className={`fa fa-chevron-${subExpanded ? 'down' : 'right'} me-2 text-muted`} style={{ width: '10px', fontSize: '0.6rem' }}></i>
+                                    <span className={`flex-grow-1 ${isNoSub ? 'fst-italic text-muted' : 'fw-medium'}`}>{sub}</span>
+                                    <span className="badge bg-light text-dark border me-2">{subExpenses.length}</span>
+                                    <span className="me-2">${subTotal.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</span>
+                                    <span className="small text-muted" style={{ width: '45px', textAlign: 'right' }}>{subPct.toFixed(1)}%</span>
+                                  </div>
+                                  {subExpanded && (
+                                    <div className="ms-4 mt-1 mb-2 table-responsive">
+                                      <table className="table table-sm table-hover mb-0">
+                                        <thead>
+                                          <tr>
+                                            <th style={{ width: '32px' }} onClick={ev => ev.stopPropagation()}>
+                                              <input
+                                                type="checkbox"
+                                                className="form-check-input"
+                                                checked={sortedSubExpenses.length > 0 && sortedSubExpenses.every(e => selectedIds.has(e.id))}
+                                                ref={el => { if (el) el.indeterminate = sortedSubExpenses.some(e => selectedIds.has(e.id)) && !sortedSubExpenses.every(e => selectedIds.has(e.id)); }}
+                                                onChange={ev => selectAllInCategory(sortedSubExpenses, ev.target.checked)}
+                                                aria-label={`Select all in ${category} / ${sub}`}
+                                              />
+                                            </th>
+                                            <th style={{ width: '90px', cursor: 'pointer' }} onClick={(ev) => { ev.stopPropagation(); toggleSort('date'); }}>Date<SortIcon field="date" /></th>
+                                            <th style={{ cursor: 'pointer' }} onClick={(ev) => { ev.stopPropagation(); toggleSort('description'); }}>Description<SortIcon field="description" /></th>
+                                            <th style={{ width: '140px' }}>Sub Category</th>
+                                            {sortedSubExpenses.some(e => e.owner) && <th style={{ width: '80px' }}>Owner</th>}
+                                            <th className="text-end" style={{ width: '90px', cursor: 'pointer' }} onClick={(ev) => { ev.stopPropagation(); toggleSort('amount'); }}>Amount<SortIcon field="amount" /></th>
+                                            <th style={{ width: '60px' }}></th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {sortedSubExpenses.map(e => (
+                                            <tr key={e.id} className={selectedIds.has(e.id) ? 'table-active' : ''}>
+                                              <td onClick={ev => ev.stopPropagation()}>
+                                                <input
+                                                  type="checkbox"
+                                                  className="form-check-input"
+                                                  checked={selectedIds.has(e.id)}
+                                                  onChange={() => toggleSelected(e.id)}
+                                                  aria-label={`Select ${e.description}`}
+                                                />
+                                              </td>
+                                              <td className="small text-muted">{new Date(e.date).toLocaleDateString('en-AU')}</td>
+                                              <td className="small">{e.description}</td>
+                                              <td className="small" onClick={ev => ev.stopPropagation()}>
+                                                {editingSubCategoryId === e.id ? (
+                                                  <input
+                                                    type="text"
+                                                    list={subCatListId(category)}
+                                                    className="form-control form-control-sm"
+                                                    autoFocus
+                                                    defaultValue={e.spendingSubCategory || ''}
+                                                    onBlur={ev => updateExpenseSubCategory(e.id, ev.target.value)}
+                                                    onKeyDown={ev => {
+                                                      if (ev.key === 'Enter') updateExpenseSubCategory(e.id, (ev.target as HTMLInputElement).value);
+                                                      if (ev.key === 'Escape') setEditingSubCategoryId(null);
+                                                    }}
+                                                  />
+                                                ) : (
+                                                  <span role="button" className={e.spendingSubCategory ? '' : 'text-muted'} onClick={() => setEditingSubCategoryId(e.id)}>
+                                                    {e.spendingSubCategory || <><i className="fa fa-plus me-1"></i>Add</>}
+                                                  </span>
+                                                )}
+                                              </td>
+                                              {sortedSubExpenses.some(ex => ex.owner) && <td className="small text-muted">{e.owner || ''}</td>}
+                                              <td className="text-end small fw-bold">
+                                                ${e.amount.toFixed(2)}
+                                                {e.recurrenceGroupId && <i className="fa fa-repeat ms-1 text-muted" title="Part of a recurring series" style={{ fontSize: '0.7rem' }}></i>}
+                                              </td>
+                                              <td className="text-nowrap">
+                                                <button className="btn btn-xs btn-outline-primary me-1" onClick={(ev) => { ev.stopPropagation(); setRecurringFor(e); }} title="Make recurring">
+                                                  <i className="fa fa-repeat"></i>
+                                                </button>
+                                                {editingExpenseId === e.id ? (
+                                                  <select className="form-select form-select-sm d-inline-block" style={{ width: 'auto' }} autoFocus value={getSpendingCat(e)} onChange={ev => updateExpenseSpendingCategory(e.id, ev.target.value)} onBlur={() => setTimeout(() => setEditingExpenseId(null), 200)}>
+                                                    {allSpendingCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                                                  </select>
+                                                ) : (
+                                                  <button className="btn btn-xs btn-outline-secondary" onClick={(ev) => { ev.stopPropagation(); setEditingExpenseId(e.id); }} title="Change category">
+                                                    <i className="fa fa-pen-to-square"></i>
+                                                  </button>
+                                                )}
+                                              </td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
                       </div>
