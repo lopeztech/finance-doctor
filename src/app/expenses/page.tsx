@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { Expense, FamilyMember } from '@/lib/types';
-import { adviceChatGet, adviceChatPut, reanalyseExpenses } from '@/lib/functions-client';
+import { adviceChatGet, adviceChatPut, reanalyseExpenses, streamExpensesAdvice } from '@/lib/functions-client';
 import { listExpenses, updateExpense, addExpenses, deleteExpense } from '@/lib/expenses-repo';
 import { listFamilyMembers } from '@/lib/family-members-repo';
 import { upsertCategoryRule } from '@/lib/category-rules-repo';
@@ -100,6 +100,12 @@ export default function ExpensesPage() {
   const [editCategoryValue, setEditCategoryValue] = useState('');
   const [recurringFor, setRecurringFor] = useState<Expense | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [focusUncategorised, setFocusUncategorised] = useState(false);
+  const [adviceHistory, setAdviceHistory] = useState<{ role: 'user' | 'model'; text: string }[]>([]);
+  const [adviceLoading, setAdviceLoading] = useState(false);
+  const [followUpInput, setFollowUpInput] = useState('');
+  const [adviceCollapsed, setAdviceCollapsed] = useState(false);
+  const adviceAnchorRef = useRef<HTMLDivElement | null>(null);
 
   const toggleSelected = (id: string) => {
     setSelectedIds(prev => {
@@ -125,6 +131,9 @@ export default function ExpensesPage() {
   useEffect(() => {
     adviceChatGet<string>('custom-spending-categories')
       .then(history => { if (history.length) setCustomCategories(history); })
+      .catch(() => {});
+    adviceChatGet('expenses')
+      .then(history => { if (history.length) setAdviceHistory(history as { role: 'user' | 'model'; text: string }[]); })
       .catch(() => {});
   }, []);
 
@@ -231,12 +240,18 @@ export default function ExpensesPage() {
   const getExpenseYear = (e: Expense) => e.date ? e.date.substring(0, 4) : '';
   const getExpenseMonthNum = (e: Expense) => e.date ? e.date.substring(5, 7) : '';
 
-  const filteredExpenses = expenses.filter(e => {
+  const hasSubCategory = (e: Expense) => Boolean(e.spendingSubCategory?.trim());
+
+  const baseFilteredExpenses = expenses.filter(e => {
     if (selectedOwner && e.owner !== selectedOwner) return false;
     if (selectedYear !== 'all' && getExpenseYear(e) !== selectedYear) return false;
     if (selectedMonth !== 'all' && getExpenseMonthNum(e) !== selectedMonth) return false;
     return true;
   });
+  const uncategorisedCount = baseFilteredExpenses.filter(e => !hasSubCategory(e)).length;
+  const filteredExpenses = focusUncategorised
+    ? baseFilteredExpenses.filter(e => !hasSubCategory(e))
+    : baseFilteredExpenses;
   const totalSpend = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
 
   // Use spendingCategory, fallback to 'Other' if not set
@@ -344,6 +359,73 @@ export default function ExpensesPage() {
     setReanalysing(false);
   };
 
+  const saveAdviceChat = useCallback(async (history: { role: 'user' | 'model'; text: string }[]) => {
+    try { await adviceChatPut('expenses', history); } catch {}
+  }, []);
+
+  const streamAdvice = async (history: { role: 'user' | 'model'; text: string }[], followUp?: string) => {
+    setAdviceLoading(true);
+    setAdviceCollapsed(false);
+    let handle;
+    try {
+      handle = await streamExpensesAdvice({ history, followUp });
+    } catch (err) {
+      const errorMsg = `Unable to generate advice: ${err instanceof Error ? err.message : 'Unknown error'}`;
+      setAdviceHistory([...history, ...(followUp ? [{ role: 'user' as const, text: followUp }] : []), { role: 'model' as const, text: errorMsg }]);
+      setAdviceLoading(false);
+      return;
+    }
+    let text = '';
+    setAdviceHistory(prev => [...prev, { role: 'model', text: '' }]);
+    try {
+      for await (const chunk of handle.stream) {
+        text += chunk;
+        setAdviceHistory(prev => [...prev.slice(0, -1), { role: 'model', text }]);
+      }
+      text = await handle.final;
+      setAdviceHistory(prev => [...prev.slice(0, -1), { role: 'model', text }]);
+    } catch (err) {
+      const errorMsg = `Unable to generate advice: ${err instanceof Error ? err.message : 'Unknown error'}`;
+      setAdviceHistory(prev => [...prev.slice(0, -1), { role: 'model', text: errorMsg }]);
+      setAdviceLoading(false);
+      return;
+    }
+    setAdviceLoading(false);
+    const finalHistory = [...history, ...(followUp ? [{ role: 'user' as const, text: followUp }] : []), { role: 'model' as const, text }];
+    saveAdviceChat(finalHistory);
+  };
+
+  const getExpensesAdvice = async () => {
+    setAdviceHistory([]);
+    setAdviceCollapsed(false);
+    adviceAnchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    await streamAdvice([]);
+  };
+
+  const sendAdviceFollowUp = async () => {
+    const question = followUpInput.trim();
+    if (!question || adviceLoading) return;
+    setFollowUpInput('');
+    const updatedHistory = [...adviceHistory, { role: 'user' as const, text: question }];
+    setAdviceHistory(updatedHistory);
+    await streamAdvice(updatedHistory.slice(0, -1), question);
+  };
+
+  const toggleFocusUncategorised = () => {
+    setFocusUncategorised(prev => {
+      const next = !prev;
+      if (next) {
+        const cats = new Set<string>();
+        for (const e of baseFilteredExpenses) {
+          if (!hasSubCategory(e)) cats.add(getSpendingCat(e));
+        }
+        setExpandedCategories(cats);
+        setExpandedSubs(new Set([...cats].map(c => `${c}::${NO_SUB}`)));
+      }
+      return next;
+    });
+  };
+
   if (loading) {
     return (
       <>
@@ -443,6 +525,18 @@ export default function ExpensesPage() {
                       <i className="fa fa-plus me-1"></i>Category
                     </button>
                   )}
+                  <button
+                    className={`btn btn-sm ${focusUncategorised ? 'btn-warning' : 'btn-outline-warning'}`}
+                    onClick={toggleFocusUncategorised}
+                    disabled={!focusUncategorised && uncategorisedCount === 0}
+                    title="Show only expenses without a sub-category"
+                  >
+                    <i className="fa fa-filter me-1"></i>
+                    {focusUncategorised ? 'Exit Focus' : 'Focus Uncategorised'}
+                    {uncategorisedCount > 0 && (
+                      <span className={`badge ms-1 ${focusUncategorised ? 'bg-dark text-warning' : 'bg-warning text-dark'}`}>{uncategorisedCount}</span>
+                    )}
+                  </button>
                   <button className="btn btn-sm btn-outline-primary" onClick={reanalyse} disabled={reanalysing || filteredExpenses.length === 0}>
                     {reanalysing ? <><i className="fa fa-spinner fa-spin me-1"></i>Re-analysing...</> : <><i className="fa fa-robot me-1"></i>Re-analyse</>}
                   </button>
@@ -650,6 +744,70 @@ export default function ExpensesPage() {
         </div>
 
         <div className="col-xl-4">
+          <div ref={adviceAnchorRef}></div>
+          <Panel>
+            <PanelHeader noButton>
+              <div className="d-flex flex-wrap align-items-center gap-2">
+                {adviceHistory.length > 0 && (
+                  <button className="btn btn-sm btn-outline-secondary" onClick={() => setAdviceCollapsed(!adviceCollapsed)} title={adviceCollapsed ? 'Expand' : 'Collapse'}>
+                    <i className={`fa fa-chevron-${adviceCollapsed ? 'down' : 'up'}`}></i>
+                  </button>
+                )}
+                <span><i className="fa fa-stethoscope me-2"></i>Expenses Doctor</span>
+                <button className="btn btn-sm btn-success ms-sm-auto" onClick={getExpensesAdvice} disabled={adviceLoading || filteredExpenses.length === 0}>
+                  {adviceLoading && adviceHistory.length <= 1 ? <><i className="fa fa-spinner fa-spin me-1"></i>Analysing...</> : <><i className="fa fa-robot me-1"></i>{adviceHistory.length > 0 ? 'New Assessment' : 'Get AI Advice'}</>}
+                </button>
+              </div>
+            </PanelHeader>
+            {!adviceCollapsed && <PanelBody>
+              {adviceHistory.length > 0 ? (
+                <>
+                  {adviceHistory.map((msg, i) => (
+                    <div key={i} className="mb-3">
+                      {msg.role === 'user' ? (
+                        <div className="d-flex align-items-start mb-2">
+                          <span className="badge bg-primary me-2 mt-1"><i className="fa fa-user"></i></span>
+                          <div className="fw-medium">{msg.text}</div>
+                        </div>
+                      ) : (
+                        <div className="d-flex align-items-start">
+                          <span className="badge bg-teal me-2 mt-1"><i className="fa fa-stethoscope"></i></span>
+                          <div className="advice-content flex-grow-1" dangerouslySetInnerHTML={{ __html: msg.text }} />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {adviceLoading && adviceHistory[adviceHistory.length - 1]?.role === 'user' && (
+                    <div className="d-flex align-items-start mb-3">
+                      <span className="badge bg-teal me-2 mt-1"><i className="fa fa-stethoscope"></i></span>
+                      <div className="text-muted"><i className="fa fa-spinner fa-spin me-1"></i>Thinking...</div>
+                    </div>
+                  )}
+                  {!adviceLoading && (
+                    <form onSubmit={(e) => { e.preventDefault(); sendAdviceFollowUp(); }} className="mt-3 border-top pt-3">
+                      <div className="input-group">
+                        <input
+                          type="text"
+                          className="form-control"
+                          placeholder="Ask Dr Finance a follow-up question..."
+                          value={followUpInput}
+                          onChange={(e) => setFollowUpInput(e.target.value)}
+                        />
+                        <button type="submit" className="btn btn-teal" disabled={!followUpInput.trim()}>
+                          <i className="fa fa-paper-plane"></i>
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </>
+              ) : (
+                <div className="text-muted text-center py-3">
+                  <p className="mb-0">Click &quot;Get AI Advice&quot; for a cashflow health assessment and a ranked list of expenses worth dropping.</p>
+                </div>
+              )}
+            </PanelBody>}
+          </Panel>
+
           <Panel>
             <PanelHeader noButton>
               <i className="fa fa-chart-pie me-2"></i>Spending Breakdown

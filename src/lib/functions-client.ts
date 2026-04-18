@@ -2,7 +2,7 @@ import { httpsCallable } from 'firebase/functions';
 import { functions } from './firebase';
 import type { Expense } from './types';
 import * as guest from './guest-store';
-import { GUEST_DASHBOARD_TIPS, mockTaxAdviceStream, mockInvestmentsAdviceStream } from './guest-mocks';
+import { GUEST_DASHBOARD_TIPS, mockTaxAdviceStream, mockInvestmentsAdviceStream, mockExpensesAdviceStream } from './guest-mocks';
 
 type ChatMessage = { role: 'user' | 'model'; text: string };
 
@@ -11,20 +11,20 @@ function assertFunctions() {
   return functions;
 }
 
-export async function adviceChatGet<T = ChatMessage>(type: 'tax' | 'investments' | 'custom-spending-categories'): Promise<T[]> {
+export async function adviceChatGet<T = ChatMessage>(type: 'tax' | 'investments' | 'expenses' | 'custom-spending-categories'): Promise<T[]> {
   if (guest.isGuest()) return guest.getAdviceChat<T>(type);
   const fn = httpsCallable<{ action: 'get'; type: string }, { history: T[] }>(assertFunctions(), 'adviceChat');
   const res = await fn({ action: 'get', type });
   return res.data.history ?? [];
 }
 
-export async function adviceChatPut<T = ChatMessage>(type: 'tax' | 'investments' | 'custom-spending-categories', history: T[]): Promise<void> {
+export async function adviceChatPut<T = ChatMessage>(type: 'tax' | 'investments' | 'expenses' | 'custom-spending-categories', history: T[]): Promise<void> {
   if (guest.isGuest()) { guest.setAdviceChat<T>(type, history); return; }
   const fn = httpsCallable<{ action: 'put'; type: string; history: T[] }, { ok: boolean }>(assertFunctions(), 'adviceChat');
   await fn({ action: 'put', type, history });
 }
 
-export async function adviceChatDelete(type: 'tax' | 'investments' | 'custom-spending-categories'): Promise<void> {
+export async function adviceChatDelete(type: 'tax' | 'investments' | 'expenses' | 'custom-spending-categories'): Promise<void> {
   if (guest.isGuest()) { guest.setAdviceChat(type, []); return; }
   const fn = httpsCallable<{ action: 'delete'; type: string }, { ok: boolean }>(assertFunctions(), 'adviceChat');
   await fn({ action: 'delete', type });
@@ -58,6 +58,13 @@ export async function streamTaxAdvice(payload: { financialYear?: string; history
 export async function streamInvestmentsAdvice(payload: { history?: ChatMessage[]; followUp?: string }): Promise<AdviceStreamHandle> {
   if (guest.isGuest()) return mockInvestmentsAdviceStream();
   const fn = httpsCallable<typeof payload, { text: string }, string>(assertFunctions(), 'investmentsAdvice');
+  const result = await fn.stream(payload);
+  return { stream: result.stream, final: result.data.then(d => d.text) };
+}
+
+export async function streamExpensesAdvice(payload: { history?: ChatMessage[]; followUp?: string }): Promise<AdviceStreamHandle> {
+  if (guest.isGuest()) return mockExpensesAdviceStream();
+  const fn = httpsCallable<typeof payload, { text: string }, string>(assertFunctions(), 'expensesAdvice');
   const result = await fn.stream(payload);
   return { stream: result.stream, final: result.data.then(d => d.text) };
 }

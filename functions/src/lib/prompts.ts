@@ -59,11 +59,41 @@ Your response style:
 - Use <ul> or <ol> for lists of recommendations
 - Use <strong> to highlight key dollar amounts and percentages`;
 
+export const EXPENSES_SYSTEM_PROMPT = `You are an Australian household cashflow advisor AI assistant called "Finance Doctor".
+You analyse spending patterns and advise how to improve cashflow, cut waste, and decide which expenses to drop.
+
+Key context:
+- Australian household context (AUD, cost-of-living pressures, ATO deduction distinction)
+- Essentials (groceries, utilities, transport, healthcare, insurance, housing) vs discretionary (dining, entertainment, subscriptions, shopping, travel)
+- Subscription creep is a common cashflow leak — flag repeat small charges
+- Lifestyle inflation: rising dining/takeaway and shopping often mask underlying budget drift
+- Tax-deductible expenses (nonDeductible=false and tax category ≠ "Other Deductions") shouldn't be cut without considering the after-tax cost
+
+Your response style:
+- Use the "doctor" metaphor: Diagnosis (cashflow health) and Prescription (what to drop or cut)
+- Be specific with dollar amounts, monthly averages, and percentages of total spend
+- Rank recommendations by impact: largest saving first
+- For each suggestion include: the category/vendor, estimated monthly saving, and why it's a candidate
+- Separate "quick wins" (cancel/downgrade today) from "lifestyle shifts" (harder behavioural changes)
+- Flag recurring/subscription charges and duplicates
+- Call out categories where spending looks unusually high vs a reasonable benchmark for an Australian household
+- Do NOT suggest dropping tax-deductible work expenses without noting the after-tax cost
+- Keep advice actionable and concise
+- Include a short disclaimer that this is general advice, not personal financial advice
+- Format your response as clean HTML using semantic tags: <h4>, <h5>, <p>, <ul>/<ol> with <li>, <strong>, <em>, <hr>, and <span class="badge bg-success/bg-warning/bg-danger"> for status indicators
+- Use <h4> for main sections (Diagnosis, Prescription) and <h5> for subsections
+- Do NOT wrap the response in <html>, <head>, or <body> tags — just the content HTML
+- Use <ul> or <ol> for lists of recommendations
+- Use <strong> to highlight key dollar amounts and percentages`;
+
 interface ExpenseInput {
   description: string;
   amount: number;
   category: string;
   date: string;
+  spendingCategory?: string;
+  spendingSubCategory?: string;
+  nonDeductible?: boolean;
 }
 
 interface InvestmentInput {
@@ -208,4 +238,87 @@ Please provide:
 3. Tax-optimisation strategies: suggest which member should hold income-producing vs growth assets
 4. Specific rebalancing recommendations with target allocations
 5. What to do next — specific actions ranked by priority`;
+}
+
+export function buildExpensesPrompt(expenses: ExpenseInput[]): string {
+  const totalSpend = expenses.reduce((s, e) => s + e.amount, 0);
+
+  const months = new Set<string>();
+  for (const e of expenses) {
+    if (e.date && e.date.length >= 7) months.add(e.date.substring(0, 7));
+  }
+  const monthCount = Math.max(months.size, 1);
+  const avgMonthly = totalSpend / monthCount;
+
+  const spendingTotals: Record<string, { total: number; count: number }> = {};
+  for (const e of expenses) {
+    const cat = e.spendingCategory || 'Other';
+    if (!spendingTotals[cat]) spendingTotals[cat] = { total: 0, count: 0 };
+    spendingTotals[cat].total += e.amount;
+    spendingTotals[cat].count += 1;
+  }
+  const spendingBreakdown = Object.entries(spendingTotals)
+    .sort(([, a], [, b]) => b.total - a.total)
+    .map(([cat, d]) => `- ${cat}: $${d.total.toFixed(2)} (${((d.total / totalSpend) * 100).toFixed(1)}%) across ${d.count} txns, ~$${(d.total / monthCount).toFixed(2)}/mo`)
+    .join('\n');
+
+  const vendorTotals: Record<string, { total: number; count: number; category: string; nonDeductible: boolean }> = {};
+  for (const e of expenses) {
+    const key = e.description || '(blank)';
+    if (!vendorTotals[key]) {
+      vendorTotals[key] = { total: 0, count: 0, category: e.spendingCategory || 'Other', nonDeductible: Boolean(e.nonDeductible) };
+    }
+    vendorTotals[key].total += e.amount;
+    vendorTotals[key].count += 1;
+  }
+  const topVendors = Object.entries(vendorTotals)
+    .sort(([, a], [, b]) => b.total - a.total)
+    .slice(0, 25)
+    .map(([desc, d]) => `- "${desc}" [${d.category}${d.nonDeductible ? ', non-deductible' : ''}]: $${d.total.toFixed(2)} over ${d.count} txns (avg $${(d.total / d.count).toFixed(2)})`)
+    .join('\n');
+
+  const recurringVendors = Object.entries(vendorTotals)
+    .filter(([, d]) => d.count >= 3)
+    .sort(([, a], [, b]) => b.total - a.total)
+    .slice(0, 20)
+    .map(([desc, d]) => `- "${desc}" [${d.category}]: ${d.count}× totalling $${d.total.toFixed(2)} (avg $${(d.total / d.count).toFixed(2)})`)
+    .join('\n') || '- (none detected)';
+
+  const monthlyTotals: Record<string, number> = {};
+  for (const e of expenses) {
+    const m = e.date?.substring(0, 7);
+    if (!m) continue;
+    monthlyTotals[m] = (monthlyTotals[m] || 0) + e.amount;
+  }
+  const monthlyTrend = Object.entries(monthlyTotals)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([m, t]) => `- ${m}: $${t.toFixed(2)}`)
+    .join('\n');
+
+  return `Analyse my household spending and deliver a cashflow diagnosis and a prescription for what to drop or cut.
+
+Overall:
+- Total spend observed: $${totalSpend.toFixed(2)}
+- Transactions: ${expenses.length}
+- Months covered: ${monthCount}
+- Average monthly spend: $${avgMonthly.toFixed(2)}
+
+Spending by category (sorted by total):
+${spendingBreakdown}
+
+Monthly totals:
+${monthlyTrend}
+
+Top 25 vendors / descriptions by total spend:
+${topVendors}
+
+Likely recurring vendors (3+ hits):
+${recurringVendors}
+
+Please provide:
+1. A cashflow health assessment (where the money goes, which categories dominate, any drift)
+2. A ranked list of specific expenses to consider dropping or reducing, with estimated monthly saving per item
+3. Subscription / recurring creep to review
+4. Lifestyle shifts that would have the biggest impact
+5. Any risks if these cuts are made (e.g. cutting deductible work expenses, kid-related needs)`;
 }

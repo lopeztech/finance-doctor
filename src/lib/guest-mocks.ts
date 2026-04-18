@@ -71,3 +71,25 @@ export function mockTaxAdviceStream(): AdviceStreamHandle {
 export function mockInvestmentsAdviceStream(): AdviceStreamHandle {
   return makeStreamHandle(INVESTMENTS_ADVICE);
 }
+
+const EXPENSES_ADVICE = `<h4>Diagnosis</h4>
+<p>Household spend is tracking <strong>$4,820/mo</strong>. Groceries and Dining & Takeaway together make up <strong>38%</strong> of outgoings, while Subscriptions has crept to <strong>$184/mo</strong> across 11 recurring vendors — a classic cashflow leak.</p>
+<h5>Where the money is going</h5>
+<ul>
+<li><strong>Groceries $1,105/mo (23%)</strong> — split 60/40 Coles/Woolies, with a steady Aldi top-up. Broadly in range for a family of four in Sydney.</li>
+<li><strong>Dining & Takeaway $720/mo (15%)</strong> — Uber Eats alone is <strong>$310/mo</strong> over 14 orders. This is the single biggest discretionary line.</li>
+<li><strong>Subscriptions $184/mo (4%)</strong> — Netflix + Stan + Kayo + Disney+ + Apple One + Spotify Duo + Audible + two SaaS tools + a gym add-on. Overlap is obvious.</li>
+</ul>
+<h4>Prescription</h4>
+<ol>
+<li><strong>Cancel or consolidate streaming</strong> — keep two of {Netflix, Stan, Kayo, Disney+}. Saving <strong>~$45/mo ($540/yr)</strong>.</li>
+<li><strong>Cap Uber Eats at 4 orders/mo</strong> — behavioural shift to home cooking on weeknights. Target saving <strong>~$180/mo ($2,160/yr)</strong>.</li>
+<li><strong>Review Audible + Spotify Duo</strong> — $31.95/mo combined. Spotify Family or a library card cuts this to <strong>~$15/mo</strong>.</li>
+<li><strong>Energy retailer switch</strong> — current AGL plan looks 12–18% above market; 10 minutes on Energy Made Easy typically reclaims <strong>~$25/mo</strong>.</li>
+<li><em>Do not cut</em> the $1,216 iPhone plan line — it's 80% work-deductible; cutting it hurts cashflow less than the tax side shows.</li>
+</ol>
+<p><em>General advice only. Not personal financial advice — confirm with your adviser for your circumstances.</em></p>`;
+
+export function mockExpensesAdviceStream(): AdviceStreamHandle {
+  return makeStreamHandle(EXPENSES_ADVICE);
+}
