@@ -2,6 +2,7 @@ import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/
 import { getDb } from '../lib/firestore';
 import { getGeminiModel } from '../lib/gemini';
 import { requireUserEmail } from '../lib/auth';
+import { auditLog } from '../lib/audit';
 
 const TAX_CATEGORIES = [
   'Work from Home', 'Vehicle & Travel', 'Clothing & Laundry', 'Self-Education',
@@ -53,6 +54,7 @@ type ExpensesMigrateData = FixData | CategoriseData;
 export const expensesMigrate = onCall<ExpensesMigrateData>(
   { region: 'australia-southeast1', serviceAccount: 'finance-doctor-functions@' },
   async (request: CallableRequest<ExpensesMigrateData>) => {
+    const start = Date.now();
     const email = requireUserEmail(request);
     const db = getDb();
 
@@ -92,6 +94,18 @@ export const expensesMigrate = onCall<ExpensesMigrateData>(
 
       const needsCategorisation = snap.docs.filter(d => !d.data().spendingCategory).length;
 
+      auditLog({
+        endpoint: 'expensesMigrate',
+        email,
+        durationMs: Date.now() - start,
+        action: 'fix',
+        geminiCalled: false,
+        total: snap.size,
+        fixed,
+        addedFY,
+        setOwner,
+        needsCategorisation,
+      });
       return { total: snap.size, fixed, addedFY, setOwner, needsCategorisation };
     }
 
@@ -111,6 +125,14 @@ export const expensesMigrate = onCall<ExpensesMigrateData>(
       const needsCategorisation = snap.docs.filter(d => !d.data().spendingCategory);
 
       if (needsCategorisation.length === 0) {
+        auditLog({
+          endpoint: 'expensesMigrate',
+          email,
+          durationMs: Date.now() - start,
+          action: 'categorise',
+          geminiCalled: false,
+          remaining: 0,
+        });
         return { categorised: 0, remaining: 0, ruleApplied: 0 };
       }
 
@@ -173,6 +195,18 @@ export const expensesMigrate = onCall<ExpensesMigrateData>(
         await aiBatch.commit();
       }
 
+      auditLog({
+        endpoint: 'expensesMigrate',
+        email,
+        durationMs: Date.now() - start,
+        action: 'categorise',
+        geminiCalled: needsAI.length > 0,
+        batchSize,
+        batchProcessed: chunk.length,
+        ruleApplied,
+        aiCategorised,
+        remaining: needsCategorisation.length - chunk.length,
+      });
       return {
         categorised: ruleApplied + aiCategorised,
         ruleApplied,

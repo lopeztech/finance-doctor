@@ -2,6 +2,7 @@ import { onCall, type CallableRequest } from 'firebase-functions/v2/https';
 import { getDb } from '../lib/firestore';
 import { getGeminiModel } from '../lib/gemini';
 import { requireUserEmail } from '../lib/auth';
+import { auditLog } from '../lib/audit';
 import type { Expense, Investment, FamilyMember } from '../lib/types';
 
 const SYSTEM_PROMPT = `You are "Dr Finance", an Australian tax and investment advisor.
@@ -20,6 +21,7 @@ Rules:
 export const dashboardTips = onCall(
   { region: 'australia-southeast1', serviceAccount: 'finance-doctor-functions@' },
   async (request: CallableRequest<unknown>) => {
+    const start = Date.now();
     const email = requireUserEmail(request);
     const db = getDb();
 
@@ -30,6 +32,7 @@ export const dashboardTips = onCall(
       const cachedDate = data?.generatedAt?.split('T')[0];
       const today = new Date().toISOString().split('T')[0];
       if (cachedDate === today && data?.tips?.length) {
+        auditLog({ endpoint: 'dashboardTips', email, durationMs: Date.now() - start, geminiCalled: false, cached: true });
         return { tips: data.tips, cached: true };
       }
     }
@@ -45,6 +48,7 @@ export const dashboardTips = onCall(
     const familyMembers: FamilyMember[] = memberSnap.docs.map(d => d.data() as FamilyMember);
 
     if (expenses.length === 0 && investments.length === 0) {
+      auditLog({ endpoint: 'dashboardTips', email, durationMs: Date.now() - start, geminiCalled: false, empty: true });
       return { tips: [] };
     }
 
@@ -93,6 +97,16 @@ Generate 3 tips as JSON.`;
 
     await cacheRef.set({ tips, generatedAt: new Date().toISOString() });
 
+    auditLog({
+      endpoint: 'dashboardTips',
+      email,
+      durationMs: Date.now() - start,
+      geminiCalled: true,
+      cached: false,
+      expenseCount: expenses.length,
+      investmentCount: investments.length,
+      tipCount: Array.isArray(tips) ? tips.length : 0,
+    });
     return { tips };
   }
 );

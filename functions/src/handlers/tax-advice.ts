@@ -2,6 +2,7 @@ import { HttpsError, onCall, type CallableRequest, type CallableResponse } from 
 import { getDb } from '../lib/firestore';
 import { getGeminiModel } from '../lib/gemini';
 import { requireUserEmail } from '../lib/auth';
+import { auditLog } from '../lib/audit';
 import { TAX_SYSTEM_PROMPT, buildTaxPrompt } from '../lib/prompts';
 import type { Expense, FamilyMember, ChatMessage } from '../lib/types';
 
@@ -14,6 +15,7 @@ interface TaxAdviceData {
 export const taxAdvice = onCall<TaxAdviceData, Promise<{ text: string }>>(
   { region: 'australia-southeast1', serviceAccount: 'finance-doctor-functions@' },
   async (request: CallableRequest<TaxAdviceData>, response?: CallableResponse<string>) => {
+    const start = Date.now();
     const email = requireUserEmail(request);
     const { financialYear, history, followUp } = request.data;
     const db = getDb();
@@ -59,6 +61,17 @@ export const taxAdvice = onCall<TaxAdviceData, Promise<{ text: string }>>(
         await response.sendChunk(text);
       }
     }
+    auditLog({
+      endpoint: 'taxAdvice',
+      email,
+      durationMs: Date.now() - start,
+      geminiCalled: true,
+      financialYear: financialYear ?? 'all',
+      expenseCount: expenses.length,
+      followUp: Boolean(followUp),
+      responseChars: full.length,
+      streamed: Boolean(request.acceptsStreaming),
+    });
     return { text: full };
   }
 );

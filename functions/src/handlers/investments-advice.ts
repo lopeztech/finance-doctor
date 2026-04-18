@@ -2,6 +2,7 @@ import { HttpsError, onCall, type CallableRequest, type CallableResponse } from 
 import { getDb } from '../lib/firestore';
 import { getGeminiModel } from '../lib/gemini';
 import { requireUserEmail } from '../lib/auth';
+import { auditLog } from '../lib/audit';
 import { INVESTMENT_SYSTEM_PROMPT, buildInvestmentPrompt } from '../lib/prompts';
 import type { Investment, FamilyMember, ChatMessage } from '../lib/types';
 
@@ -13,6 +14,7 @@ interface InvestmentsAdviceData {
 export const investmentsAdvice = onCall<InvestmentsAdviceData, Promise<{ text: string }>>(
   { region: 'australia-southeast1', serviceAccount: 'finance-doctor-functions@' },
   async (request: CallableRequest<InvestmentsAdviceData>, response?: CallableResponse<string>) => {
+    const start = Date.now();
     const email = requireUserEmail(request);
     const { history, followUp } = request.data;
     const db = getDb();
@@ -55,6 +57,16 @@ export const investmentsAdvice = onCall<InvestmentsAdviceData, Promise<{ text: s
         await response.sendChunk(text);
       }
     }
+    auditLog({
+      endpoint: 'investmentsAdvice',
+      email,
+      durationMs: Date.now() - start,
+      geminiCalled: true,
+      investmentCount: investments.length,
+      followUp: Boolean(followUp),
+      responseChars: full.length,
+      streamed: Boolean(request.acceptsStreaming),
+    });
     return { text: full };
   }
 );

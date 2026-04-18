@@ -2,6 +2,7 @@ import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/
 import { getDb } from '../lib/firestore';
 import { getGeminiModel } from '../lib/gemini';
 import { requireUserEmail } from '../lib/auth';
+import { auditLog } from '../lib/audit';
 import type { Expense } from '../lib/types';
 
 const TAX_CATEGORIES = [
@@ -72,6 +73,7 @@ interface ExpensesReanalyseData {
 export const expensesReanalyse = onCall<ExpensesReanalyseData>(
   { region: 'australia-southeast1', serviceAccount: 'finance-doctor-functions@' },
   async (request: CallableRequest<ExpensesReanalyseData>) => {
+    const start = Date.now();
     const email = requireUserEmail(request);
     const { financialYear, type } = request.data;
     const isSpending = type === 'spending';
@@ -122,6 +124,16 @@ export const expensesReanalyse = onCall<ExpensesReanalyseData>(
     }
     await batch.commit();
 
+    auditLog({
+      endpoint: 'expensesReanalyse',
+      email,
+      durationMs: Date.now() - start,
+      geminiCalled: true,
+      type: isSpending ? 'spending' : 'tax',
+      financialYear: financialYear ?? 'all',
+      expenseCount: expenses.length,
+      updatedCount: updated,
+    });
     return { updated, total: expenses.length };
   }
 );

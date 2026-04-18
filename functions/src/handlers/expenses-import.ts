@@ -2,6 +2,7 @@ import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/
 import { getDb } from '../lib/firestore';
 import { getGeminiModel } from '../lib/gemini';
 import { requireUserEmail } from '../lib/auth';
+import { auditLog } from '../lib/audit';
 import type { Expense } from '../lib/types';
 
 const CATEGORIES = [
@@ -179,6 +180,7 @@ function parseCSV(text: string): { date: string; description: string; amount: nu
 export const expensesImport = onCall<ExpensesImportData>(
   { region: 'australia-southeast1', serviceAccount: 'finance-doctor-functions@' },
   async (request: CallableRequest<ExpensesImportData>) => {
+    const start = Date.now();
     const email = requireUserEmail(request);
     const db = getDb();
 
@@ -264,6 +266,17 @@ export const expensesImport = onCall<ExpensesImportData>(
       }));
 
       const duplicateCount = preview.filter(p => p.duplicate).length;
+      auditLog({
+        endpoint: 'expensesImport',
+        email,
+        durationMs: Date.now() - start,
+        action: 'preview',
+        geminiCalled: needsAI.length > 0,
+        rowCount: parsed.length,
+        aiCategorised: needsAI.length,
+        ruleCategorised: parsed.length - needsAI.length,
+        duplicateCount,
+      });
       return { preview, total: preview.length, duplicateCount };
     }
 
@@ -296,6 +309,14 @@ export const expensesImport = onCall<ExpensesImportData>(
       }
 
       await batch.commit();
+      auditLog({
+        endpoint: 'expensesImport',
+        email,
+        durationMs: Date.now() - start,
+        action: 'save',
+        geminiCalled: false,
+        savedCount: saved.length,
+      });
       return { saved, total: saved.length };
     }
 
