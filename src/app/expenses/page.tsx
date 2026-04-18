@@ -9,6 +9,7 @@ import { listFamilyMembers } from '@/lib/family-members-repo';
 import { upsertCategoryRule } from '@/lib/category-rules-repo';
 import RecurringModal from '@/components/recurring-modal';
 import BulkActionsBar from '@/components/bulk-actions-bar';
+import { CategoryDonut, MonthlyTrend, TopVendorsChart } from '@/components/spending-charts';
 
 const SPENDING_ICONS: Record<string, string> = {
   'Bakery': 'fa-bread-slice',
@@ -324,6 +325,19 @@ export default function ExpensesPage() {
 
   const avgMonthly = sortedMonths.length > 0 ? totalSpend / sortedMonths.length : 0;
 
+  const vendorTotals = filteredExpenses.reduce((acc, e) => {
+    const key = (e.description || '(blank)').trim() || '(blank)';
+    if (!acc[key]) acc[key] = { description: key, total: 0, category: getSpendingCat(e) };
+    acc[key].total += e.amount;
+    return acc;
+  }, {} as Record<string, { description: string; total: number; category: string }>);
+  const vendorList = Object.values(vendorTotals);
+
+  const highestMonth = sortedMonths.length > 0 ? sortedMonths.reduce(([mM, mT], [m, t]) => t > mT ? [m, t] : [mM, mT]) : null;
+  const lowestMonth = sortedMonths.length > 0 ? sortedMonths.reduce(([mM, mT], [m, t]) => t < mT ? [m, t] : [mM, mT]) : null;
+  const topCategory = sortedCategories.length > 0 ? [...sortedCategories].sort(([, a], [, b]) => b - a)[0] : null;
+  const formatMonth = (m: string) => new Date(m + '-01').toLocaleDateString('en-AU', { month: 'short', year: 'numeric' });
+
   const toggleCategory = (category: string) => {
     setExpandedCategories(prev => {
       const next = new Set(prev);
@@ -515,6 +529,39 @@ export default function ExpensesPage() {
         </div>
       </div>
 
+      <Panel>
+        <PanelHeader noButton>
+          <i className="fa fa-calendar me-2"></i>Period Summary
+        </PanelHeader>
+        <PanelBody>
+          <div className="row g-3">
+            <div className="col-md-6 col-xl-3">
+              <div className="text-muted small mb-1">Highest Month</div>
+              <div className="fw-bold">{highestMonth ? `${formatMonth(highestMonth[0])} — $${highestMonth[1].toLocaleString('en-AU', { minimumFractionDigits: 2 })}` : '—'}</div>
+            </div>
+            <div className="col-md-6 col-xl-3">
+              <div className="text-muted small mb-1">Lowest Month</div>
+              <div className="fw-bold">{lowestMonth ? `${formatMonth(lowestMonth[0])} — $${lowestMonth[1].toLocaleString('en-AU', { minimumFractionDigits: 2 })}` : '—'}</div>
+            </div>
+            <div className="col-md-6 col-xl-3">
+              <div className="text-muted small mb-1">Avg per Transaction</div>
+              <div className="fw-bold">${filteredExpenses.length > 0 ? (totalSpend / filteredExpenses.length).toFixed(2) : '0.00'}</div>
+            </div>
+            <div className="col-md-6 col-xl-3">
+              <div className="text-muted small mb-1">Top Category</div>
+              <div className="fw-bold">
+                {topCategory ? (
+                  <>
+                    {topCategory[0]}
+                    <span className="text-muted ms-2 small">({((topCategory[1] / totalSpend) * 100).toFixed(1)}%)</span>
+                  </>
+                ) : '—'}
+              </div>
+            </div>
+          </div>
+        </PanelBody>
+      </Panel>
+
       {selectedIds.size > 0 && (
         <BulkActionsBar
           count={selectedIds.size}
@@ -526,12 +573,167 @@ export default function ExpensesPage() {
         />
       )}
 
-      <div className="row">
-        <div className="col-xl-8">
-          <Panel>
-            <PanelHeader noButton>
-              <div className="d-flex flex-wrap align-items-center gap-2">
-                <span><i className="fa fa-list me-2"></i>Expenses by Category</span>
+      <div ref={adviceAnchorRef}></div>
+      <Panel>
+        <PanelHeader noButton>
+          <div className="d-flex flex-wrap align-items-center gap-2">
+            {adviceHistory.length > 0 && (
+              <button className="btn btn-sm btn-outline-secondary" onClick={() => setAdviceCollapsed(!adviceCollapsed)} title={adviceCollapsed ? 'Expand' : 'Collapse'}>
+                <i className={`fa fa-chevron-${adviceCollapsed ? 'down' : 'up'}`}></i>
+              </button>
+            )}
+            <span><i className="fa fa-stethoscope me-2"></i>Expenses Doctor</span>
+            <button className="btn btn-sm btn-success ms-sm-auto" onClick={getExpensesAdvice} disabled={adviceLoading || filteredExpenses.length === 0}>
+              {adviceLoading && adviceHistory.length <= 1 ? <><i className="fa fa-spinner fa-spin me-1"></i>Analysing...</> : <><i className="fa fa-robot me-1"></i>{adviceHistory.length > 0 ? 'New Assessment' : 'Get AI Advice'}</>}
+            </button>
+          </div>
+        </PanelHeader>
+        {!adviceCollapsed && <PanelBody>
+          {adviceHistory.length > 0 ? (
+            <>
+              {adviceHistory.map((msg, i) => (
+                <div key={i} className="mb-3">
+                  {msg.role === 'user' ? (
+                    <div className="d-flex align-items-start mb-2">
+                      <span className="badge bg-primary me-2 mt-1"><i className="fa fa-user"></i></span>
+                      <div className="fw-medium">{msg.text}</div>
+                    </div>
+                  ) : (
+                    <div className="d-flex align-items-start">
+                      <span className="badge bg-teal me-2 mt-1"><i className="fa fa-stethoscope"></i></span>
+                      <div className="advice-content flex-grow-1" dangerouslySetInnerHTML={{ __html: msg.text }} />
+                    </div>
+                  )}
+                </div>
+              ))}
+              {adviceLoading && adviceHistory[adviceHistory.length - 1]?.role === 'user' && (
+                <div className="d-flex align-items-start mb-3">
+                  <span className="badge bg-teal me-2 mt-1"><i className="fa fa-stethoscope"></i></span>
+                  <div className="text-muted"><i className="fa fa-spinner fa-spin me-1"></i>Thinking...</div>
+                </div>
+              )}
+              {!adviceLoading && (
+                <form onSubmit={(e) => { e.preventDefault(); sendAdviceFollowUp(); }} className="mt-3 border-top pt-3">
+                  <div className="input-group">
+                    <input type="text" className="form-control" placeholder="Ask Dr Finance a follow-up question..." value={followUpInput} onChange={(e) => setFollowUpInput(e.target.value)} />
+                    <button type="submit" className="btn btn-teal" disabled={!followUpInput.trim()}>
+                      <i className="fa fa-paper-plane"></i>
+                    </button>
+                  </div>
+                </form>
+              )}
+            </>
+          ) : (
+            <div className="text-muted text-center py-3">
+              <p className="mb-0">Click &quot;Get AI Advice&quot; for a cashflow health assessment and a ranked list of expenses worth dropping.</p>
+            </div>
+          )}
+        </PanelBody>}
+      </Panel>
+
+      {filteredExpenses.length > 0 && (
+        <Panel>
+          <PanelHeader noButton>
+            <i className="fa fa-chart-simple me-2"></i>Overview Charts
+          </PanelHeader>
+          <PanelBody>
+            <div className="row g-3">
+              <div className="col-xl-4 col-md-6">
+                <h6 className="small text-muted text-uppercase mb-2"><i className="fa fa-chart-pie me-1"></i>By Category</h6>
+                <CategoryDonut totals={categoryTotals} colors={SPENDING_COLORS} />
+              </div>
+              <div className="col-xl-4 col-md-6">
+                <h6 className="small text-muted text-uppercase mb-2"><i className="fa fa-chart-line me-1"></i>Monthly Trend</h6>
+                <MonthlyTrend monthlyTotals={monthlyTotals} />
+              </div>
+              <div className="col-xl-4 col-md-12">
+                <h6 className="small text-muted text-uppercase mb-2"><i className="fa fa-ranking-star me-1"></i>Top Vendors</h6>
+                <TopVendorsChart vendors={vendorList} colors={SPENDING_COLORS} />
+              </div>
+            </div>
+          </PanelBody>
+        </Panel>
+      )}
+
+      {filteredExpenses.length > 0 && (
+        <Panel>
+          <PanelHeader noButton>
+            <i className="fa fa-chart-column me-2"></i>Spending Overview
+          </PanelHeader>
+          <PanelBody>
+            <div className="row g-4">
+              <div className="col-xl-6">
+                <h6 className="small text-muted text-uppercase mb-3"><i className="fa fa-list-ul me-1"></i>By Category</h6>
+                {sortedCategories.length === 0 ? (
+                  <div className="text-muted small">No data</div>
+                ) : (
+                  <div>
+                    {sortedCategories.map(([category, total]) => {
+                      const pct = totalSpend > 0 ? (total / totalSpend) * 100 : 0;
+                      const color = SPENDING_COLORS[category] || '#6c757d';
+                      return (
+                        <div key={category} className="mb-3">
+                          <div className="d-flex align-items-center mb-1">
+                            <i className={`fa ${SPENDING_ICONS[category] || 'fa-ellipsis'} me-2`} style={{ color }}></i>
+                            <span className="flex-grow-1 small">{category}</span>
+                            <span className="small fw-bold">${total.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</span>
+                            <span className="small text-muted ms-2" style={{ width: '45px', textAlign: 'right' }}>{pct.toFixed(1)}%</span>
+                          </div>
+                          <div className="progress" style={{ height: '6px' }}>
+                            <div className="progress-bar" style={{ width: `${pct}%`, backgroundColor: color }}></div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              <div className="col-xl-6">
+                <h6 className="small text-muted text-uppercase mb-3"><i className="fa fa-chart-bar me-1"></i>By Month</h6>
+                {sortedMonths.length === 0 ? (
+                  <div className="text-muted small">No data</div>
+                ) : (
+                  <div>
+                    {sortedMonths.map(([month, total]) => {
+                      const date = new Date(month + '-01');
+                      const label = date.toLocaleDateString('en-AU', { month: 'short', year: 'numeric' });
+                      const pct = (total / maxMonthly) * 100;
+                      const cats = monthlyCategoryTotals[month] || {};
+                      return (
+                        <div key={month} className="mb-3">
+                          <div className="d-flex align-items-center mb-1">
+                            <span className="small fw-bold" style={{ width: '80px' }}>{label}</span>
+                            <span className="flex-grow-1"></span>
+                            <span className="small fw-bold">${total.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</span>
+                          </div>
+                          <div className="d-flex" style={{ height: '12px', borderRadius: '4px', overflow: 'hidden' }}>
+                            {Object.entries(cats).sort(([a], [b]) => a.localeCompare(b)).map(([cat, catTotal]) => (
+                              <div
+                                key={cat}
+                                title={`${cat}: $${catTotal.toFixed(2)}`}
+                                style={{
+                                  width: `${(catTotal / maxMonthly) * 100}%`,
+                                  backgroundColor: SPENDING_COLORS[cat] || '#6c757d',
+                                }}
+                              ></div>
+                            ))}
+                            <div style={{ width: `${100 - pct}%` }}></div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </PanelBody>
+        </Panel>
+      )}
+
+      <Panel>
+        <PanelHeader noButton>
+          <div className="d-flex flex-wrap align-items-center gap-2">
+            <span><i className="fa fa-list me-2"></i>Expenses by Category</span>
                 <div className="ms-sm-auto d-flex flex-wrap gap-2">
                   {showNewCategory ? (
                     <div className="d-flex gap-1">
@@ -737,195 +939,6 @@ export default function ExpensesPage() {
               )}
             </PanelBody>
           </Panel>
-
-          <Panel>
-            <PanelHeader noButton>
-              <i className="fa fa-chart-bar me-2"></i>Monthly Spending
-            </PanelHeader>
-            <PanelBody>
-              {sortedMonths.length === 0 ? (
-                <div className="text-center py-4 text-muted">No expense data yet.</div>
-              ) : (
-                <div>
-                  {sortedMonths.map(([month, total]) => {
-                    const date = new Date(month + '-01');
-                    const label = date.toLocaleDateString('en-AU', { month: 'short', year: 'numeric' });
-                    const pct = (total / maxMonthly) * 100;
-                    const cats = monthlyCategoryTotals[month] || {};
-                    return (
-                      <div key={month} className="mb-3">
-                        <div className="d-flex align-items-center mb-1">
-                          <span className="small fw-bold" style={{ width: '80px' }}>{label}</span>
-                          <span className="flex-grow-1"></span>
-                          <span className="small fw-bold">${total.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</span>
-                        </div>
-                        <div className="d-flex" style={{ height: '12px', borderRadius: '4px', overflow: 'hidden' }}>
-                          {Object.entries(cats).sort(([a], [b]) => a.localeCompare(b)).map(([cat, catTotal]) => (
-                            <div
-                              key={cat}
-                              title={`${cat}: $${catTotal.toFixed(2)}`}
-                              style={{
-                                width: `${(catTotal / maxMonthly) * 100}%`,
-                                backgroundColor: SPENDING_COLORS[cat] || '#6c757d',
-                              }}
-                            ></div>
-                          ))}
-                          <div style={{ width: `${100 - pct}%` }}></div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </PanelBody>
-          </Panel>
-        </div>
-
-        <div className="col-xl-4">
-          <div ref={adviceAnchorRef}></div>
-          <Panel>
-            <PanelHeader noButton>
-              <div className="d-flex flex-wrap align-items-center gap-2">
-                {adviceHistory.length > 0 && (
-                  <button className="btn btn-sm btn-outline-secondary" onClick={() => setAdviceCollapsed(!adviceCollapsed)} title={adviceCollapsed ? 'Expand' : 'Collapse'}>
-                    <i className={`fa fa-chevron-${adviceCollapsed ? 'down' : 'up'}`}></i>
-                  </button>
-                )}
-                <span><i className="fa fa-stethoscope me-2"></i>Expenses Doctor</span>
-                <button className="btn btn-sm btn-success ms-sm-auto" onClick={getExpensesAdvice} disabled={adviceLoading || filteredExpenses.length === 0}>
-                  {adviceLoading && adviceHistory.length <= 1 ? <><i className="fa fa-spinner fa-spin me-1"></i>Analysing...</> : <><i className="fa fa-robot me-1"></i>{adviceHistory.length > 0 ? 'New Assessment' : 'Get AI Advice'}</>}
-                </button>
-              </div>
-            </PanelHeader>
-            {!adviceCollapsed && <PanelBody>
-              {adviceHistory.length > 0 ? (
-                <>
-                  {adviceHistory.map((msg, i) => (
-                    <div key={i} className="mb-3">
-                      {msg.role === 'user' ? (
-                        <div className="d-flex align-items-start mb-2">
-                          <span className="badge bg-primary me-2 mt-1"><i className="fa fa-user"></i></span>
-                          <div className="fw-medium">{msg.text}</div>
-                        </div>
-                      ) : (
-                        <div className="d-flex align-items-start">
-                          <span className="badge bg-teal me-2 mt-1"><i className="fa fa-stethoscope"></i></span>
-                          <div className="advice-content flex-grow-1" dangerouslySetInnerHTML={{ __html: msg.text }} />
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                  {adviceLoading && adviceHistory[adviceHistory.length - 1]?.role === 'user' && (
-                    <div className="d-flex align-items-start mb-3">
-                      <span className="badge bg-teal me-2 mt-1"><i className="fa fa-stethoscope"></i></span>
-                      <div className="text-muted"><i className="fa fa-spinner fa-spin me-1"></i>Thinking...</div>
-                    </div>
-                  )}
-                  {!adviceLoading && (
-                    <form onSubmit={(e) => { e.preventDefault(); sendAdviceFollowUp(); }} className="mt-3 border-top pt-3">
-                      <div className="input-group">
-                        <input
-                          type="text"
-                          className="form-control"
-                          placeholder="Ask Dr Finance a follow-up question..."
-                          value={followUpInput}
-                          onChange={(e) => setFollowUpInput(e.target.value)}
-                        />
-                        <button type="submit" className="btn btn-teal" disabled={!followUpInput.trim()}>
-                          <i className="fa fa-paper-plane"></i>
-                        </button>
-                      </div>
-                    </form>
-                  )}
-                </>
-              ) : (
-                <div className="text-muted text-center py-3">
-                  <p className="mb-0">Click &quot;Get AI Advice&quot; for a cashflow health assessment and a ranked list of expenses worth dropping.</p>
-                </div>
-              )}
-            </PanelBody>}
-          </Panel>
-
-          <Panel>
-            <PanelHeader noButton>
-              <i className="fa fa-chart-pie me-2"></i>Spending Breakdown
-            </PanelHeader>
-            <PanelBody>
-              {sortedCategories.length === 0 ? (
-                <div className="text-center py-4 text-muted">No expense data yet.</div>
-              ) : (
-                <div>
-                  {sortedCategories.map(([category, total]) => {
-                    const pct = totalSpend > 0 ? (total / totalSpend) * 100 : 0;
-                    const color = SPENDING_COLORS[category] || '#6c757d';
-                    return (
-                      <div key={category} className="mb-3">
-                        <div className="d-flex align-items-center mb-1">
-                          <i className={`fa ${SPENDING_ICONS[category] || 'fa-ellipsis'} me-2`} style={{ color }}></i>
-                          <span className="flex-grow-1 small">{category}</span>
-                          <span className="small fw-bold">${total.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</span>
-                          <span className="small text-muted ms-2" style={{ width: '45px', textAlign: 'right' }}>{pct.toFixed(1)}%</span>
-                        </div>
-                        <div className="progress" style={{ height: '6px' }}>
-                          <div className="progress-bar" style={{ width: `${pct}%`, backgroundColor: color }}></div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </PanelBody>
-          </Panel>
-
-          <Panel>
-            <PanelHeader noButton>
-              <i className="fa fa-calendar me-2"></i>Period Summary
-            </PanelHeader>
-            <PanelBody>
-              <div className="mb-2">
-                <div className="d-flex justify-content-between small">
-                  <span className="text-muted">Highest Month</span>
-                  <span className="fw-bold">
-                    {sortedMonths.length > 0 ? (() => {
-                      const [month, total] = sortedMonths.reduce(([mM, mT], [m, t]) => t > mT ? [m, t] : [mM, mT]);
-                      return `${new Date(month + '-01').toLocaleDateString('en-AU', { month: 'short', year: 'numeric' })} — $${total.toLocaleString('en-AU', { minimumFractionDigits: 2 })}`;
-                    })() : '—'}
-                  </span>
-                </div>
-              </div>
-              <div className="mb-2">
-                <div className="d-flex justify-content-between small">
-                  <span className="text-muted">Lowest Month</span>
-                  <span className="fw-bold">
-                    {sortedMonths.length > 0 ? (() => {
-                      const [month, total] = sortedMonths.reduce(([mM, mT], [m, t]) => t < mT ? [m, t] : [mM, mT]);
-                      return `${new Date(month + '-01').toLocaleDateString('en-AU', { month: 'short', year: 'numeric' })} — $${total.toLocaleString('en-AU', { minimumFractionDigits: 2 })}`;
-                    })() : '—'}
-                  </span>
-                </div>
-              </div>
-              <div className="mb-2">
-                <div className="d-flex justify-content-between small">
-                  <span className="text-muted">Avg per Transaction</span>
-                  <span className="fw-bold">${filteredExpenses.length > 0 ? (totalSpend / filteredExpenses.length).toFixed(2) : '0.00'}</span>
-                </div>
-              </div>
-              <div className="mb-2">
-                <div className="d-flex justify-content-between small">
-                  <span className="text-muted">Top Category</span>
-                  <span className="fw-bold">{(() => { const top = sortedCategories.length > 0 ? [...sortedCategories].sort(([, a], [, b]) => b - a)[0] : null; return top ? top[0] : '—'; })()}</span>
-                </div>
-              </div>
-              <div>
-                <div className="d-flex justify-content-between small">
-                  <span className="text-muted">Top Category %</span>
-                  <span className="fw-bold">{(() => { const top = sortedCategories.length > 0 ? [...sortedCategories].sort(([, a], [, b]) => b - a)[0] : null; return top ? ((top[1] / totalSpend) * 100).toFixed(1) + '%' : '—'; })()}</span>
-                </div>
-              </div>
-            </PanelBody>
-          </Panel>
-        </div>
-      </div>
 
       {recurringFor && (
         <RecurringModal
