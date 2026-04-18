@@ -67,6 +67,16 @@ export function updateExpense(id: string, patch: Partial<Expense>) {
   state.expenses = state.expenses.map(e => e.id === id ? { ...e, ...patch } : e);
 }
 
+export function addExpense(data: Omit<Expense, 'id'>): Expense {
+  const exp: Expense = { id: rid('e'), ...data };
+  state.expenses.push(exp);
+  return exp;
+}
+
+export function deleteExpense(id: string) {
+  state.expenses = state.expenses.filter(e => e.id !== id);
+}
+
 // Investments --------------------------------------------------------------
 
 export function listInvestments(): Investment[] {

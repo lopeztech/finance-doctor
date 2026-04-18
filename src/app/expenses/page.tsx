@@ -4,9 +4,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { Expense, FamilyMember } from '@/lib/types';
 import { adviceChatGet, adviceChatPut, reanalyseExpenses } from '@/lib/functions-client';
-import { listExpenses, updateExpense } from '@/lib/expenses-repo';
+import { listExpenses, updateExpense, addExpenses } from '@/lib/expenses-repo';
 import { listFamilyMembers } from '@/lib/family-members-repo';
 import { upsertCategoryRule } from '@/lib/category-rules-repo';
+import RecurringModal from '@/components/recurring-modal';
 
 const SPENDING_ICONS: Record<string, string> = {
   'Bakery': 'fa-bread-slice',
@@ -87,6 +88,7 @@ export default function ExpensesPage() {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [editingCategoryName, setEditingCategoryName] = useState<string | null>(null);
   const [editCategoryValue, setEditCategoryValue] = useState('');
+  const [recurringFor, setRecurringFor] = useState<Expense | null>(null);
 
   // Load custom categories from Firestore
   useEffect(() => {
@@ -447,10 +449,16 @@ export default function ExpensesPage() {
                                       )}
                                     </td>
                                     {catExpenses.some(ex => ex.owner) && <td className="small text-muted">{e.owner || ''}</td>}
-                                    <td className="text-end small fw-bold">${e.amount.toFixed(2)}</td>
-                                    <td>
+                                    <td className="text-end small fw-bold">
+                                      ${e.amount.toFixed(2)}
+                                      {e.recurrenceGroupId && <i className="fa fa-repeat ms-1 text-muted" title="Part of a recurring series" style={{ fontSize: '0.7rem' }}></i>}
+                                    </td>
+                                    <td className="text-nowrap">
+                                      <button className="btn btn-xs btn-outline-primary me-1" onClick={(ev) => { ev.stopPropagation(); setRecurringFor(e); }} title="Make recurring">
+                                        <i className="fa fa-repeat"></i>
+                                      </button>
                                       {editingExpenseId === e.id ? (
-                                        <select className="form-select form-select-sm" autoFocus value={getSpendingCat(e)} onChange={ev => updateExpenseSpendingCategory(e.id, ev.target.value)} onBlur={() => setTimeout(() => setEditingExpenseId(null), 200)}>
+                                        <select className="form-select form-select-sm d-inline-block" style={{ width: 'auto' }} autoFocus value={getSpendingCat(e)} onChange={ev => updateExpenseSpendingCategory(e.id, ev.target.value)} onBlur={() => setTimeout(() => setEditingExpenseId(null), 200)}>
                                           {allSpendingCategories.map(c => <option key={c} value={c}>{c}</option>)}
                                         </select>
                                       ) : (
@@ -597,6 +605,17 @@ export default function ExpensesPage() {
           </Panel>
         </div>
       </div>
+
+      {recurringFor && (
+        <RecurringModal
+          expense={recurringFor}
+          onClose={() => setRecurringFor(null)}
+          onConfirm={async (items) => {
+            const saved = await addExpenses(items);
+            setExpenses(prev => [...prev, ...saved]);
+          }}
+        />
+      )}
     </>
   );
 }

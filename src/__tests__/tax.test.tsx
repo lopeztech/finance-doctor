@@ -26,6 +26,11 @@ jest.mock('@/components/deductions-chart', () => ({
   default: () => null,
 }));
 
+jest.mock('@/components/yoy-chart', () => ({
+  __esModule: true,
+  default: () => null,
+}));
+
 import TaxPage from '@/app/tax/page';
 
 jest.mock('@/config/app-settings', () => ({

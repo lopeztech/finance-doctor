@@ -9,6 +9,7 @@ export interface Expense {
   financialYear: string;
   owner?: string;
   nonDeductible?: boolean;
+  recurrenceGroupId?: string;
 }
 
 export interface FamilyMember {

@@ -8,6 +8,7 @@ import { listExpenses, updateExpense } from '@/lib/expenses-repo';
 import { listFamilyMembers } from '@/lib/family-members-repo';
 import { upsertCategoryRule } from '@/lib/category-rules-repo';
 import DeductionsChart from '@/components/deductions-chart';
+import YoyChart from '@/components/yoy-chart';
 
 const CATEGORIES = [
   'Clothing & Laundry',
@@ -264,6 +265,24 @@ export default function TaxPage() {
 
   const sortedNonDeductible = sortExpenses(nonDeductibleExpenses);
 
+  // YoY uses all expenses regardless of FY filter (but respects owner filter)
+  const allDeductibleExpenses = expenses.filter(e => {
+    if (selectedOwner && e.owner !== selectedOwner) return false;
+    return !e.nonDeductible && e.category !== 'Other Deductions';
+  });
+  const yoyByFy = allDeductibleExpenses.reduce((acc, e) => {
+    const key = getExpenseFY(e);
+    if (!key) return acc;
+    if (!acc[key]) acc[key] = {};
+    acc[key][e.category] = (acc[key][e.category] || 0) + e.amount;
+    return acc;
+  }, {} as Record<string, Record<string, number>>);
+  const yoyFys = Object.keys(yoyByFy).sort();
+  const yoyTotals = yoyFys.map(fy => ({
+    fy,
+    total: Object.values(yoyByFy[fy]).reduce((s, v) => s + v, 0),
+  }));
+
   return (
     <>
       <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
@@ -329,6 +348,53 @@ export default function TaxPage() {
           </PanelHeader>
           <PanelBody>
             <DeductionsChart categoryTotals={categoryTotals} height={Math.max(220, sortedCategories.length * 42)} />
+          </PanelBody>
+        </Panel>
+      )}
+
+      {yoyFys.length >= 2 && (
+        <Panel className="mb-3">
+          <PanelHeader noButton>
+            <div className="d-flex align-items-center">
+              <i className="fa fa-chart-bar me-2"></i>Year-over-Year Comparison
+              {selectedOwner && <span className="badge bg-primary ms-2">{selectedOwner}</span>}
+              <span className="ms-auto text-muted small">{yoyFys.length} financial years</span>
+            </div>
+          </PanelHeader>
+          <PanelBody>
+            <YoyChart byFy={yoyByFy} />
+            <div className="table-responsive mt-3">
+              <table className="table table-sm mb-0">
+                <thead>
+                  <tr>
+                    <th>Financial Year</th>
+                    <th className="text-end">Total Deductions</th>
+                    <th className="text-end">Change</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {yoyTotals.map((row, i) => {
+                    const prev = i > 0 ? yoyTotals[i - 1].total : null;
+                    const delta = prev !== null ? row.total - prev : null;
+                    const pct = prev && prev > 0 ? ((row.total - prev) / prev) * 100 : null;
+                    return (
+                      <tr key={row.fy}>
+                        <td className="fw-bold">FY {row.fy}</td>
+                        <td className="text-end">${row.total.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</td>
+                        <td className={`text-end ${delta === null ? 'text-muted' : delta >= 0 ? 'text-success' : 'text-danger'}`}>
+                          {delta === null ? '—' : (
+                            <>
+                              {delta >= 0 ? '+' : ''}${delta.toLocaleString('en-AU', { minimumFractionDigits: 2 })}
+                              {pct !== null && <small className="ms-1">({pct >= 0 ? '+' : ''}{pct.toFixed(1)}%)</small>}
+                            </>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </PanelBody>
         </Panel>
       )}
