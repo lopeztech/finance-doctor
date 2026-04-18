@@ -76,9 +76,9 @@ export default function FamilyPage() {
 
       <Panel>
         <PanelHeader noButton>
-          <div className="d-flex align-items-center">
-            <i className="fa fa-users me-2"></i>Family Members
-            <button className="btn btn-sm btn-success ms-auto" onClick={() => { if (showForm) cancelEdit(); else setShowForm(true); }}>
+          <div className="d-flex flex-wrap align-items-center gap-2">
+            <span><i className="fa fa-users me-2"></i>Family Members</span>
+            <button className="btn btn-sm btn-success ms-sm-auto" onClick={() => { if (showForm) cancelEdit(); else setShowForm(true); }}>
               {showForm ? <><i className="fa fa-times me-1"></i>Cancel</> : <><i className="fa fa-plus me-1"></i>Add Member</>}
             </button>
           </div>

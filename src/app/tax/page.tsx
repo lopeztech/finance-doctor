@@ -7,6 +7,7 @@ import { adviceChatGet, adviceChatPut, reanalyseExpenses, streamTaxAdvice } from
 import { listExpenses, updateExpense } from '@/lib/expenses-repo';
 import { listFamilyMembers } from '@/lib/family-members-repo';
 import { upsertCategoryRule } from '@/lib/category-rules-repo';
+import DeductionsChart from '@/components/deductions-chart';
 
 const CATEGORIES = [
   'Clothing & Laundry',
@@ -318,6 +319,20 @@ export default function TaxPage() {
         </div>
       </div>
 
+      {sortedCategories.length > 0 && (
+        <Panel className="mb-3">
+          <PanelHeader noButton>
+            <div className="d-flex align-items-center">
+              <i className="fa fa-chart-column me-2"></i>Deductions breakdown
+              {selectedOwner && <span className="badge bg-primary ms-2">{selectedOwner}</span>}
+            </div>
+          </PanelHeader>
+          <PanelBody>
+            <DeductionsChart categoryTotals={categoryTotals} height={Math.max(220, sortedCategories.length * 42)} />
+          </PanelBody>
+        </Panel>
+      )}
+
       <div className="row">
         <div className="col-xl-8">
           <Panel>
@@ -456,10 +471,10 @@ export default function TaxPage() {
           {otherExpenses.length > 0 && (
             <Panel>
               <PanelHeader noButton>
-                <div className="d-flex align-items-center">
-                  <i className="fa fa-question-circle me-2 text-warning"></i>Uncategorised / Other Deductions
-                  <span className="badge bg-warning text-dark ms-2">{otherExpenses.length}</span>
-                  <button className="btn btn-sm btn-outline-primary ms-auto" onClick={reanalyseOther} disabled={reanalysing}>
+                <div className="d-flex flex-wrap align-items-center gap-2">
+                  <span><i className="fa fa-question-circle me-2 text-warning"></i>Uncategorised / Other Deductions</span>
+                  <span className="badge bg-warning text-dark">{otherExpenses.length}</span>
+                  <button className="btn btn-sm btn-outline-primary ms-sm-auto" onClick={reanalyseOther} disabled={reanalysing}>
                     {reanalysing ? <><i className="fa fa-spinner fa-spin me-1"></i>Re-analysing...</> : <><i className="fa fa-robot me-1"></i>Re-analyse</>}
                   </button>
                 </div>
@@ -502,14 +517,14 @@ export default function TaxPage() {
           {filteredExpenses.length > 0 && (
             <Panel>
               <PanelHeader noButton>
-                <div className="d-flex align-items-center">
+                <div className="d-flex flex-wrap align-items-center gap-2">
                   {adviceHistory.length > 0 && (
-                    <button className="btn btn-sm btn-outline-secondary me-2" onClick={() => setAdviceCollapsed(!adviceCollapsed)} title={adviceCollapsed ? 'Expand' : 'Collapse'}>
+                    <button className="btn btn-sm btn-outline-secondary" onClick={() => setAdviceCollapsed(!adviceCollapsed)} title={adviceCollapsed ? 'Expand' : 'Collapse'}>
                       <i className={`fa fa-chevron-${adviceCollapsed ? 'down' : 'up'}`}></i>
                     </button>
                   )}
-                  <i className="fa fa-stethoscope me-2"></i>Tax Health Assessment
-                  <button className="btn btn-sm btn-success ms-auto" onClick={getAdvice} disabled={adviceLoading}>
+                  <span><i className="fa fa-stethoscope me-2"></i>Tax Health Assessment</span>
+                  <button className="btn btn-sm btn-success ms-sm-auto" onClick={getAdvice} disabled={adviceLoading}>
                     {adviceLoading && adviceHistory.length <= 1 ? <><i className="fa fa-spinner fa-spin me-1"></i>Analysing...</> : <><i className="fa fa-robot me-1"></i>{adviceHistory.length > 0 ? 'New Assessment' : 'Get AI Advice'}</>}
                   </button>
                 </div>

@@ -562,14 +562,14 @@ export default function InvestmentsPage() {
       {investments.length > 0 && (
         <Panel className="mb-3">
           <PanelHeader noButton>
-            <div className="d-flex align-items-center">
+            <div className="d-flex flex-wrap align-items-center gap-2">
               {adviceHistory.length > 0 && (
-                <button className="btn btn-sm btn-outline-secondary me-2" onClick={() => setAdviceCollapsed(!adviceCollapsed)} title={adviceCollapsed ? 'Expand' : 'Collapse'}>
+                <button className="btn btn-sm btn-outline-secondary" onClick={() => setAdviceCollapsed(!adviceCollapsed)} title={adviceCollapsed ? 'Expand' : 'Collapse'}>
                   <i className={`fa fa-chevron-${adviceCollapsed ? 'down' : 'up'}`}></i>
                 </button>
               )}
-              <i className="fa fa-stethoscope me-2"></i>Investment Health Assessment
-              <button className="btn btn-sm btn-success ms-auto" onClick={getAdvice} disabled={adviceLoading}>
+              <span><i className="fa fa-stethoscope me-2"></i>Investment Health Assessment</span>
+              <button className="btn btn-sm btn-success ms-sm-auto" onClick={getAdvice} disabled={adviceLoading}>
                 {adviceLoading && adviceHistory.length <= 1 ? <><i className="fa fa-spinner fa-spin me-1"></i>Analysing...</> : <><i className="fa fa-robot me-1"></i>{adviceHistory.length > 0 ? 'New Assessment' : 'Get AI Advice'}</>}
               </button>
             </div>
@@ -628,9 +628,9 @@ export default function InvestmentsPage() {
         <div className="col-12">
           <Panel>
             <PanelHeader noButton>
-              <div className="d-flex align-items-center">
-                Investments
-                <button className="btn btn-success btn-sm ms-auto" onClick={() => { if (showForm) cancelEdit(); else setShowForm(true); }}>
+              <div className="d-flex flex-wrap align-items-center gap-2">
+                <span>Investments</span>
+                <button className="btn btn-success btn-sm ms-sm-auto" onClick={() => { if (showForm) cancelEdit(); else setShowForm(true); }}>
                   {showForm ? <><i className="fa fa-times me-1"></i>Cancel</> : <><i className="fa fa-plus me-1"></i>Add Investment</>}
                 </button>
               </div>

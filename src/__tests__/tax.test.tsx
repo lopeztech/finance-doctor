@@ -21,6 +21,11 @@ jest.mock('@/lib/category-rules-repo', () => ({
   upsertCategoryRule: jest.fn().mockResolvedValue({}),
 }));
 
+jest.mock('@/components/deductions-chart', () => ({
+  __esModule: true,
+  default: () => null,
+}));
+
 import TaxPage from '@/app/tax/page';
 
 jest.mock('@/config/app-settings', () => ({
