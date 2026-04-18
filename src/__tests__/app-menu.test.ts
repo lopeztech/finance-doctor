@@ -9,7 +9,7 @@ describe('App Menu', () => {
 
   it('has all navigation items', () => {
     const titles = Menu.filter((item: any) => !item.is_header).map((item: any) => item.title);
-    expect(titles).toEqual(['Dashboard', 'Family', 'Tax', 'Expenses', 'Family Portfolio', 'Settings']);
+    expect(titles).toEqual(['Dashboard', 'Family', 'Tax', 'Expenses', 'Investment Portfolio', 'Settings']);
   });
 
   it('has correct paths', () => {

@@ -25,6 +25,11 @@ jest.mock('@/lib/family-members-repo', () => ({
   listFamilyMembers: jest.fn().mockResolvedValue([]),
 }));
 
+jest.mock('@/lib/expenses-repo', () => ({
+  listExpenses: jest.fn().mockResolvedValue([]),
+  updateExpense: jest.fn(),
+}));
+
 import InvestmentsPage from '@/app/investments/page';
 
 jest.mock('@/config/app-settings', () => ({
@@ -49,7 +54,7 @@ beforeEach(() => {
 describe('Investments Page', () => {
   it('renders the page header', async () => {
     render(<InvestmentsPage />);
-    expect(screen.getByText('Family Portfolio')).toBeInTheDocument();
+    expect(screen.getByText('Investment Portfolio')).toBeInTheDocument();
   });
 
   it('fetches investments on load', async () => {

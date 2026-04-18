@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
-import type { Investment, FamilyMember } from '@/lib/types';
+import type { Investment, FamilyMember, Expense } from '@/lib/types';
 import { adviceChatGet, adviceChatPut, streamInvestmentsAdvice } from '@/lib/functions-client';
 import { listInvestments, addInvestment, updateInvestment, deleteInvestment } from '@/lib/investments-repo';
+import { listExpenses, updateExpense } from '@/lib/expenses-repo';
 import AllocationChart from '@/components/allocation-chart';
 import { listFamilyMembers } from '@/lib/family-members-repo';
 
@@ -324,6 +325,7 @@ export default function InvestmentsPage() {
   const [followUpInput, setFollowUpInput] = useState('');
   const [adviceCollapsed, setAdviceCollapsed] = useState(false);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
+  const [investmentRelatedExpenses, setInvestmentRelatedExpenses] = useState<Expense[]>([]);
 
   const adviceHistoryRef = useRef(adviceHistory);
   adviceHistoryRef.current = adviceHistory;
@@ -355,7 +357,21 @@ export default function InvestmentsPage() {
     }
   }, []);
 
-  useEffect(() => { fetchInvestments(); fetchFamilyMembers(); }, [fetchInvestments, fetchFamilyMembers]);
+  const fetchInvestmentExpenses = useCallback(async () => {
+    try {
+      const all = await listExpenses('all');
+      setInvestmentRelatedExpenses(all.filter(e => e.category === 'Investment Expenses' || e.category === 'Investment Property'));
+    } catch {
+      setInvestmentRelatedExpenses([]);
+    }
+  }, []);
+
+  useEffect(() => { fetchInvestments(); fetchFamilyMembers(); fetchInvestmentExpenses(); }, [fetchInvestments, fetchFamilyMembers, fetchInvestmentExpenses]);
+
+  const assignExpenseToInvestment = async (expenseId: string, investmentId: string | null) => {
+    await updateExpense(expenseId, investmentId ? { investmentId } : { investmentId: undefined });
+    setInvestmentRelatedExpenses(prev => prev.map(e => e.id === expenseId ? { ...e, investmentId: investmentId || undefined } : e));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -501,7 +517,7 @@ export default function InvestmentsPage() {
   return (
     <>
       <div className="d-flex align-items-center mb-3">
-        <h1 className="page-header mb-0">Family Portfolio</h1>
+        <h1 className="page-header mb-0">Investment Portfolio</h1>
       </div>
 
       <div className="row mb-3">
@@ -621,6 +637,77 @@ export default function InvestmentsPage() {
               </div>
             )}
           </PanelBody>}
+        </Panel>
+      )}
+
+      {investmentRelatedExpenses.length > 0 && (
+        <Panel className="mb-3">
+          <PanelHeader noButton>
+            <div className="d-flex align-items-center">
+              <i className="fa fa-receipt me-2"></i>Investment Expenses
+              <span className="badge bg-secondary ms-2">{investmentRelatedExpenses.length}</span>
+              <span className="ms-auto fw-bold">${investmentRelatedExpenses.reduce((s, e) => s + e.amount, 0).toLocaleString('en-AU', { minimumFractionDigits: 2 })}</span>
+            </div>
+          </PanelHeader>
+          <PanelBody>
+            <p className="text-muted small mb-2">
+              Expenses tagged <em>Investment Expenses</em> or <em>Investment Property</em>. Link each to a specific holding so property interest, maintenance, and management costs roll up per investment.
+            </p>
+            <div className="table-responsive">
+              <table className="table table-sm table-hover mb-0">
+                <thead>
+                  <tr>
+                    <th style={{ width: '90px' }}>Date</th>
+                    <th>Description</th>
+                    <th style={{ width: '160px' }}>Tax Category</th>
+                    <th className="text-end" style={{ width: '100px' }}>Amount</th>
+                    <th style={{ width: '260px' }}>Linked to</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...investmentRelatedExpenses].sort((a, b) => (b.date || '').localeCompare(a.date || '')).map(e => (
+                    <tr key={e.id}>
+                      <td className="small text-muted">{new Date(e.date).toLocaleDateString('en-AU')}</td>
+                      <td className="small">{e.description}</td>
+                      <td className="small text-muted">{e.category}</td>
+                      <td className="text-end small fw-bold">${e.amount.toFixed(2)}</td>
+                      <td>
+                        <select
+                          className="form-select form-select-sm"
+                          value={e.investmentId || ''}
+                          onChange={ev => assignExpenseToInvestment(e.id, ev.target.value || null)}
+                        >
+                          <option value="">— Unassigned —</option>
+                          {investments.map(inv => (
+                            <option key={inv.id} value={inv.id}>{inv.name} ({inv.type})</option>
+                          ))}
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {(() => {
+              const totals = investments.map(inv => ({
+                inv,
+                total: investmentRelatedExpenses.filter(e => e.investmentId === inv.id).reduce((s, e) => s + e.amount, 0),
+              })).filter(row => row.total > 0);
+              if (totals.length === 0) return null;
+              return (
+                <div className="mt-3">
+                  <div className="small text-muted mb-1">Linked totals per investment</div>
+                  <div className="d-flex flex-wrap gap-2">
+                    {totals.map(({ inv, total }) => (
+                      <span key={inv.id} className="badge bg-light text-dark border">
+                        {inv.name}: <strong className="ms-1">${total.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</strong>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+          </PanelBody>
         </Panel>
       )}
 

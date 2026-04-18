@@ -10,6 +10,7 @@ export interface Expense {
   owner?: string;
   nonDeductible?: boolean;
   recurrenceGroupId?: string;
+  investmentId?: string;
 }
 
 export interface FamilyMember {

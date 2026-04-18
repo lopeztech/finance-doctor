@@ -6,6 +6,7 @@ import {
   doc,
   updateDoc,
   deleteDoc,
+  deleteField,
   writeBatch,
   orderBy,
   type CollectionReference,
@@ -41,7 +42,13 @@ export async function updateExpense(id: string, data: Partial<Expense>): Promise
   if (guest.isGuest()) { guest.updateExpense(id, data); return; }
   if (!db) throw new Error('Firestore is not initialised');
   const ref = doc(db, 'users', getUserKey(), 'expenses', id);
-  await updateDoc(ref, data as Record<string, unknown>);
+  // undefined values mean "remove the field" in our callers; Firestore rejects
+  // undefined so translate to deleteField() sentinels.
+  const payload: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(data)) {
+    payload[k] = v === undefined ? deleteField() : v;
+  }
+  await updateDoc(ref, payload);
 }
 
 export async function addExpenses(items: Omit<Expense, 'id'>[]): Promise<Expense[]> {
