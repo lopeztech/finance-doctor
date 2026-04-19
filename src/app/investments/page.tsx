@@ -8,6 +8,41 @@ import { listInvestments, addInvestment, updateInvestment, deleteInvestment } fr
 import { listExpenses, updateExpense } from '@/lib/expenses-repo';
 import AllocationChart from '@/components/allocation-chart';
 import { listFamilyMembers } from '@/lib/family-members-repo';
+import { getCategorySettings, resolveType, type CategorySettings, type SpendingCategoryType } from '@/lib/category-settings-repo';
+
+const SPENDING_ICONS: Record<string, string> = {
+  'Bakery': 'fa-bread-slice', 'Cafe': 'fa-mug-hot', 'Car': 'fa-car-side',
+  'Dining & Takeaway': 'fa-utensils', 'Education': 'fa-graduation-cap', 'Entertainment': 'fa-film',
+  'Financial & Banking': 'fa-university', 'Gifts & Donations': 'fa-gift', 'Groceries': 'fa-cart-shopping',
+  'Healthcare': 'fa-heart-pulse', 'Home & Garden': 'fa-house', 'Insurance': 'fa-shield',
+  'Kids Entertainment': 'fa-child', 'Personal Care': 'fa-spa', 'Personal Project': 'fa-lightbulb',
+  'Shopping': 'fa-bag-shopping', 'Subscriptions': 'fa-repeat', 'Transport': 'fa-car',
+  'Travel & Holidays': 'fa-plane', 'Utilities & Bills': 'fa-bolt', 'Other': 'fa-ellipsis',
+};
+
+const SPENDING_COLORS: Record<string, string> = {
+  'Bakery': '#d4a373', 'Cafe': '#8d6e63', 'Car': '#455a64',
+  'Dining & Takeaway': '#fd7e14', 'Education': '#0dcaf0', 'Entertainment': '#6f42c1',
+  'Financial & Banking': '#607d8b', 'Gifts & Donations': '#e91e63', 'Groceries': '#20c997',
+  'Healthcare': '#dc3545', 'Home & Garden': '#795548', 'Insurance': '#198754',
+  'Kids Entertainment': '#4caf50', 'Personal Care': '#ff69b4', 'Personal Project': '#ff9800',
+  'Shopping': '#e83e8c', 'Subscriptions': '#6610f2', 'Transport': '#0d6efd',
+  'Travel & Holidays': '#17a2b8', 'Utilities & Bills': '#ffc107', 'Other': '#6c757d',
+};
+
+const INV_TYPE_BADGES: Record<SpendingCategoryType, string> = {
+  essential: 'bg-success',
+  committed: 'bg-warning',
+  discretionary: 'bg-danger',
+};
+const INV_TYPE_LABELS: Record<SpendingCategoryType, string> = {
+  essential: 'Essential',
+  committed: 'Committed',
+  discretionary: 'Discretionary',
+};
+
+const NO_SUB = '— No sub-category —';
+const UNASSIGNED_KEY = '__unassigned__';
 
 const INVESTMENT_TYPES = [
   'Australian Shares',
@@ -326,6 +361,32 @@ export default function InvestmentsPage() {
   const [adviceCollapsed, setAdviceCollapsed] = useState(false);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [investmentRelatedExpenses, setInvestmentRelatedExpenses] = useState<Expense[]>([]);
+  const [categorySettings, setCategorySettings] = useState<CategorySettings>({ types: {}, excluded: [] });
+  const [expandedInvestmentIds, setExpandedInvestmentIds] = useState<Set<string>>(new Set());
+  const [expandedInvCategories, setExpandedInvCategories] = useState<Set<string>>(new Set());
+  const [expandedInvSubs, setExpandedInvSubs] = useState<Set<string>>(new Set());
+
+  const toggleInvestmentExpanded = (key: string) => {
+    setExpandedInvestmentIds(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+  const toggleInvCategoryExpanded = (key: string) => {
+    setExpandedInvCategories(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+  const toggleInvSubExpanded = (key: string) => {
+    setExpandedInvSubs(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
 
   const adviceHistoryRef = useRef(adviceHistory);
   adviceHistoryRef.current = adviceHistory;
@@ -338,6 +399,7 @@ export default function InvestmentsPage() {
     adviceChatGet('investments')
       .then(history => { if (history.length) setAdviceHistory(history); })
       .catch(() => {});
+    getCategorySettings().then(setCategorySettings).catch(() => {});
   }, []);
 
   const fetchInvestments = useCallback(async () => {
@@ -640,76 +702,180 @@ export default function InvestmentsPage() {
         </Panel>
       )}
 
-      {investmentRelatedExpenses.length > 0 && (
-        <Panel className="mb-3">
-          <PanelHeader noButton>
-            <div className="d-flex align-items-center">
-              <i className="fa fa-receipt me-2"></i>Investment Expenses
-              <span className="badge bg-secondary ms-2">{investmentRelatedExpenses.length}</span>
-              <span className="ms-auto fw-bold">${investmentRelatedExpenses.reduce((s, e) => s + e.amount, 0).toLocaleString('en-AU', { minimumFractionDigits: 2 })}</span>
-            </div>
-          </PanelHeader>
-          <PanelBody>
-            <p className="text-muted small mb-2">
-              Expenses tagged <em>Investment Expenses</em> or <em>Investment Property</em>. Link each to a specific holding so property interest, maintenance, and management costs roll up per investment.
-            </p>
-            <div className="table-responsive">
-              <table className="table table-sm table-hover mb-0">
-                <thead>
-                  <tr>
-                    <th style={{ width: '90px' }}>Date</th>
-                    <th>Description</th>
-                    <th style={{ width: '160px' }}>Tax Category</th>
-                    <th className="text-end" style={{ width: '100px' }}>Amount</th>
-                    <th style={{ width: '260px' }}>Linked to</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...investmentRelatedExpenses].sort((a, b) => (b.date || '').localeCompare(a.date || '')).map(e => (
-                    <tr key={e.id}>
-                      <td className="small text-muted">{new Date(e.date).toLocaleDateString('en-AU')}</td>
-                      <td className="small">{e.description}</td>
-                      <td className="small text-muted">{e.category}</td>
-                      <td className="text-end small fw-bold">${e.amount.toFixed(2)}</td>
-                      <td>
-                        <select
-                          className="form-select form-select-sm"
-                          value={e.investmentId || ''}
-                          onChange={ev => assignExpenseToInvestment(e.id, ev.target.value || null)}
-                        >
-                          <option value="">— Unassigned —</option>
-                          {investments.map(inv => (
-                            <option key={inv.id} value={inv.id}>{inv.name} ({inv.type})</option>
-                          ))}
-                        </select>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {(() => {
-              const totals = investments.map(inv => ({
-                inv,
-                total: investmentRelatedExpenses.filter(e => e.investmentId === inv.id).reduce((s, e) => s + e.amount, 0),
-              })).filter(row => row.total > 0);
-              if (totals.length === 0) return null;
-              return (
-                <div className="mt-3">
-                  <div className="small text-muted mb-1">Linked totals per investment</div>
-                  <div className="d-flex flex-wrap gap-2">
-                    {totals.map(({ inv, total }) => (
-                      <span key={inv.id} className="badge bg-light text-dark border">
-                        {inv.name}: <strong className="ms-1">${total.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</strong>
-                      </span>
-                    ))}
+      {investmentRelatedExpenses.length > 0 && (() => {
+        const totalAll = investmentRelatedExpenses.reduce((s, e) => s + e.amount, 0);
+        const groups: { key: string; label: string; icon: string; badge?: string; items: Expense[] }[] = [];
+        const unassigned = investmentRelatedExpenses.filter(e => !e.investmentId);
+        if (unassigned.length > 0) {
+          groups.push({ key: UNASSIGNED_KEY, label: 'Unassigned', icon: 'fa-circle-question', items: unassigned });
+        }
+        for (const inv of investments) {
+          const items = investmentRelatedExpenses.filter(e => e.investmentId === inv.id);
+          if (items.length === 0) continue;
+          groups.push({
+            key: inv.id,
+            label: inv.name,
+            icon: TYPE_ICONS[inv.type] || 'fa-wallet',
+            badge: inv.type,
+            items,
+          });
+        }
+
+        return (
+          <Panel className="mb-3">
+            <PanelHeader noButton>
+              <div className="d-flex align-items-center">
+                <i className="fa fa-receipt me-2"></i>Investment Expenses
+                <span className="badge bg-secondary ms-2">{investmentRelatedExpenses.length}</span>
+                <span className="ms-auto fw-bold">${totalAll.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</span>
+              </div>
+            </PanelHeader>
+            <PanelBody>
+              <p className="text-muted small mb-3">
+                Expenses tagged <em>Investment Expenses</em> or <em>Investment Property</em>, grouped by holding. Assign unlinked rows to the right holding via the dropdown.
+              </p>
+              {groups.map(group => {
+                const groupTotal = group.items.reduce((s, e) => s + e.amount, 0);
+                const groupPct = totalAll > 0 ? (groupTotal / totalAll) * 100 : 0;
+                const investmentExpanded = expandedInvestmentIds.has(group.key);
+
+                const byCategory: Record<string, Expense[]> = {};
+                for (const e of group.items) {
+                  const cat = e.spendingCategory || 'Other';
+                  if (!byCategory[cat]) byCategory[cat] = [];
+                  byCategory[cat].push(e);
+                }
+                const catEntries = Object.entries(byCategory).sort(([, a], [, b]) => b.reduce((s, e) => s + e.amount, 0) - a.reduce((s, e) => s + e.amount, 0));
+                const isUnassigned = group.key === UNASSIGNED_KEY;
+
+                return (
+                  <div key={group.key} className="mb-2">
+                    <div
+                      className={`d-flex align-items-center p-2 rounded ${isUnassigned ? 'bg-warning bg-opacity-10' : ''}`}
+                      style={{ cursor: 'pointer', backgroundColor: !isUnassigned && investmentExpanded ? 'var(--bs-light)' : undefined }}
+                      onClick={() => toggleInvestmentExpanded(group.key)}
+                    >
+                      <i className={`fa fa-chevron-${investmentExpanded ? 'down' : 'right'} me-2 text-muted`} style={{ width: '12px', fontSize: '0.7rem' }}></i>
+                      <i className={`fa ${group.icon} me-2 ${isUnassigned ? 'text-warning' : ''}`}></i>
+                      <span className="fw-bold">{group.label}</span>
+                      {group.badge && <span className="badge bg-light text-dark border ms-2 small">{group.badge}</span>}
+                      <span className="ms-auto badge bg-secondary me-2">{group.items.length}</span>
+                      <span className="fw-bold me-2">${groupTotal.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</span>
+                      <span className="small text-muted" style={{ width: '45px', textAlign: 'right' }}>{groupPct.toFixed(1)}%</span>
+                    </div>
+                    {investmentExpanded && (
+                      <div className="ms-4 mt-1 mb-2">
+                        {catEntries.map(([category, catItems]) => {
+                          const catKey = `${group.key}::${category}`;
+                          const catExpanded = expandedInvCategories.has(catKey);
+                          const catTotal = catItems.reduce((s, e) => s + e.amount, 0);
+                          const catPct = groupTotal > 0 ? (catTotal / groupTotal) * 100 : 0;
+                          const color = SPENDING_COLORS[category] || '#6c757d';
+                          const catType = resolveType(category, categorySettings);
+
+                          const byCatSub: Record<string, Expense[]> = {};
+                          for (const e of catItems) {
+                            const sub = e.spendingSubCategory?.trim() || NO_SUB;
+                            if (!byCatSub[sub]) byCatSub[sub] = [];
+                            byCatSub[sub].push(e);
+                          }
+                          const subEntries = Object.entries(byCatSub).sort(([a], [b]) => {
+                            if (a === NO_SUB) return 1;
+                            if (b === NO_SUB) return -1;
+                            return a.localeCompare(b);
+                          });
+
+                          return (
+                            <div key={catKey} className="mb-1">
+                              <div
+                                className="d-flex align-items-center px-2 py-1 rounded"
+                                style={{ cursor: 'pointer', backgroundColor: catExpanded ? 'var(--bs-light)' : undefined, fontSize: '0.9rem' }}
+                                onClick={() => toggleInvCategoryExpanded(catKey)}
+                              >
+                                <i className={`fa fa-chevron-${catExpanded ? 'down' : 'right'} me-2 text-muted`} style={{ width: '10px', fontSize: '0.6rem' }}></i>
+                                <i className={`fa ${SPENDING_ICONS[category] || 'fa-ellipsis'} me-2`} style={{ color }}></i>
+                                <span className="fw-medium flex-grow-1">{category}</span>
+                                {catType && <span className={`badge ${INV_TYPE_BADGES[catType]} me-2 small`}>{INV_TYPE_LABELS[catType]}</span>}
+                                <span className="badge bg-light text-dark border me-2">{catItems.length}</span>
+                                <span className="me-2">${catTotal.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</span>
+                                <span className="small text-muted" style={{ width: '45px', textAlign: 'right' }}>{catPct.toFixed(1)}%</span>
+                              </div>
+                              {catExpanded && (
+                                <div className="ms-4 mt-1 mb-2">
+                                  {subEntries.map(([sub, subItems]) => {
+                                    const subKey = `${catKey}::${sub}`;
+                                    const subExpanded = expandedInvSubs.has(subKey);
+                                    const subTotal = subItems.reduce((s, e) => s + e.amount, 0);
+                                    const subPct = catTotal > 0 ? (subTotal / catTotal) * 100 : 0;
+                                    const isNoSub = sub === NO_SUB;
+                                    const sortedSubItems = [...subItems].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+                                    return (
+                                      <div key={subKey} className="mb-1">
+                                        <div
+                                          className="d-flex align-items-center px-2 py-1 rounded"
+                                          style={{ cursor: 'pointer', backgroundColor: subExpanded ? 'var(--bs-light)' : undefined, fontSize: '0.85rem' }}
+                                          onClick={() => toggleInvSubExpanded(subKey)}
+                                        >
+                                          <i className={`fa fa-chevron-${subExpanded ? 'down' : 'right'} me-2 text-muted`} style={{ width: '10px', fontSize: '0.55rem' }}></i>
+                                          <span className={`flex-grow-1 ${isNoSub ? 'fst-italic text-muted' : ''}`}>{sub}</span>
+                                          <span className="badge bg-light text-dark border me-2">{subItems.length}</span>
+                                          <span className="me-2">${subTotal.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</span>
+                                          <span className="small text-muted" style={{ width: '45px', textAlign: 'right' }}>{subPct.toFixed(1)}%</span>
+                                        </div>
+                                        {subExpanded && (
+                                          <div className="ms-4 mt-1 mb-2 table-responsive">
+                                            <table className="table table-sm table-hover mb-0">
+                                              <thead>
+                                                <tr>
+                                                  <th style={{ width: '90px' }}>Date</th>
+                                                  <th>Description</th>
+                                                  <th style={{ width: '140px' }}>Tax Category</th>
+                                                  <th className="text-end" style={{ width: '100px' }}>Amount</th>
+                                                  <th style={{ width: '230px' }}>Linked to</th>
+                                                </tr>
+                                              </thead>
+                                              <tbody>
+                                                {sortedSubItems.map(e => (
+                                                  <tr key={e.id}>
+                                                    <td className="small text-muted">{new Date(e.date).toLocaleDateString('en-AU')}</td>
+                                                    <td className="small">{e.description}</td>
+                                                    <td className="small text-muted">{e.category}</td>
+                                                    <td className="text-end small fw-bold">${e.amount.toFixed(2)}</td>
+                                                    <td onClick={ev => ev.stopPropagation()}>
+                                                      <select
+                                                        className="form-select form-select-sm"
+                                                        value={e.investmentId || ''}
+                                                        onChange={ev => assignExpenseToInvestment(e.id, ev.target.value || null)}
+                                                      >
+                                                        <option value="">— Unassigned —</option>
+                                                        {investments.map(inv => (
+                                                          <option key={inv.id} value={inv.id}>{inv.name} ({inv.type})</option>
+                                                        ))}
+                                                      </select>
+                                                    </td>
+                                                  </tr>
+                                                ))}
+                                              </tbody>
+                                            </table>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                </div>
-              );
-            })()}
-          </PanelBody>
-        </Panel>
-      )}
+                );
+              })}
+            </PanelBody>
+          </Panel>
+        );
+      })()}
 
       <div className="row">
         <div className="col-12">
