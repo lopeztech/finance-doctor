@@ -49,7 +49,13 @@ beforeEach(() => {
   });
   mockListInvestments.mockReset();
   mockListInvestments.mockResolvedValue([]);
+  window.localStorage.clear();
 });
+
+// The Summary/Detail toggle hides the investments table, Add form, and empty state
+// behind Detail mode. Tests asserting on those elements pre-set localStorage so the
+// page mounts already in Detail.
+const startInDetail = () => window.localStorage.setItem('viewMode.investments', 'detail');
 
 describe('Investments Page', () => {
   it('renders the page header', async () => {
@@ -63,11 +69,13 @@ describe('Investments Page', () => {
   });
 
   it('shows empty state after loading', async () => {
+    startInDetail();
     render(<InvestmentsPage />);
     await waitFor(() => expect(screen.getByText(/No investments yet/)).toBeInTheDocument());
   });
 
   it('shows investments from API', async () => {
+    startInDetail();
     mockListInvestments.mockResolvedValue([
       { id: '1', name: 'VAS', type: 'Australian Shares', currentValue: 10000, costBasis: 9000, units: 100, buyPricePerUnit: 90 },
     ]);
@@ -76,18 +84,20 @@ describe('Investments Page', () => {
   });
 
   it('shows type-specific fields for shares', async () => {
+    startInDetail();
     const user = userEvent.setup();
     render(<InvestmentsPage />);
-    await waitFor(() => {});
+    await waitFor(() => expect(screen.getByText('Add Investment')).toBeInTheDocument());
     await user.click(screen.getByText('Add Investment'));
     expect(screen.getByText('Units')).toBeInTheDocument();
     expect(screen.getByText('Buy price per unit')).toBeInTheDocument();
   });
 
   it('shows type-specific fields for property', async () => {
+    startInDetail();
     const user = userEvent.setup();
     render(<InvestmentsPage />);
-    await waitFor(() => {});
+    await waitFor(() => expect(screen.getByText('Add Investment')).toBeInTheDocument());
     await user.click(screen.getByText('Add Investment'));
     await user.selectOptions(screen.getByDisplayValue('Australian Shares'), 'Property');
     expect(screen.getByText('Purchase price')).toBeInTheDocument();
@@ -96,9 +106,10 @@ describe('Investments Page', () => {
   });
 
   it('shows type-specific fields for super', async () => {
+    startInDetail();
     const user = userEvent.setup();
     render(<InvestmentsPage />);
-    await waitFor(() => {});
+    await waitFor(() => expect(screen.getByText('Add Investment')).toBeInTheDocument());
     await user.click(screen.getByText('Add Investment'));
     await user.selectOptions(screen.getByDisplayValue('Australian Shares'), 'Superannuation');
     expect(screen.getByText('Current balance')).toBeInTheDocument();
@@ -110,8 +121,7 @@ describe('Investments Page', () => {
       { id: '1', name: 'VAS', type: 'Australian Shares', currentValue: 10000, costBasis: 9000 },
     ]);
     render(<InvestmentsPage />);
-    await waitFor(() => expect(screen.getByText('VAS')).toBeInTheDocument());
-    expect(screen.getByText('Investment Health Assessment')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Investment Health Assessment')).toBeInTheDocument());
     expect(screen.getByText('Get AI Advice')).toBeInTheDocument();
   });
 });

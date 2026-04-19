@@ -50,7 +50,10 @@ beforeEach(() => {
   });
   mockListExpenses.mockReset();
   mockListExpenses.mockResolvedValue([]);
+  window.localStorage.clear();
 });
+
+const startInDetail = () => window.localStorage.setItem('viewMode.tax', 'detail');
 
 describe('Tax Page', () => {
   it('renders the page header', async () => {
@@ -64,11 +67,13 @@ describe('Tax Page', () => {
   });
 
   it('shows empty state after loading', async () => {
+    startInDetail();
     render(<TaxPage />);
     await waitFor(() => expect(screen.getByText(/No deductions found/)).toBeInTheDocument());
   });
 
   it('shows expenses grouped by category', async () => {
+    startInDetail();
     mockListExpenses.mockResolvedValue([
       { id: '1', date: '2025-09-15', description: 'Office chair', amount: 450, category: 'Work from Home', financialYear: '2025-2026' },
       { id: '2', date: '2025-10-01', description: 'Desk lamp', amount: 80, category: 'Work from Home', financialYear: '2025-2026' },
