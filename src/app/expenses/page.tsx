@@ -505,7 +505,7 @@ export default function ExpensesPage() {
     <>
       <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
         <h1 className="page-header mb-0">Expenses</h1>
-        <ViewToggle value={mode} onChange={setMode} className="ms-sm-auto" />
+        <ViewToggle value={mode} onChange={setMode} className="ms-sm-auto" showDoctor />
       </div>
 
       {(() => {
@@ -682,22 +682,20 @@ export default function ExpensesPage() {
         </div>
       </div>
 
+      </>}
+
+      {mode === 'doctor' && <>
       <div ref={adviceAnchorRef}></div>
       <Panel>
         <PanelHeader noButton>
           <div className="d-flex flex-wrap align-items-center gap-2">
-            {adviceHistory.length > 0 && (
-              <button className="btn btn-sm btn-outline-secondary" onClick={() => setAdviceCollapsed(!adviceCollapsed)} title={adviceCollapsed ? 'Expand' : 'Collapse'}>
-                <i className={`fa fa-chevron-${adviceCollapsed ? 'down' : 'up'}`}></i>
-              </button>
-            )}
             <span><i className="fa fa-stethoscope me-2"></i>Expenses Doctor</span>
             <button className="btn btn-sm btn-success ms-sm-auto" onClick={getExpensesAdvice} disabled={adviceLoading || filteredExpenses.length === 0}>
               {adviceLoading && adviceHistory.length <= 1 ? <><i className="fa fa-spinner fa-spin me-1"></i>Analysing...</> : <><i className="fa fa-robot me-1"></i>{adviceHistory.length > 0 ? 'New Assessment' : 'Get AI Advice'}</>}
             </button>
           </div>
         </PanelHeader>
-        {!adviceCollapsed && <PanelBody>
+        <PanelBody>
           {adviceHistory.length > 0 ? (
             <>
               {adviceHistory.map((msg, i) => (
@@ -737,8 +735,11 @@ export default function ExpensesPage() {
               <p className="mb-0">Click &quot;Get AI Advice&quot; for a cashflow health assessment and a ranked list of expenses worth dropping.</p>
             </div>
           )}
-        </PanelBody>}
+        </PanelBody>
       </Panel>
+      </>}
+
+      {mode === 'summary' && <>
 
       {filteredExpenses.length > 0 && (
         <Panel>

@@ -64,6 +64,7 @@ beforeEach(() => {
 // behind Detail mode. Tests asserting on those elements pre-set localStorage so the
 // page mounts already in Detail.
 const startInDetail = () => window.localStorage.setItem('viewMode.investments', 'detail');
+const startInDoctor = () => window.localStorage.setItem('viewMode.investments', 'doctor');
 
 describe('Investments Page', () => {
   it('renders the page header', async () => {
@@ -126,6 +127,7 @@ describe('Investments Page', () => {
   });
 
   it('shows health assessment panel with AI advice button', async () => {
+    startInDoctor();
     mockListInvestments.mockResolvedValue([
       { id: '1', name: 'VAS', type: 'Australian Shares', currentValue: 10000, costBasis: 9000 },
     ]);
