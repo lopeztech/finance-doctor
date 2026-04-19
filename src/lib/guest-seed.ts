@@ -49,7 +49,7 @@ const INVESTMENTS: Investment[] = [
   { id: 'inv-1', name: 'VAS', type: 'ETFs', owner: 'Sam', units: 450, buyPricePerUnit: 88.5, costBasis: 39825, currentValue: 45900 },
   { id: 'inv-2', name: 'VGS', type: 'ETFs', owner: 'Sam', units: 220, buyPricePerUnit: 105.2, costBasis: 23144, currentValue: 28380 },
   { id: 'inv-3', name: 'CBA', type: 'Australian Shares', owner: 'Alex', units: 120, buyPricePerUnit: 102.4, costBasis: 12288, currentValue: 15840 },
-  { id: 'inv-4', name: '42 Moreland St, Brunswick', type: 'Property', owner: 'Joint', propertyType: 'Investment', costBasis: 720000, currentValue: 895000, liability: 512000, rentalIncomeAnnual: 31200 },
+  { id: 'inv-4', name: '42 Moreland St, Brunswick', type: 'Property', owner: 'Joint', propertyType: 'Investment', address: '42 Moreland St, Brunswick VIC 3056', costBasis: 720000, currentValue: 895000, liability: 512000, rentalIncomeMonthly: 2600 },
   { id: 'inv-5', name: 'AustralianSuper', type: 'Superannuation', owner: 'Sam', costBasis: 142000, currentValue: 142000, employerContribution: 12 },
   { id: 'inv-6', name: 'AustralianSuper', type: 'Superannuation', owner: 'Alex', costBasis: 86000, currentValue: 86000, employerContribution: 12 },
   { id: 'inv-7', name: 'ING Savings Maximiser', type: 'Cash / Term Deposit', owner: 'Joint', costBasis: 24500, currentValue: 24500, interestRate: 5.5 },

@@ -107,7 +107,8 @@ interface FormState {
   // Property
   propertyType: string;
   purchasePrice: string;
-  rentalIncome: string;
+  address: string;
+  rentalIncomeMonthly: string;
   liability: string;
   monthlyRepayment: string;
   // Cash
@@ -125,7 +126,7 @@ interface FormState {
 const EMPTY_FORM: FormState = {
   name: '', type: INVESTMENT_TYPES[0], owner: '',
   units: '', buyPricePerUnit: '', currentValue: '',
-  propertyType: 'Investment', purchasePrice: '', rentalIncome: '', liability: '', monthlyRepayment: '',
+  propertyType: 'Investment', purchasePrice: '', address: '', rentalIncomeMonthly: '', liability: '', monthlyRepayment: '',
   amount: '', interestRate: '',
   faceValue: '', couponRate: '', maturityDate: '',
   balance: '', employerContribution: '',
@@ -143,13 +144,15 @@ function buildInvestment(form: FormState): Investment {
     const pp = parseFloat(form.purchasePrice);
     const rate = parseFloat(form.interestRate);
     const repayment = parseFloat(form.monthlyRepayment);
+    const address = form.address.trim();
     return {
       ...base,
       propertyType: form.propertyType as 'Investment' | 'Owner Occupied',
       costBasis: pp,
       currentValue: parseFloat(form.currentValue),
-      rentalIncomeAnnual: parseFloat(form.rentalIncome) || 0,
+      rentalIncomeMonthly: parseFloat(form.rentalIncomeMonthly) || 0,
       liability: parseFloat(form.liability) || 0,
+      ...(address ? { address } : {}),
       ...(Number.isFinite(rate) && rate > 0 ? { interestRate: rate } : {}),
       ...(Number.isFinite(repayment) && repayment > 0 ? { monthlyRepayment: repayment } : {}),
     };
@@ -221,6 +224,17 @@ function TypeSpecificFields({ form, setForm }: { form: FormState; setForm: (f: F
           </select>
         </div>
         <div className="col-12">
+          <label className="form-label text-muted small mb-1">Address</label>
+          <input
+            type="text"
+            className="form-control"
+            placeholder="e.g. 42 Moreland St, Brunswick VIC 3056"
+            value={form.address}
+            onChange={e => setForm({ ...form, address: e.target.value })}
+          />
+          <div className="form-text small">Helps Dr Finance tailor advice to the local market (optional).</div>
+        </div>
+        <div className="col-12">
           <label className="form-label text-muted small mb-1">Purchase price</label>
           <CurrencyInput placeholder="0.00" value={form.purchasePrice} onChange={v => setForm({ ...form, purchasePrice: v })} required step="1" />
         </div>
@@ -241,8 +255,8 @@ function TypeSpecificFields({ form, setForm }: { form: FormState; setForm: (f: F
           <CurrencyInput placeholder="0.00" value={form.monthlyRepayment} onChange={v => setForm({ ...form, monthlyRepayment: v })} step="1" />
         </div>
         <div className="col-12">
-          <label className="form-label text-muted small mb-1">Rental income per year</label>
-          <CurrencyInput placeholder="0.00" value={form.rentalIncome} onChange={v => setForm({ ...form, rentalIncome: v })} step="1" />
+          <label className="form-label text-muted small mb-1">Rental income per month</label>
+          <CurrencyInput placeholder="0.00" value={form.rentalIncomeMonthly} onChange={v => setForm({ ...form, rentalIncomeMonthly: v })} step="1" />
         </div>
       </>
     );
@@ -360,8 +374,9 @@ function formatDetail(inv: Investment): string {
   if (TRADED_TYPES.includes(inv.type) && inv.units) return `${inv.units} units @ $${inv.buyPricePerUnit?.toFixed(2)}`;
   if (inv.type === 'Property') {
     const parts: string[] = [inv.propertyType || 'Investment'];
+    if (inv.address) parts.push(inv.address);
     if (inv.liability) parts.push(`Mortgage: $${inv.liability.toLocaleString()}`);
-    if (inv.rentalIncomeAnnual) parts.push(`Rental: $${inv.rentalIncomeAnnual.toLocaleString()}/yr`);
+    if (inv.rentalIncomeMonthly) parts.push(`Rental: $${Math.round(inv.rentalIncomeMonthly).toLocaleString()}/mo`);
     return parts.join(' | ');
   }
   if (inv.type === 'Cash / Term Deposit' && inv.interestRate) return `${inv.interestRate}% p.a.`;
@@ -483,10 +498,11 @@ export default function InvestmentsPage() {
       f.currentValue = String(inv.currentValue);
     } else if (inv.type === 'Property') {
       f.propertyType = inv.propertyType || 'Investment';
+      f.address = inv.address || '';
       f.purchasePrice = String(inv.costBasis);
       f.currentValue = String(inv.currentValue);
       f.liability = String(inv.liability || '');
-      f.rentalIncome = String(inv.rentalIncomeAnnual || '');
+      f.rentalIncomeMonthly = inv.rentalIncomeMonthly ? String(inv.rentalIncomeMonthly) : '';
       f.interestRate = String(inv.interestRate || '');
       f.monthlyRepayment = String(inv.monthlyRepayment || '');
     } else if (inv.type === 'Cash / Term Deposit') {

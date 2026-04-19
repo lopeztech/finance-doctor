@@ -116,7 +116,7 @@ export function computeCashflowSummary(input: {
   for (const inv of investments) {
     if (inv.monthlyRepayment) repaymentMonthlyTotal += inv.monthlyRepayment;
     if (inv.propertyType !== 'Investment') continue;
-    const rental = inv.rentalIncomeAnnual || 0;
+    const rental = (inv.rentalIncomeMonthly || 0) * 12;
     rentalAnnualTotal += rental;
     const interest = (inv.liability && inv.interestRate) ? (inv.liability * inv.interestRate) / 100 : 0;
     const linkedAnnual = expenses.filter(e => e.investmentId === inv.id).reduce((s, e) => s + e.amount, 0) * (12 / monthCount);

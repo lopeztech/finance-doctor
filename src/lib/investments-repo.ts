@@ -24,10 +24,19 @@ function investmentsCollection(): CollectionReference {
   return collection(db, 'users', getUserKey(), 'investments');
 }
 
+function normaliseInvestmentDoc(raw: Record<string, unknown>): Investment {
+  const { rentalIncomeAnnual, ...rest } = raw as { rentalIncomeAnnual?: number } & Partial<Investment> & Record<string, unknown>;
+  const inv = rest as Investment;
+  if (inv.rentalIncomeMonthly == null && typeof rentalIncomeAnnual === 'number') {
+    inv.rentalIncomeMonthly = rentalIncomeAnnual / 12;
+  }
+  return inv;
+}
+
 export async function listInvestments(): Promise<Investment[]> {
   if (guest.isGuest()) return guest.listInvestments();
   const snap = await getDocs(query(investmentsCollection(), orderBy('name')));
-  return snap.docs.map(d => ({ id: d.id, ...d.data() } as Investment));
+  return snap.docs.map(d => normaliseInvestmentDoc({ id: d.id, ...d.data() }));
 }
 
 export async function addInvestment(data: Omit<Investment, 'id'>): Promise<Investment> {

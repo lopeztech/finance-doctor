@@ -135,7 +135,7 @@ export function computeInvestmentCashflow(
   let repaymentMonthly = 0;
   for (const inv of investments) {
     if (inv.propertyType === 'Investment') {
-      rentalAnnual += inv.rentalIncomeAnnual || 0;
+      rentalAnnual += (inv.rentalIncomeMonthly || 0) * 12;
       if (inv.liability && inv.interestRate) {
         interestAnnual += (inv.liability * inv.interestRate) / 100;
       }
@@ -213,7 +213,7 @@ export function computeCashflow(input: {
   for (const m of members) invIncomeByMember.set(m.id, 0);
   for (const inv of investments) {
     if (inv.propertyType !== 'Investment') continue;
-    const rental = inv.rentalIncomeAnnual || 0;
+    const rental = (inv.rentalIncomeMonthly || 0) * 12;
     const interest = (inv.liability && inv.interestRate) ? (inv.liability * inv.interestRate) / 100 : 0;
     const linkedExpensesAnnual = expenses
       .filter(e => e.investmentId === inv.id)

@@ -3,7 +3,8 @@ import { getDb } from '../lib/firestore';
 import { getGeminiModel } from '../lib/gemini';
 import { requireUserEmail } from '../lib/auth';
 import { auditLog } from '../lib/audit';
-import type { Expense, Investment, FamilyMember } from '../lib/types';
+import { normaliseInvestment } from '../lib/investments';
+import type { Expense, FamilyMember } from '../lib/types';
 
 const SYSTEM_PROMPT = `You are "Dr Finance", an Australian tax and investment advisor.
 Given a snapshot of a user's financial data, generate exactly 3 short, actionable tips.
@@ -44,7 +45,7 @@ export const dashboardTips = onCall(
     ]);
 
     const expenses: Expense[] = expSnap.docs.map(d => d.data() as Expense);
-    const investments: Investment[] = invSnap.docs.map(d => d.data() as Investment);
+    const investments = invSnap.docs.map(d => normaliseInvestment(d.data()));
     const familyMembers: FamilyMember[] = memberSnap.docs.map(d => d.data() as FamilyMember);
 
     if (expenses.length === 0 && investments.length === 0) {

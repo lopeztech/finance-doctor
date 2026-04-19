@@ -4,7 +4,8 @@ import { getGeminiModel } from '../lib/gemini';
 import { requireUserEmail } from '../lib/auth';
 import { auditLog } from '../lib/audit';
 import { INVESTMENT_SYSTEM_PROMPT, buildInvestmentPrompt } from '../lib/prompts';
-import type { Investment, FamilyMember, ChatMessage } from '../lib/types';
+import { normaliseInvestment } from '../lib/investments';
+import type { FamilyMember, ChatMessage } from '../lib/types';
 
 interface InvestmentsAdviceData {
   history?: ChatMessage[];
@@ -20,7 +21,7 @@ export const investmentsAdvice = onCall<InvestmentsAdviceData, Promise<{ text: s
     const db = getDb();
 
     const snap = await db.collection('users').doc(email).collection('investments').get();
-    const investments: Investment[] = snap.docs.map(d => d.data() as Investment);
+    const investments = snap.docs.map(d => normaliseInvestment(d.data()));
     if (investments.length === 0) {
       throw new HttpsError('failed-precondition', 'No investments found.');
     }

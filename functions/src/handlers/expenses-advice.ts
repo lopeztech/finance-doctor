@@ -5,7 +5,8 @@ import { requireUserEmail } from '../lib/auth';
 import { auditLog } from '../lib/audit';
 import { EXPENSES_SYSTEM_PROMPT, buildExpensesPrompt } from '../lib/prompts';
 import { computeCashflowSummary } from '../lib/cashflow-calc';
-import type { Expense, ChatMessage, FamilyMember, Investment, IncomeSource } from '../lib/types';
+import { normaliseInvestment } from '../lib/investments';
+import type { Expense, ChatMessage, FamilyMember, IncomeSource } from '../lib/types';
 
 interface ExpensesAdviceData {
   history?: ChatMessage[];
@@ -36,7 +37,7 @@ export const expensesAdvice = onCall<ExpensesAdviceData, Promise<{ text: string 
     }
 
     const members: FamilyMember[] = membersSnap.docs.map(d => d.data() as FamilyMember);
-    const investments: Investment[] = investmentsSnap.docs.map(d => d.data() as Investment);
+    const investments = investmentsSnap.docs.map(d => normaliseInvestment(d.data()));
     const incomeSources: IncomeSource[] = incomeSourcesSnap.docs.map(d => d.data() as IncomeSource);
     const cashflow = computeCashflowSummary({
       members,

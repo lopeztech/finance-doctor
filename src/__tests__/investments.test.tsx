@@ -109,7 +109,8 @@ describe('Investments Page', () => {
     await user.click(screen.getByText('Add Investment'));
     await user.selectOptions(screen.getByDisplayValue('Australian Shares'), 'Property');
     expect(screen.getByText('Purchase price')).toBeInTheDocument();
-    expect(screen.getByText('Rental income per year')).toBeInTheDocument();
+    expect(screen.getByText('Rental income per month')).toBeInTheDocument();
+    expect(screen.getByText('Address')).toBeInTheDocument();
     expect(screen.getByText('Property type')).toBeInTheDocument();
   });
 

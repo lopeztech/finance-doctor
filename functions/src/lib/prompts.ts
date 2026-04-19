@@ -108,8 +108,11 @@ interface InvestmentInput {
   units?: number;
   interestRate?: number;
   employerContribution?: number;
-  rentalIncomeAnnual?: number;
+  rentalIncomeMonthly?: number;
   liability?: number;
+  address?: string;
+  monthlyRepayment?: number;
+  propertyType?: 'Investment' | 'Owner Occupied';
 }
 
 interface FamilyMemberInput {
@@ -180,8 +183,11 @@ export function buildInvestmentPrompt(investments: InvestmentInput[], familyMemb
     const pct = i.costBasis > 0 ? ((gl / i.costBasis) * 100).toFixed(1) : '0.0';
     let detail = `- ${i.name} (${i.type}): Value $${i.currentValue.toLocaleString()}, Cost $${i.costBasis.toLocaleString()}, Return ${gl >= 0 ? '+' : ''}${pct}%`;
     if (i.owner) detail += `, Owner: ${i.owner}`;
+    if (i.address) detail += `, Address: ${i.address}`;
+    if (i.propertyType) detail += `, Use: ${i.propertyType}`;
     if (i.liability) detail += `, Mortgage $${i.liability.toLocaleString()}`;
-    if (i.rentalIncomeAnnual) detail += `, Rental $${i.rentalIncomeAnnual.toLocaleString()}/yr`;
+    if (i.monthlyRepayment) detail += `, Repayment $${i.monthlyRepayment.toLocaleString()}/mo`;
+    if (i.rentalIncomeMonthly) detail += `, Rental $${Math.round(i.rentalIncomeMonthly).toLocaleString()}/mo`;
     if (i.interestRate) detail += `, Rate ${i.interestRate}%`;
     if (i.employerContribution) detail += `, Employer ${i.employerContribution}%`;
     return detail;

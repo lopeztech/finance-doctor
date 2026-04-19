@@ -45,7 +45,8 @@ export interface Investment {
   units?: number;
   buyPricePerUnit?: number;
   propertyType?: 'Investment' | 'Owner Occupied';
-  rentalIncomeAnnual?: number;
+  address?: string;
+  rentalIncomeMonthly?: number;
   liability?: number;
   interestRate?: number;
   employerContribution?: number;
