@@ -9,6 +9,7 @@ import { listExpenses } from '@/lib/expenses-repo';
 import { listIncomeSources, addIncomeSource, updateIncomeSource, deleteIncomeSource } from '@/lib/income-sources-repo';
 import { getCategorySettings, type CategorySettings, type SpendingCategoryType } from '@/lib/category-settings-repo';
 import { computeCashflow, type CashflowSnapshot } from '@/lib/cashflow-calc';
+import { ViewToggle, useViewMode } from '@/components/view-toggle';
 
 const INCOME_TYPES: { value: IncomeSourceType; label: string; icon: string }[] = [
   { value: 'dividend', label: 'Dividend', icon: 'fa-chart-line' },
@@ -41,6 +42,7 @@ export default function CashflowPage() {
   const [categorySettings, setCategorySettings] = useState<CategorySettings>({ types: {}, excluded: [] });
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<View>('monthly');
+  const [mode, setMode] = useViewMode('viewMode.cashflow');
 
   const [showMemberForm, setShowMemberForm] = useState(false);
   const [memberForm, setMemberForm] = useState({ name: '', job: '', salary: '', superSalarySacrifice: '' });
@@ -170,13 +172,16 @@ export default function CashflowPage() {
     <>
       <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
         <h1 className="page-header mb-0">Cashflow</h1>
-        <div className="ms-sm-auto btn-group btn-group-sm" role="group">
-          <button className={`btn ${view === 'monthly' ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setView('monthly')}>Monthly</button>
-          <button className={`btn ${view === 'annual' ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setView('annual')}>Annual</button>
+        <div className="ms-sm-auto d-flex flex-wrap gap-2">
+          <div className="btn-group btn-group-sm" role="group">
+            <button className={`btn ${view === 'monthly' ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setView('monthly')}>Monthly</button>
+            <button className={`btn ${view === 'annual' ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setView('annual')}>Annual</button>
+          </div>
+          <ViewToggle value={mode} onChange={setMode} />
         </div>
       </div>
 
-      {hasData && (
+      {hasData && mode === 'summary' && (
         <div className="row mb-3">
           <div className="col-md-3">
             <div className="card border-0 bg-teal text-white mb-3">
@@ -213,6 +218,7 @@ export default function CashflowPage() {
         </div>
       )}
 
+      {mode === 'detail' && <>
       <Panel>
         <PanelHeader noButton>
           <div className="d-flex flex-wrap align-items-center gap-2">
@@ -474,8 +480,9 @@ export default function CashflowPage() {
           </div>
         </div>
       )}
+      </>}
 
-      {hasData && (
+      {hasData && mode === 'summary' && (
         <Panel>
           <PanelHeader noButton><i className="fa fa-scale-balanced me-2"></i>Net Position ({view})</PanelHeader>
           <PanelBody>

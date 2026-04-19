@@ -11,6 +11,7 @@ import { getCategorySettings, setCategoryType, resolveType, type CategorySetting
 import RecurringModal from '@/components/recurring-modal';
 import BulkActionsBar from '@/components/bulk-actions-bar';
 import { CategoryDonut, MonthlyTrend, TopVendorsChart } from '@/components/spending-charts';
+import { ViewToggle, useViewMode } from '@/components/view-toggle';
 
 const TYPE_META: Record<SpendingCategoryType, { label: string; color: string; bg: string; description: string }> = {
   essential: { label: 'Essential', color: '#198754', bg: 'bg-success', description: 'Unavoidable — floor of your cashflow' },
@@ -118,6 +119,7 @@ export default function ExpensesPage() {
   const [followUpInput, setFollowUpInput] = useState('');
   const [adviceCollapsed, setAdviceCollapsed] = useState(false);
   const adviceAnchorRef = useRef<HTMLDivElement | null>(null);
+  const [mode, setMode] = useViewMode('viewMode.expenses');
 
   const toggleSelected = (id: string) => {
     setSelectedIds(prev => {
@@ -512,6 +514,7 @@ export default function ExpensesPage() {
       <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
         <h1 className="page-header mb-0">Expenses</h1>
         <div className="ms-sm-auto d-flex flex-wrap gap-2">
+          <ViewToggle value={mode} onChange={setMode} />
           {familyMembers.length > 0 && (
             <select className="form-select" value={selectedOwner} onChange={(e) => setSelectedOwner(e.target.value)}>
               <option value="">All Members</option>
@@ -533,6 +536,7 @@ export default function ExpensesPage() {
         </div>
       </div>
 
+      {mode === 'summary' && <>
       <div className="row mb-3">
         <div className="col-lg-3">
           <div className="card border-0 bg-teal text-white mb-3">
@@ -662,17 +666,6 @@ export default function ExpensesPage() {
         </div>
       </div>
 
-      {selectedIds.size > 0 && (
-        <BulkActionsBar
-          count={selectedIds.size}
-          categories={allSpendingCategories}
-          changeCategoryLabel="Move to"
-          onChangeCategory={bulkChangeCategory}
-          onDelete={bulkDelete}
-          onClear={clearSelection}
-        />
-      )}
-
       <div ref={adviceAnchorRef}></div>
       <Panel>
         <PanelHeader noButton>
@@ -753,6 +746,19 @@ export default function ExpensesPage() {
             </div>
           </PanelBody>
         </Panel>
+      )}
+      </>}
+
+      {mode === 'detail' && <>
+      {selectedIds.size > 0 && (
+        <BulkActionsBar
+          count={selectedIds.size}
+          categories={allSpendingCategories}
+          changeCategoryLabel="Move to"
+          onChangeCategory={bulkChangeCategory}
+          onDelete={bulkDelete}
+          onClear={clearSelection}
+        />
       )}
 
       {filteredExpenses.length > 0 && (
@@ -1055,6 +1061,7 @@ export default function ExpensesPage() {
               )}
             </PanelBody>
           </Panel>
+      </>}
 
       {recurringFor && (
         <RecurringModal

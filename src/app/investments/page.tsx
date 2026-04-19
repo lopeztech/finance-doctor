@@ -9,6 +9,7 @@ import { listExpenses, updateExpense } from '@/lib/expenses-repo';
 import AllocationChart from '@/components/allocation-chart';
 import { listFamilyMembers } from '@/lib/family-members-repo';
 import { getCategorySettings, resolveType, type CategorySettings, type SpendingCategoryType } from '@/lib/category-settings-repo';
+import { ViewToggle, useViewMode } from '@/components/view-toggle';
 
 const SPENDING_ICONS: Record<string, string> = {
   'Bakery': 'fa-bread-slice', 'Cafe': 'fa-mug-hot', 'Car': 'fa-car-side',
@@ -385,6 +386,7 @@ export default function InvestmentsPage() {
   const [expandedInvestmentIds, setExpandedInvestmentIds] = useState<Set<string>>(new Set());
   const [expandedInvCategories, setExpandedInvCategories] = useState<Set<string>>(new Set());
   const [expandedInvSubs, setExpandedInvSubs] = useState<Set<string>>(new Set());
+  const [mode, setMode] = useViewMode('viewMode.investments');
 
   const toggleInvestmentExpanded = (key: string) => {
     setExpandedInvestmentIds(prev => {
@@ -600,10 +602,12 @@ export default function InvestmentsPage() {
 
   return (
     <>
-      <div className="d-flex align-items-center mb-3">
+      <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
         <h1 className="page-header mb-0">Investment Portfolio</h1>
+        <ViewToggle value={mode} onChange={setMode} className="ms-sm-auto" />
       </div>
 
+      {mode === 'summary' && <>
       <div className="row mb-3">
         <div className="col-lg-3">
           <div className="card border-0 bg-teal text-white mb-3">
@@ -723,7 +727,9 @@ export default function InvestmentsPage() {
           </PanelBody>}
         </Panel>
       )}
+      </>}
 
+      {mode === 'detail' && <>
       {investmentRelatedExpenses.length > 0 && (() => {
         const totalAll = investmentRelatedExpenses.reduce((s, e) => s + e.amount, 0);
         const groups: { key: string; label: string; icon: string; badge?: string; items: Expense[] }[] = [];
@@ -1033,6 +1039,7 @@ export default function InvestmentsPage() {
           </Panel>
         </div>
       </div>
+      </>}
     </>
   );
 }
