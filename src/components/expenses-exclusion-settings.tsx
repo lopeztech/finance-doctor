@@ -19,6 +19,7 @@ export default function ExpensesExclusionSettings() {
   const [allCategories, setAllCategories] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -51,38 +52,48 @@ export default function ExpensesExclusionSettings() {
   return (
     <Panel>
       <PanelHeader noButton>
-        <i className="fa fa-eye-slash me-2"></i>Exclude from Expenses Analysis
+        <div className="d-flex flex-wrap align-items-center gap-2">
+          <span><i className="fa fa-eye-slash me-2"></i>Exclude from Expenses Analysis</span>
+          {settings.excluded.length > 0 && (
+            <span className="badge bg-secondary">{settings.excluded.length} excluded</span>
+          )}
+          <button className="btn btn-sm btn-outline-secondary ms-sm-auto" onClick={() => setExpanded(v => !v)}>
+            {expanded ? <><i className="fa fa-chevron-up me-1"></i>Hide</> : <><i className="fa fa-chevron-down me-1"></i>Show</>}
+          </button>
+        </div>
       </PanelHeader>
-      <PanelBody>
-        <p className="text-muted small mb-3">
-          Ticked categories are hidden from the Expenses view, charts, and AI Doctor — useful for tax-deductible items
-          that don&apos;t reflect day-to-day cashflow (e.g. investment property interest). Excluded categories remain
-          visible in Tax.
-        </p>
-        {loading ? (
-          <div className="text-center py-3"><i className="fa fa-spinner fa-spin"></i></div>
-        ) : (
-          <div className="row g-2">
-            {allCategories.map(cat => {
-              const checked = settings.excluded.includes(cat);
-              return (
-                <div key={cat} className="col-md-6 col-lg-4">
-                  <label className="form-check">
-                    <input
-                      type="checkbox"
-                      className="form-check-input"
-                      checked={checked}
-                      disabled={saving}
-                      onChange={ev => toggle(cat, ev.target.checked)}
-                    />
-                    <span className={`form-check-label ${checked ? 'fw-bold' : ''}`}>{cat}</span>
-                  </label>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </PanelBody>
+      {expanded && (
+        <PanelBody>
+          <p className="text-muted small mb-3">
+            Ticked categories are hidden from the Expenses view, charts, and AI Doctor — useful for tax-deductible items
+            that don&apos;t reflect day-to-day cashflow (e.g. investment property interest). Excluded categories remain
+            visible in Tax.
+          </p>
+          {loading ? (
+            <div className="text-center py-3"><i className="fa fa-spinner fa-spin"></i></div>
+          ) : (
+            <div className="row g-2">
+              {allCategories.map(cat => {
+                const checked = settings.excluded.includes(cat);
+                return (
+                  <div key={cat} className="col-md-6 col-lg-4">
+                    <label className="form-check">
+                      <input
+                        type="checkbox"
+                        className="form-check-input"
+                        checked={checked}
+                        disabled={saving}
+                        onChange={ev => toggle(cat, ev.target.checked)}
+                      />
+                      <span className={`form-check-label ${checked ? 'fw-bold' : ''}`}>{cat}</span>
+                    </label>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </PanelBody>
+      )}
     </Panel>
   );
 }
