@@ -19,13 +19,19 @@ export const expensesAdvice = onCall<ExpensesAdviceData, Promise<{ text: string 
     const { history, followUp } = request.data;
     const db = getDb();
 
-    const snap = await db.collection('users').doc(email).collection('expenses').get();
-    const expenses: Expense[] = snap.docs.map(d => d.data() as Expense);
+    const [expensesSnap, settingsSnap] = await Promise.all([
+      db.collection('users').doc(email).collection('expenses').get(),
+      db.collection('users').doc(email).collection('meta').doc('category-settings').get(),
+    ]);
+    const allExpenses: Expense[] = expensesSnap.docs.map(d => d.data() as Expense);
+    const settings = settingsSnap.exists ? (settingsSnap.data() as { types?: Record<string, string>; excluded?: string[] }) : {};
+    const excluded = new Set(settings.excluded || []);
+    const expenses = allExpenses.filter(e => !excluded.has(e.spendingCategory || 'Other'));
     if (expenses.length === 0) {
       throw new HttpsError('failed-precondition', 'No expenses found to analyse.');
     }
 
-    const initialPrompt = buildExpensesPrompt(expenses);
+    const initialPrompt = buildExpensesPrompt(expenses, (settings.types || {}) as Record<string, 'essential' | 'committed' | 'discretionary'>);
 
     const contents: { role: string; parts: { text: string }[] }[] = [
       { role: 'user', parts: [{ text: initialPrompt }] },
@@ -60,6 +66,7 @@ export const expensesAdvice = onCall<ExpensesAdviceData, Promise<{ text: string 
       durationMs: Date.now() - start,
       geminiCalled: true,
       expenseCount: expenses.length,
+      excludedCount: allExpenses.length - expenses.length,
       followUp: Boolean(followUp),
       responseChars: full.length,
       streamed: Boolean(request.acceptsStreaming),

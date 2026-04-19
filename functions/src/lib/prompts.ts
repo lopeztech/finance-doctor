@@ -64,7 +64,9 @@ You analyse spending patterns and advise how to improve cashflow, cut waste, and
 
 Key context:
 - Australian household context (AUD, cost-of-living pressures, ATO deduction distinction)
-- Essentials (groceries, utilities, transport, healthcare, insurance, housing) vs discretionary (dining, entertainment, subscriptions, shopping, travel)
+- Each spending category is classified into one of three types: ESSENTIAL (unavoidable — groceries, utilities, transport, healthcare, insurance, housing), COMMITTED (reducible fixed costs — subscriptions, phone plans, gyms), or DISCRETIONARY (fully avoidable — dining, entertainment, shopping, travel).
+- The user has already excluded tax-only expenses (e.g. investment property interest) from the data you see, so everything below reflects genuine cashflow.
+- Prioritise cuts on DISCRETIONARY first, then COMMITTED (renegotiate/downgrade/cancel), and treat ESSENTIAL as a floor unless there is a clear overspend signal.
 - Subscription creep is a common cashflow leak — flag repeat small charges
 - Lifestyle inflation: rising dining/takeaway and shopping often mask underlying budget drift
 - Tax-deductible expenses (nonDeductible=false and tax category ≠ "Other Deductions") shouldn't be cut without considering the after-tax cost
@@ -240,7 +242,21 @@ Please provide:
 5. What to do next — specific actions ranked by priority`;
 }
 
-export function buildExpensesPrompt(expenses: ExpenseInput[]): string {
+const DEFAULT_CATEGORY_TYPES: Record<string, 'essential' | 'committed' | 'discretionary'> = {
+  'Bakery': 'discretionary', 'Cafe': 'discretionary', 'Car': 'essential',
+  'Dining & Takeaway': 'discretionary', 'Education': 'essential', 'Entertainment': 'discretionary',
+  'Financial & Banking': 'committed', 'Gifts & Donations': 'discretionary', 'Groceries': 'essential',
+  'Healthcare': 'essential', 'Home & Garden': 'discretionary', 'Insurance': 'essential',
+  'Kids Entertainment': 'discretionary', 'Personal Care': 'discretionary', 'Personal Project': 'discretionary',
+  'Shopping': 'discretionary', 'Subscriptions': 'committed', 'Transport': 'essential',
+  'Travel & Holidays': 'discretionary', 'Utilities & Bills': 'essential', 'Other': 'discretionary',
+};
+
+export function buildExpensesPrompt(
+  expenses: ExpenseInput[],
+  categoryTypes: Record<string, 'essential' | 'committed' | 'discretionary'> = {},
+): string {
+  const resolveType = (cat: string) => categoryTypes[cat] ?? DEFAULT_CATEGORY_TYPES[cat];
   const totalSpend = expenses.reduce((s, e) => s + e.amount, 0);
 
   const months = new Set<string>();
@@ -259,7 +275,21 @@ export function buildExpensesPrompt(expenses: ExpenseInput[]): string {
   }
   const spendingBreakdown = Object.entries(spendingTotals)
     .sort(([, a], [, b]) => b.total - a.total)
-    .map(([cat, d]) => `- ${cat}: $${d.total.toFixed(2)} (${((d.total / totalSpend) * 100).toFixed(1)}%) across ${d.count} txns, ~$${(d.total / monthCount).toFixed(2)}/mo`)
+    .map(([cat, d]) => {
+      const t = resolveType(cat);
+      const tag = t ? `[${t.toUpperCase()}]` : '[UNCLASSIFIED]';
+      return `- ${cat} ${tag}: $${d.total.toFixed(2)} (${((d.total / totalSpend) * 100).toFixed(1)}%) across ${d.count} txns, ~$${(d.total / monthCount).toFixed(2)}/mo`;
+    })
+    .join('\n');
+
+  const typeTotals: Record<string, number> = { essential: 0, committed: 0, discretionary: 0, unclassified: 0 };
+  for (const [cat, d] of Object.entries(spendingTotals)) {
+    const t = resolveType(cat) || 'unclassified';
+    typeTotals[t] = (typeTotals[t] || 0) + d.total;
+  }
+  const typeBreakdown = ['essential', 'committed', 'discretionary', 'unclassified']
+    .filter(t => typeTotals[t] > 0)
+    .map(t => `- ${t.toUpperCase()}: $${typeTotals[t].toFixed(2)} (${((typeTotals[t] / totalSpend) * 100).toFixed(1)}%)`)
     .join('\n');
 
   const vendorTotals: Record<string, { total: number; count: number; category: string; nonDeductible: boolean }> = {};
@@ -303,7 +333,10 @@ Overall:
 - Months covered: ${monthCount}
 - Average monthly spend: $${avgMonthly.toFixed(2)}
 
-Spending by category (sorted by total):
+Spending by type (3-tier framework — focus your cuts here):
+${typeBreakdown}
+
+Spending by category (sorted by total, tagged with type):
 ${spendingBreakdown}
 
 Monthly totals:

@@ -4,6 +4,7 @@ import { signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import DataManagement from '@/components/data-management';
+import ExpensesExclusionSettings from '@/components/expenses-exclusion-settings';
 import { auth } from '@/lib/firebase';
 import { useAuthUser } from '@/lib/use-auth-user';
 import { useGuestMode } from '@/lib/use-guest-mode';
@@ -97,6 +98,9 @@ export default function SettingsPage() {
           </Panel>
         </div>
       </div>
+
+      <h2 className="h4 mt-4 mb-3"><i className="fa fa-wallet me-2"></i>Expenses</h2>
+      <ExpensesExclusionSettings />
 
       <h2 className="h4 mt-4 mb-3"><i className="fa fa-database me-2"></i>Data Management</h2>
       <DataManagement />

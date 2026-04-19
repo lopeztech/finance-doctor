@@ -33,12 +33,18 @@ interface ChatMessage {
   text: string;
 }
 
+interface CategorySettings {
+  types: Record<string, 'essential' | 'committed' | 'discretionary'>;
+  excluded: string[];
+}
+
 interface GuestState {
   expenses: Expense[];
   investments: Investment[];
   familyMembers: FamilyMember[];
   categoryRules: CategoryRule[];
   adviceChats: Record<string, ChatMessage[] | string[]>;
+  categorySettings?: CategorySettings;
 }
 
 function clone<T>(v: T): T {
@@ -146,4 +152,19 @@ export function getAdviceChat<T = ChatMessage>(type: string): T[] {
 
 export function setAdviceChat<T = ChatMessage>(type: string, history: T[]) {
   state.adviceChats[type] = history as ChatMessage[] | string[];
+}
+
+// Category settings --------------------------------------------------------
+
+export function getCategorySettings(): CategorySettings {
+  return state.categorySettings
+    ? { types: { ...state.categorySettings.types }, excluded: [...state.categorySettings.excluded] }
+    : { types: {}, excluded: [] };
+}
+
+export function setCategorySettings(settings: CategorySettings) {
+  state.categorySettings = {
+    types: { ...settings.types },
+    excluded: [...settings.excluded],
+  };
 }

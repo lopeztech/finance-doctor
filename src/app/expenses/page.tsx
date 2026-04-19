@@ -7,9 +7,17 @@ import { adviceChatGet, adviceChatPut, reanalyseExpenses, streamExpensesAdvice }
 import { listExpenses, updateExpense, addExpenses, deleteExpense } from '@/lib/expenses-repo';
 import { listFamilyMembers } from '@/lib/family-members-repo';
 import { upsertCategoryRule } from '@/lib/category-rules-repo';
+import { getCategorySettings, setCategoryType, resolveType, type CategorySettings, type SpendingCategoryType } from '@/lib/category-settings-repo';
 import RecurringModal from '@/components/recurring-modal';
 import BulkActionsBar from '@/components/bulk-actions-bar';
 import { CategoryDonut, MonthlyTrend, TopVendorsChart } from '@/components/spending-charts';
+
+const TYPE_META: Record<SpendingCategoryType, { label: string; color: string; bg: string; description: string }> = {
+  essential: { label: 'Essential', color: '#198754', bg: 'bg-success', description: 'Unavoidable — floor of your cashflow' },
+  committed: { label: 'Committed', color: '#fd7e14', bg: 'bg-warning', description: 'Reducible fixed costs (cancel/downgrade)' },
+  discretionary: { label: 'Discretionary', color: '#dc3545', bg: 'bg-danger', description: 'Fully avoidable — prime cut targets' },
+};
+const TYPE_ORDER: SpendingCategoryType[] = ['essential', 'committed', 'discretionary'];
 
 const SPENDING_ICONS: Record<string, string> = {
   'Bakery': 'fa-bread-slice',
@@ -104,6 +112,7 @@ export default function ExpensesPage() {
   const [focusUncategorised, setFocusUncategorised] = useState(false);
   const [subCategorising, setSubCategorising] = useState(false);
   const [subCategoriseMessage, setSubCategoriseMessage] = useState<string | null>(null);
+  const [categorySettings, setCategorySettingsState] = useState<CategorySettings>({ types: {}, excluded: [] });
   const [adviceHistory, setAdviceHistory] = useState<{ role: 'user' | 'model'; text: string }[]>([]);
   const [adviceLoading, setAdviceLoading] = useState(false);
   const [followUpInput, setFollowUpInput] = useState('');
@@ -138,6 +147,7 @@ export default function ExpensesPage() {
     adviceChatGet('expenses')
       .then(history => { if (history.length) setAdviceHistory(history as { role: 'user' | 'model'; text: string }[]); })
       .catch(() => {});
+    getCategorySettings().then(setCategorySettingsState).catch(() => {});
   }, []);
 
   const fetchExpenses = useCallback(async () => {
@@ -245,7 +255,11 @@ export default function ExpensesPage() {
 
   const hasSubCategory = (e: Expense) => Boolean(e.spendingSubCategory?.trim());
 
+  const excludedSet = new Set(categorySettings.excluded);
+  const excludedExpenses = expenses.filter(e => excludedSet.has(e.spendingCategory || 'Other'));
+  const excludedTotal = excludedExpenses.reduce((s, e) => s + e.amount, 0);
   const baseFilteredExpenses = expenses.filter(e => {
+    if (excludedSet.has(e.spendingCategory || 'Other')) return false;
     if (selectedOwner && e.owner !== selectedOwner) return false;
     if (selectedYear !== 'all' && getExpenseYear(e) !== selectedYear) return false;
     if (selectedMonth !== 'all' && getExpenseMonthNum(e) !== selectedMonth) return false;
@@ -332,6 +346,31 @@ export default function ExpensesPage() {
     return acc;
   }, {} as Record<string, { description: string; total: number; category: string }>);
   const vendorList = Object.values(vendorTotals);
+
+  const typeTotals: Record<SpendingCategoryType, number> = { essential: 0, committed: 0, discretionary: 0 };
+  let untypedTotal = 0;
+  for (const [cat, total] of Object.entries(categoryTotals)) {
+    const t = resolveType(cat, categorySettings);
+    if (t) typeTotals[t] += total;
+    else untypedTotal += total;
+  }
+
+  const updateCategoryType = async (category: string, type: SpendingCategoryType | null) => {
+    const optimistic: CategorySettings = {
+      ...categorySettings,
+      types: { ...categorySettings.types },
+    };
+    if (type === null) delete optimistic.types[category];
+    else optimistic.types[category] = type;
+    setCategorySettingsState(optimistic);
+    try {
+      const next = await setCategoryType(category, type);
+      setCategorySettingsState(next);
+    } catch {
+      // revert on failure
+      setCategorySettingsState(categorySettings);
+    }
+  };
 
   const highestMonth = sortedMonths.length > 0 ? sortedMonths.reduce(([mM, mT], [m, t]) => t > mT ? [m, t] : [mM, mT]) : null;
   const lowestMonth = sortedMonths.length > 0 ? sortedMonths.reduce(([mM, mT], [m, t]) => t < mT ? [m, t] : [mM, mT]) : null;
@@ -529,38 +568,99 @@ export default function ExpensesPage() {
         </div>
       </div>
 
-      <Panel>
-        <PanelHeader noButton>
-          <i className="fa fa-calendar me-2"></i>Period Summary
-        </PanelHeader>
-        <PanelBody>
-          <div className="row g-3">
-            <div className="col-md-6 col-xl-3">
-              <div className="text-muted small mb-1">Highest Month</div>
-              <div className="fw-bold">{highestMonth ? `${formatMonth(highestMonth[0])} — $${highestMonth[1].toLocaleString('en-AU', { minimumFractionDigits: 2 })}` : '—'}</div>
-            </div>
-            <div className="col-md-6 col-xl-3">
-              <div className="text-muted small mb-1">Lowest Month</div>
-              <div className="fw-bold">{lowestMonth ? `${formatMonth(lowestMonth[0])} — $${lowestMonth[1].toLocaleString('en-AU', { minimumFractionDigits: 2 })}` : '—'}</div>
-            </div>
-            <div className="col-md-6 col-xl-3">
-              <div className="text-muted small mb-1">Avg per Transaction</div>
-              <div className="fw-bold">${filteredExpenses.length > 0 ? (totalSpend / filteredExpenses.length).toFixed(2) : '0.00'}</div>
-            </div>
-            <div className="col-md-6 col-xl-3">
-              <div className="text-muted small mb-1">Top Category</div>
-              <div className="fw-bold">
-                {topCategory ? (
-                  <>
-                    {topCategory[0]}
-                    <span className="text-muted ms-2 small">({((topCategory[1] / totalSpend) * 100).toFixed(1)}%)</span>
-                  </>
-                ) : '—'}
+      {excludedExpenses.length > 0 && (
+        <div className="alert alert-secondary d-flex flex-wrap align-items-center gap-2 py-2 small">
+          <i className="fa fa-eye-slash me-1"></i>
+          <span>
+            Hiding <strong>{excludedExpenses.length}</strong> expenses worth <strong>${excludedTotal.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</strong> from
+            {' '}<em>{categorySettings.excluded.join(', ')}</em>. Still counted in Tax.
+          </span>
+          <a href="/settings" className="ms-auto alert-link small">Manage in Settings</a>
+        </div>
+      )}
+
+      <div className="row">
+        <div className="col-xl-6">
+          <Panel>
+            <PanelHeader noButton>
+              <i className="fa fa-calendar me-2"></i>Period Summary
+            </PanelHeader>
+            <PanelBody>
+              <div className="row g-3">
+                <div className="col-md-6">
+                  <div className="text-muted small mb-1">Highest Month</div>
+                  <div className="fw-bold">{highestMonth ? `${formatMonth(highestMonth[0])} — $${highestMonth[1].toLocaleString('en-AU', { minimumFractionDigits: 2 })}` : '—'}</div>
+                </div>
+                <div className="col-md-6">
+                  <div className="text-muted small mb-1">Lowest Month</div>
+                  <div className="fw-bold">{lowestMonth ? `${formatMonth(lowestMonth[0])} — $${lowestMonth[1].toLocaleString('en-AU', { minimumFractionDigits: 2 })}` : '—'}</div>
+                </div>
+                <div className="col-md-6">
+                  <div className="text-muted small mb-1">Avg per Transaction</div>
+                  <div className="fw-bold">${filteredExpenses.length > 0 ? (totalSpend / filteredExpenses.length).toFixed(2) : '0.00'}</div>
+                </div>
+                <div className="col-md-6">
+                  <div className="text-muted small mb-1">Top Category</div>
+                  <div className="fw-bold">
+                    {topCategory ? (
+                      <>
+                        {topCategory[0]}
+                        <span className="text-muted ms-2 small">({((topCategory[1] / totalSpend) * 100).toFixed(1)}%)</span>
+                      </>
+                    ) : '—'}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        </PanelBody>
-      </Panel>
+            </PanelBody>
+          </Panel>
+        </div>
+        <div className="col-xl-6">
+          <Panel>
+            <PanelHeader noButton>
+              <i className="fa fa-heart-pulse me-2"></i>Spending Health
+            </PanelHeader>
+            <PanelBody>
+              {totalSpend === 0 ? (
+                <div className="text-muted small">No expenses to classify.</div>
+              ) : (
+                <>
+                  <div className="d-flex rounded overflow-hidden mb-3" style={{ height: '16px' }}>
+                    {TYPE_ORDER.map(t => {
+                      const pct = (typeTotals[t] / totalSpend) * 100;
+                      if (pct <= 0) return null;
+                      return <div key={t} title={`${TYPE_META[t].label}: ${pct.toFixed(1)}%`} style={{ width: `${pct}%`, backgroundColor: TYPE_META[t].color }} />;
+                    })}
+                    {untypedTotal > 0 && <div title={`Untyped: ${((untypedTotal / totalSpend) * 100).toFixed(1)}%`} style={{ width: `${(untypedTotal / totalSpend) * 100}%`, backgroundColor: '#adb5bd' }} />}
+                  </div>
+                  <div className="row g-2">
+                    {TYPE_ORDER.map(t => {
+                      const amt = typeTotals[t];
+                      const pct = (amt / totalSpend) * 100;
+                      return (
+                        <div key={t} className="col-md-4">
+                          <div className="d-flex align-items-center">
+                            <span className="rounded-circle me-2" style={{ width: '10px', height: '10px', backgroundColor: TYPE_META[t].color, display: 'inline-block' }}></span>
+                            <span className="small fw-bold">{TYPE_META[t].label}</span>
+                            <span className="ms-auto small text-muted">{pct.toFixed(0)}%</span>
+                          </div>
+                          <div className="fw-bold">${amt.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</div>
+                          <div className="text-muted small">{TYPE_META[t].description}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {untypedTotal > 0 && (
+                    <div className="alert alert-warning py-2 mt-3 mb-0 small">
+                      <i className="fa fa-triangle-exclamation me-1"></i>
+                      ${untypedTotal.toLocaleString('en-AU', { minimumFractionDigits: 2 })} in unclassified categories — assign a type on each category row below.
+                    </div>
+                  )}
+                </>
+              )}
+            </PanelBody>
+          </Panel>
+        </div>
+      </div>
 
       {selectedIds.size > 0 && (
         <BulkActionsBar
@@ -816,6 +916,22 @@ export default function ExpensesPage() {
                               </button>
                             </span>
                           )}
+                          {(() => {
+                            const current = resolveType(category, categorySettings);
+                            return (
+                              <select
+                                className={`form-select form-select-sm me-2 ${current ? `${TYPE_META[current].bg} text-white border-0` : 'border-warning text-warning'}`}
+                                style={{ width: 'auto', fontSize: '0.75rem', paddingTop: '0.15rem', paddingBottom: '0.15rem' }}
+                                value={current ?? ''}
+                                title={current ? TYPE_META[current].description : 'Unclassified — pick a type'}
+                                onClick={ev => ev.stopPropagation()}
+                                onChange={ev => { ev.stopPropagation(); updateCategoryType(category, (ev.target.value || null) as SpendingCategoryType | null); }}
+                              >
+                                <option value="">— type —</option>
+                                {TYPE_ORDER.map(t => <option key={t} value={t}>{TYPE_META[t].label}</option>)}
+                              </select>
+                            );
+                          })()}
                           <span className="badge bg-secondary me-2">{catExpenses.length}</span>
                           <span className="fw-bold me-2">${total.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</span>
                           <span className="small text-muted" style={{ width: '45px', textAlign: 'right' }}>{pct.toFixed(1)}%</span>
