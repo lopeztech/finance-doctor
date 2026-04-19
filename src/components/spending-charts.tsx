@@ -55,9 +55,10 @@ export function CategoryDonut({ totals, colors, height = 300 }: CategoryDonutPro
 interface MonthlyTrendProps {
   monthlyTotals: Record<string, number>;
   height?: number;
+  variant?: 'area' | 'line';
 }
 
-export function MonthlyTrend({ monthlyTotals, height = 300 }: MonthlyTrendProps) {
+export function MonthlyTrend({ monthlyTotals, height = 300, variant = 'area' }: MonthlyTrendProps) {
   const entries = Object.entries(monthlyTotals).sort(([a], [b]) => a.localeCompare(b));
   const labels = entries.map(([m]) => {
     const d = new Date(m + '-01');
@@ -66,13 +67,17 @@ export function MonthlyTrend({ monthlyTotals, height = 300 }: MonthlyTrendProps)
   const values = entries.map(([, v]) => Number(v.toFixed(2)));
   const avg = values.length > 0 ? values.reduce((s, v) => s + v, 0) / values.length : 0;
 
+  const isLine = variant === 'line';
   const options = {
-    chart: { type: 'area' as const, toolbar: { show: false }, animations: { enabled: false } },
-    stroke: { curve: 'smooth' as const, width: 2 },
-    fill: {
-      type: 'gradient',
-      gradient: { shadeIntensity: 1, opacityFrom: 0.5, opacityTo: 0.05, stops: [0, 100] },
-    },
+    chart: { type: isLine ? ('line' as const) : ('area' as const), toolbar: { show: false }, animations: { enabled: false } },
+    stroke: { curve: 'smooth' as const, width: isLine ? 3 : 2 },
+    ...(isLine ? {} : {
+      fill: {
+        type: 'gradient',
+        gradient: { shadeIntensity: 1, opacityFrom: 0.5, opacityTo: 0.05, stops: [0, 100] },
+      },
+    }),
+    markers: isLine ? { size: 5, strokeWidth: 2, hover: { sizeOffset: 3 } } : { size: 0 },
     colors: ['#0d6efd'],
     dataLabels: { enabled: false },
     xaxis: { categories: labels, labels: { style: { fontSize: '11px' } } },
@@ -99,7 +104,7 @@ export function MonthlyTrend({ monthlyTotals, height = 300 }: MonthlyTrendProps)
     grid: { borderColor: '#e7e7e7' },
   };
 
-  return <ApexChart options={options} series={[{ name: 'Spend', data: values }]} type="area" height={height} />;
+  return <ApexChart options={options} series={[{ name: 'Spend', data: values }]} type={isLine ? 'line' : 'area'} height={height} />;
 }
 
 interface TopVendorsProps {

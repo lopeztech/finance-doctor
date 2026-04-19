@@ -8,6 +8,7 @@ import { fetchDashboardTips, type DashboardTip } from '@/lib/functions-client';
 import { listExpenses } from '@/lib/expenses-repo';
 import { listInvestments } from '@/lib/investments-repo';
 import { listFamilyMembers } from '@/lib/family-members-repo';
+import { PageFilters, type FilterGroup } from '@/components/page-filters';
 
 const CATEGORY_ICONS: Record<string, string> = {
   'Work from Home': 'fa-house-laptop',
@@ -182,14 +183,23 @@ export default function Dashboard() {
     <>
       <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
         <h1 className="page-header mb-0">Dashboard</h1>
-        <div className="ms-sm-auto">
-          <select className="form-select" value={financialYear} onChange={(e) => setFinancialYear(e.target.value)}>
-            <option value="2025-2026">FY 2025-2026</option>
-            <option value="2024-2025">FY 2024-2025</option>
-            <option value="2023-2024">FY 2023-2024</option>
-          </select>
-        </div>
       </div>
+
+      {(() => {
+        const groups: FilterGroup[] = [{
+          id: 'fy',
+          icon: 'fa-calendar',
+          label: 'Financial Year',
+          value: financialYear,
+          onChange: (v: string) => setFinancialYear(v),
+          options: [
+            { value: '2025-2026', label: 'FY 2025-2026' },
+            { value: '2024-2025', label: 'FY 2024-2025' },
+            { value: '2023-2024', label: 'FY 2023-2024' },
+          ],
+        }];
+        return <PageFilters groups={groups} className="mb-3" />;
+      })()}
 
       <div className="row mb-3">
         <div className="col-lg-3">

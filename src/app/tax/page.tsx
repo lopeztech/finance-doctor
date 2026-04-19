@@ -10,6 +10,7 @@ import { upsertCategoryRule } from '@/lib/category-rules-repo';
 import DeductionsChart from '@/components/deductions-chart';
 import YoyChart from '@/components/yoy-chart';
 import { ViewToggle, useViewMode } from '@/components/view-toggle';
+import { PageFilters, type FilterGroup } from '@/components/page-filters';
 
 const CATEGORIES = [
   'Clothing & Laundry',
@@ -308,22 +309,38 @@ export default function TaxPage() {
     <>
       <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
         <h1 className="page-header mb-0">Tax Health Check</h1>
-        <div className="ms-sm-auto d-flex flex-wrap gap-2">
-          <ViewToggle value={mode} onChange={setMode} />
-          {familyMembers.length > 0 && (
-            <select className="form-select" value={selectedOwner} onChange={(e) => setSelectedOwner(e.target.value)}>
-              <option value="">All Members</option>
-              {familyMembers.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
-            </select>
-          )}
-          <select className="form-select" value={financialYear} onChange={(e) => setFinancialYear(e.target.value)}>
-            <option value="all">All Years</option>
-            {[...new Set(expenses.map(e => getExpenseFY(e)).filter(Boolean))].sort().reverse().map(fy => (
-              <option key={fy} value={fy}>FY {fy}</option>
-            ))}
-          </select>
-        </div>
+        <ViewToggle value={mode} onChange={setMode} className="ms-sm-auto" />
       </div>
+
+      {(() => {
+        const fys = [...new Set(expenses.map(e => getExpenseFY(e)).filter(Boolean))].sort().reverse();
+        const groups: FilterGroup[] = [];
+        if (familyMembers.length > 0) {
+          groups.push({
+            id: 'owner',
+            icon: 'fa-user',
+            label: 'Member',
+            value: selectedOwner,
+            onChange: (v: string) => setSelectedOwner(v),
+            options: [
+              { value: '', label: 'All' },
+              ...familyMembers.map(m => ({ value: m.name, label: m.name })),
+            ],
+          });
+        }
+        groups.push({
+          id: 'fy',
+          icon: 'fa-calendar',
+          label: 'Financial Year',
+          value: financialYear,
+          onChange: (v: string) => setFinancialYear(v),
+          options: [
+            { value: 'all', label: 'All' },
+            ...fys.map(fy => ({ value: fy, label: `FY ${fy}` })),
+          ],
+        });
+        return <PageFilters groups={groups} className="mb-3" />;
+      })()}
 
       {mode === 'summary' && <>
       <div className="row mb-3">

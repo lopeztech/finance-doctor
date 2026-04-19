@@ -7,6 +7,7 @@ import { adviceChatGet, adviceChatPut, streamInvestmentsAdvice } from '@/lib/fun
 import { listInvestments, addInvestment, updateInvestment, deleteInvestment } from '@/lib/investments-repo';
 import { listExpenses, updateExpense } from '@/lib/expenses-repo';
 import AllocationChart from '@/components/allocation-chart';
+import { CostVsValueChart, GainLossChart, OwnerAllocationChart, ReturnByTypeChart } from '@/components/investment-charts';
 import { listFamilyMembers } from '@/lib/family-members-repo';
 import { getCategorySettings, resolveType, type CategorySettings, type SpendingCategoryType } from '@/lib/category-settings-repo';
 import { ViewToggle, useViewMode } from '@/components/view-toggle';
@@ -580,6 +581,27 @@ export default function InvestmentsPage() {
 
   const sortedAllocations = Object.entries(allocationByType).sort(([, a], [, b]) => b - a);
 
+  const costVsValueByType = investments.reduce((acc, i) => {
+    if (!acc[i.type]) acc[i.type] = { cost: 0, value: 0 };
+    acc[i.type].cost += i.costBasis;
+    acc[i.type].value += i.currentValue;
+    return acc;
+  }, {} as Record<string, { cost: number; value: number }>);
+
+  const gainLossItems = investments.map(i => {
+    const gl = i.liability ? i.currentValue - i.liability : i.currentValue - i.costBasis;
+    const base = i.liability ? i.liability : i.costBasis;
+    const pct = base > 0 ? (gl / base) * 100 : 0;
+    return { name: i.name, type: i.type, gainLoss: gl, returnPct: pct };
+  }).filter(i => i.gainLoss !== 0);
+
+  const allocationByOwner = investments.reduce((acc, i) => {
+    const key = i.owner || 'Unassigned';
+    acc[key] = (acc[key] || 0) + i.currentValue;
+    return acc;
+  }, {} as Record<string, number>);
+  const ownerCount = Object.keys(allocationByOwner).length;
+
   const typeCount = Object.keys(allocationByType).length;
   const maxAllocationPct = totalValue > 0
     ? Math.max(...Object.values(allocationByType).map(v => (v / totalValue) * 100))
@@ -651,14 +673,86 @@ export default function InvestmentsPage() {
       </div>
 
       {sortedAllocations.length > 0 && (
+        <div className="row">
+          <div className={ownerCount > 1 ? 'col-xl-6' : 'col-12'}>
+            <Panel className="mb-3">
+              <PanelHeader noButton>
+                <div className="d-flex align-items-center">
+                  <i className="fa fa-chart-pie me-2"></i>Asset Allocation by Type
+                </div>
+              </PanelHeader>
+              <PanelBody>
+                <AllocationChart allocations={sortedAllocations} height={320} />
+              </PanelBody>
+            </Panel>
+          </div>
+          {ownerCount > 1 && (
+            <div className="col-xl-6">
+              <Panel className="mb-3">
+                <PanelHeader noButton>
+                  <div className="d-flex align-items-center">
+                    <i className="fa fa-users me-2"></i>Allocation by Owner
+                  </div>
+                </PanelHeader>
+                <PanelBody>
+                  <OwnerAllocationChart byOwner={allocationByOwner} height={320} />
+                </PanelBody>
+              </Panel>
+            </div>
+          )}
+        </div>
+      )}
+
+      {investments.length > 0 && (
+        <div className="row">
+          <div className="col-xl-6">
+            <Panel className="mb-3">
+              <PanelHeader noButton>
+                <div className="d-flex align-items-center">
+                  <i className="fa fa-chart-column me-2"></i>Cost vs Current Value
+                </div>
+              </PanelHeader>
+              <PanelBody>
+                <CostVsValueChart byType={costVsValueByType} height={320} />
+                <div className="text-muted small mt-2">
+                  <i className="fa fa-info-circle me-1"></i>
+                  Grey bars show what you put in; blue shows today&apos;s value. Gaps = gains or losses by asset class.
+                </div>
+              </PanelBody>
+            </Panel>
+          </div>
+          <div className="col-xl-6">
+            <Panel className="mb-3">
+              <PanelHeader noButton>
+                <div className="d-flex align-items-center">
+                  <i className="fa fa-percent me-2"></i>Return by Asset Class
+                </div>
+              </PanelHeader>
+              <PanelBody>
+                <ReturnByTypeChart byType={costVsValueByType} height={320} />
+                <div className="text-muted small mt-2">
+                  <i className="fa fa-info-circle me-1"></i>
+                  Percentage return across each asset class. Property uses liability as the base where present.
+                </div>
+              </PanelBody>
+            </Panel>
+          </div>
+        </div>
+      )}
+
+      {gainLossItems.length > 0 && (
         <Panel className="mb-3">
           <PanelHeader noButton>
             <div className="d-flex align-items-center">
-              <i className="fa fa-chart-pie me-2"></i>Asset Allocation
+              <i className="fa fa-ranking-star me-2"></i>Biggest Movers
             </div>
           </PanelHeader>
           <PanelBody>
-            <AllocationChart allocations={sortedAllocations} height={320} />
+            <GainLossChart items={gainLossItems} height={Math.min(400, 40 + gainLossItems.length * 32)} />
+            <div className="text-muted small mt-2">
+              <i className="fa fa-info-circle me-1"></i>
+              Top holdings by absolute gain/loss. Green = in the money, red = underwater.
+            </div>
           </PanelBody>
         </Panel>
       )}

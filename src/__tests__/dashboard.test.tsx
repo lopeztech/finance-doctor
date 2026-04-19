@@ -67,6 +67,9 @@ describe('Dashboard', () => {
 
   it('renders financial year selector', async () => {
     render(<Dashboard />);
-    await waitFor(() => expect(screen.getByDisplayValue('FY 2025-2026')).toBeInTheDocument());
+    await waitFor(() => {
+      const chip = screen.getByRole('button', { name: 'FY 2025-2026', pressed: true });
+      expect(chip).toBeInTheDocument();
+    });
   });
 });

@@ -12,6 +12,7 @@ import RecurringModal from '@/components/recurring-modal';
 import BulkActionsBar from '@/components/bulk-actions-bar';
 import { CategoryDonut, MonthlyTrend, TopVendorsChart } from '@/components/spending-charts';
 import { ViewToggle, useViewMode } from '@/components/view-toggle';
+import { PageFilters, type FilterGroup } from '@/components/page-filters';
 
 const TYPE_META: Record<SpendingCategoryType, { label: string; color: string; bg: string; description: string }> = {
   essential: { label: 'Essential', color: '#198754', bg: 'bg-success', description: 'Unavoidable — floor of your cashflow' },
@@ -329,15 +330,6 @@ export default function ExpensesPage() {
     return acc;
   }, {} as Record<string, number>);
   const sortedMonths = Object.entries(monthlyTotals).sort(([a], [b]) => a.localeCompare(b));
-  const maxMonthly = Math.max(...Object.values(monthlyTotals), 1);
-
-  const monthlyCategoryTotals = filteredExpenses.reduce((acc, e) => {
-    const month = e.date.substring(0, 7);
-    const cat = getSpendingCat(e);
-    if (!acc[month]) acc[month] = {};
-    acc[month][cat] = (acc[month][cat] || 0) + e.amount;
-    return acc;
-  }, {} as Record<string, Record<string, number>>);
 
   const avgMonthly = sortedMonths.length > 0 ? totalSpend / sortedMonths.length : 0;
 
@@ -513,28 +505,52 @@ export default function ExpensesPage() {
     <>
       <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
         <h1 className="page-header mb-0">Expenses</h1>
-        <div className="ms-sm-auto d-flex flex-wrap gap-2">
-          <ViewToggle value={mode} onChange={setMode} />
-          {familyMembers.length > 0 && (
-            <select className="form-select" value={selectedOwner} onChange={(e) => setSelectedOwner(e.target.value)}>
-              <option value="">All Members</option>
-              {familyMembers.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
-            </select>
-          )}
-          <select className="form-select" value={selectedYear} onChange={(e) => { setSelectedYear(e.target.value); }}>
-            <option value="all">All Years</option>
-            {[...new Set(expenses.map(e => getExpenseYear(e)).filter(Boolean))].sort().reverse().map(y => (
-              <option key={y} value={y}>{y}</option>
-            ))}
-          </select>
-          <select className="form-select" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)}>
-            <option value="all">All Months</option>
-            {['01','02','03','04','05','06','07','08','09','10','11','12'].map(m => (
-              <option key={m} value={m}>{new Date(`2000-${m}-01`).toLocaleDateString('en-AU', { month: 'long' })}</option>
-            ))}
-          </select>
-        </div>
+        <ViewToggle value={mode} onChange={setMode} className="ms-sm-auto" />
       </div>
+
+      {(() => {
+        const years = [...new Set(expenses.map(e => getExpenseYear(e)).filter(Boolean))].sort().reverse();
+        const groups: FilterGroup[] = [];
+        if (familyMembers.length > 0) {
+          groups.push({
+            id: 'owner',
+            icon: 'fa-user',
+            label: 'Member',
+            value: selectedOwner,
+            onChange: (v: string) => setSelectedOwner(v),
+            options: [
+              { value: '', label: 'All' },
+              ...familyMembers.map(m => ({ value: m.name, label: m.name })),
+            ],
+          });
+        }
+        groups.push({
+          id: 'year',
+          icon: 'fa-calendar',
+          label: 'Year',
+          value: selectedYear,
+          onChange: (v: string) => setSelectedYear(v),
+          options: [
+            { value: 'all', label: 'All' },
+            ...years.map(y => ({ value: y, label: y })),
+          ],
+        });
+        groups.push({
+          id: 'month',
+          icon: 'fa-calendar-day',
+          label: 'Month',
+          value: selectedMonth,
+          onChange: (v: string) => setSelectedMonth(v),
+          options: [
+            { value: 'all', label: 'All' },
+            ...['01','02','03','04','05','06','07','08','09','10','11','12'].map(m => ({
+              value: m,
+              label: new Date(`2000-${m}-01`).toLocaleDateString('en-AU', { month: 'short' }),
+            })),
+          ],
+        });
+        return <PageFilters groups={groups} className="mb-3" />;
+      })()}
 
       {mode === 'summary' && <>
       <div className="row mb-3">
@@ -767,70 +783,37 @@ export default function ExpensesPage() {
             <i className="fa fa-chart-column me-2"></i>Spending Overview
           </PanelHeader>
           <PanelBody>
-            <div className="row g-4">
-              <div className="col-xl-6">
-                <h6 className="small text-muted text-uppercase mb-3"><i className="fa fa-list-ul me-1"></i>By Category</h6>
-                {sortedCategories.length === 0 ? (
-                  <div className="text-muted small">No data</div>
-                ) : (
-                  <div>
-                    {sortedCategories.map(([category, total]) => {
-                      const pct = totalSpend > 0 ? (total / totalSpend) * 100 : 0;
-                      const color = SPENDING_COLORS[category] || '#6c757d';
-                      return (
-                        <div key={category} className="mb-3">
-                          <div className="d-flex align-items-center mb-1">
-                            <i className={`fa ${SPENDING_ICONS[category] || 'fa-ellipsis'} me-2`} style={{ color }}></i>
-                            <span className="flex-grow-1 small">{category}</span>
-                            <span className="small fw-bold">${total.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</span>
-                            <span className="small text-muted ms-2" style={{ width: '45px', textAlign: 'right' }}>{pct.toFixed(1)}%</span>
-                          </div>
-                          <div className="progress" style={{ height: '6px' }}>
-                            <div className="progress-bar" style={{ width: `${pct}%`, backgroundColor: color }}></div>
-                          </div>
+            <div>
+              <h6 className="small text-muted text-uppercase mb-3"><i className="fa fa-list-ul me-1"></i>By Category</h6>
+              {sortedCategories.length === 0 ? (
+                <div className="text-muted small">No data</div>
+              ) : (
+                <div className="mb-4">
+                  {sortedCategories.map(([category, total]) => {
+                    const pct = totalSpend > 0 ? (total / totalSpend) * 100 : 0;
+                    const color = SPENDING_COLORS[category] || '#6c757d';
+                    return (
+                      <div key={category} className="mb-3">
+                        <div className="d-flex align-items-center mb-1">
+                          <i className={`fa ${SPENDING_ICONS[category] || 'fa-ellipsis'} me-2`} style={{ color }}></i>
+                          <span className="flex-grow-1 small">{category}</span>
+                          <span className="small fw-bold">${total.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</span>
+                          <span className="small text-muted ms-2" style={{ width: '45px', textAlign: 'right' }}>{pct.toFixed(1)}%</span>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-              <div className="col-xl-6">
-                <h6 className="small text-muted text-uppercase mb-3"><i className="fa fa-chart-bar me-1"></i>By Month</h6>
-                {sortedMonths.length === 0 ? (
-                  <div className="text-muted small">No data</div>
-                ) : (
-                  <div>
-                    {sortedMonths.map(([month, total]) => {
-                      const date = new Date(month + '-01');
-                      const label = date.toLocaleDateString('en-AU', { month: 'short', year: 'numeric' });
-                      const pct = (total / maxMonthly) * 100;
-                      const cats = monthlyCategoryTotals[month] || {};
-                      return (
-                        <div key={month} className="mb-3">
-                          <div className="d-flex align-items-center mb-1">
-                            <span className="small fw-bold" style={{ width: '80px' }}>{label}</span>
-                            <span className="flex-grow-1"></span>
-                            <span className="small fw-bold">${total.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</span>
-                          </div>
-                          <div className="d-flex" style={{ height: '12px', borderRadius: '4px', overflow: 'hidden' }}>
-                            {Object.entries(cats).sort(([a], [b]) => a.localeCompare(b)).map(([cat, catTotal]) => (
-                              <div
-                                key={cat}
-                                title={`${cat}: $${catTotal.toFixed(2)}`}
-                                style={{
-                                  width: `${(catTotal / maxMonthly) * 100}%`,
-                                  backgroundColor: SPENDING_COLORS[cat] || '#6c757d',
-                                }}
-                              ></div>
-                            ))}
-                            <div style={{ width: `${100 - pct}%` }}></div>
-                          </div>
+                        <div className="progress" style={{ height: '6px' }}>
+                          <div className="progress-bar" style={{ width: `${pct}%`, backgroundColor: color }}></div>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <h6 className="small text-muted text-uppercase mb-3 pt-2 border-top"><i className="fa fa-chart-line me-1"></i>By Month</h6>
+              {sortedMonths.length === 0 ? (
+                <div className="text-muted small">No data</div>
+              ) : (
+                <MonthlyTrend monthlyTotals={monthlyTotals} variant="line" height={340} />
+              )}
             </div>
           </PanelBody>
         </Panel>
