@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import PerfectScrollbar from 'react-perfect-scrollbar';
 import SidebarNav from '@/components/sidebar/sidebar-nav';
 import SidebarMinifyBtn from '@/components/sidebar/sidebar-minify-btn';
+import SidebarSignOut from '@/components/sidebar/sidebar-signout';
 import 'react-perfect-scrollbar/dist/css/styles.css';
 import { useAppSettings } from '@/config/app-settings';
 import { slideUp } from '@/composables/slideUp';
@@ -290,6 +291,7 @@ export default function Sidebar() {
       <div id="sidebar" className={'app-sidebar ' + (settings.appSidebarGrid ? 'app-sidebar-grid ' : '') + (settings.appSidebarTransparent ? 'app-sidebar-transparent ' : '')}  data-bs-theme={!settings.appSidebarLight ? 'dark' : ''}>
         <PerfectScrollbar className="app-sidebar-content" options={{ suppressScrollX: true }}>
           <SidebarNav />
+          <SidebarSignOut />
           <SidebarMinifyBtn />
         </PerfectScrollbar>
       </div>
