@@ -11,6 +11,8 @@ export interface Expense {
   nonDeductible?: boolean;
   recurrenceGroupId?: string;
   investmentId?: string;
+  categorisationStatus?: 'pending' | 'done' | 'failed';
+  categorisationError?: string;
 }
 
 export interface FamilyMember {

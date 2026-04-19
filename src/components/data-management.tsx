@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { Expense, FamilyMember } from '@/lib/types';
 import { importPreview as callImportPreview, importSave as callImportSave, migrateFix, migrateCategorise, type MigrateFixResult } from '@/lib/functions-client';
-import { listExpenses } from '@/lib/expenses-repo';
+import { listExpenses, watchPendingCategorisation } from '@/lib/expenses-repo';
 import { listFamilyMembers } from '@/lib/family-members-repo';
 
 const CATEGORIES = [
@@ -56,6 +56,7 @@ interface ImportRow {
   financialYear: string;
   owner?: string;
   duplicate?: boolean;
+  awaitingCategorisation?: boolean;
 }
 
 export default function DataManagement() {
@@ -67,12 +68,19 @@ export default function DataManagement() {
   const [importLoading, setImportLoading] = useState(false);
   const [importPreviewRows, setImportPreviewRows] = useState<ImportRow[] | null>(null);
   const [importDuplicateCount, setImportDuplicateCount] = useState(0);
+  const [importDeferredCount, setImportDeferredCount] = useState(0);
   const [importSaving, setImportSaving] = useState(false);
   const [importOwner, setImportOwner] = useState('');
   const [migrating, setMigrating] = useState(false);
   const [migrateResult, setMigrateResult] = useState<MigrateFixResult | null>(null);
   const [categorising, setCategorising] = useState(false);
   const [categoriseProgress, setCategoriseProgress] = useState({ done: 0, remaining: 0 });
+  const [pendingCounts, setPendingCounts] = useState({ pending: 0, failed: 0 });
+
+  useEffect(() => {
+    const unsub = watchPendingCategorisation(setPendingCounts);
+    return () => unsub();
+  }, []);
 
   const fetchExpenses = useCallback(async () => {
     setLoading(true);
@@ -98,6 +106,7 @@ export default function DataManagement() {
       const csvText = await file.text();
       const data = await callImportPreview(csvText);
       setImportDuplicateCount(data.duplicateCount || 0);
+      setImportDeferredCount(data.deferredCategorisation || 0);
       setImportPreviewRows(data.preview);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Import failed');
@@ -125,12 +134,14 @@ export default function DataManagement() {
       ...(r.nonDeductible ? { nonDeductible: true } : {}),
       financialYear: r.financialYear,
       ...(importOwner ? { owner: importOwner } : {}),
+      ...(r.awaitingCategorisation ? { awaitingCategorisation: true } : {}),
     }));
     if (!toSave?.length) return;
     setImportSaving(true);
     try {
       await callImportSave(toSave);
       setImportPreviewRows(null);
+      setImportDeferredCount(0);
       setShowImport(false);
       fetchExpenses();
     } catch {}
@@ -183,6 +194,11 @@ export default function DataManagement() {
                   {importDuplicateCount > 0 && (
                     <span className="badge bg-warning text-dark"><i className="fa fa-copy me-1"></i>{importDuplicateCount} duplicates skipped</span>
                   )}
+                  {importDeferredCount > 0 && (
+                    <span className="badge bg-info text-dark" title="Large imports categorise in the background after save">
+                      <i className="fa fa-clock me-1"></i>{importDeferredCount} will auto-categorise
+                    </span>
+                  )}
                   {importOwner && <span className="badge bg-primary"><i className="fa fa-user me-1"></i>{importOwner}</span>}
                   <span className="text-muted small">Review categories, then confirm.</span>
                   <button className="btn btn-sm btn-success ms-auto me-2" onClick={confirmImport} disabled={importSaving || newCount === 0}>
@@ -192,6 +208,12 @@ export default function DataManagement() {
                     <i className="fa fa-times me-1"></i>Cancel
                   </button>
                 </div>
+                {importDeferredCount > 0 && (
+                  <div className="alert alert-info py-2 small mb-2">
+                    <i className="fa fa-circle-info me-1"></i>
+                    This import is large enough that {importDeferredCount} rows will be categorised in the background after save. Rows marked below as &quot;pending&quot; will update automatically once Dr Finance has processed them.
+                  </div>
+                )}
                 <div className="table-responsive" style={{ maxHeight: '400px', overflowY: 'auto' }}>
                   <table className="table table-sm table-hover mb-0">
                     <thead className="sticky-top bg-light">
@@ -226,7 +248,11 @@ export default function DataManagement() {
                               </select>
                             )}
                           </td>
-                          <td className="small text-muted">{row.spendingCategory || '—'}</td>
+                          <td className="small text-muted">
+                            {row.awaitingCategorisation
+                              ? <span className="badge bg-light text-muted border"><i className="fa fa-clock me-1"></i>pending</span>
+                              : (row.spendingCategory || '—')}
+                          </td>
                           <td>
                             {!row.duplicate && (
                               <button className="btn btn-xs btn-outline-danger" onClick={() => removePreviewRow(i)} title="Remove">
@@ -290,6 +316,26 @@ export default function DataManagement() {
           </PanelBody>
         )}
       </Panel>
+
+      {(pendingCounts.pending > 0 || pendingCounts.failed > 0) && (
+        <div className="alert alert-info d-flex flex-wrap align-items-center gap-2">
+          <i className="fa fa-robot"></i>
+          <div className="flex-grow-1">
+            {pendingCounts.pending > 0 && (
+              <>
+                <i className="fa fa-spinner fa-spin me-1"></i>
+                <strong>{pendingCounts.pending}</strong> expense{pendingCounts.pending === 1 ? '' : 's'} still being categorised in the background.
+              </>
+            )}
+            {pendingCounts.failed > 0 && (
+              <span className="ms-2 text-danger">
+                <i className="fa fa-triangle-exclamation me-1"></i>
+                <strong>{pendingCounts.failed}</strong> failed — re-run the categoriser from Settings to retry.
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="text-center py-3"><i className="fa fa-spinner fa-spin fa-2x"></i></div>

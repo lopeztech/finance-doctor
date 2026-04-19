@@ -6,3 +6,4 @@ export { expensesAdvice } from './handlers/expenses-advice';
 export { expensesImport } from './handlers/expenses-import';
 export { expensesMigrate } from './handlers/expenses-migrate';
 export { expensesReanalyse } from './handlers/expenses-reanalyse';
+export { expensesCategoriseWorker } from './handlers/expenses-categorise-worker';

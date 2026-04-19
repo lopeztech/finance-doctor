@@ -1,67 +1,18 @@
 import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/https';
+import { logger } from 'firebase-functions/v2';
+import { PubSub } from '@google-cloud/pubsub';
 import { getDb } from '../lib/firestore';
-import { getGeminiModel } from '../lib/gemini';
 import { requireUserEmail } from '../lib/auth';
 import { auditLog } from '../lib/audit';
+import { categoriseBatch, TAX_CATEGORIES as CATEGORIES, SPENDING_CATEGORIES } from '../lib/categorise';
 import type { Expense } from '../lib/types';
+import { EXPENSE_CATEGORISE_TOPIC, type CategoriseMessage } from './expenses-categorise-worker';
 
-const CATEGORIES = [
-  'Work from Home',
-  'Vehicle & Travel',
-  'Clothing & Laundry',
-  'Self-Education',
-  'Tools & Equipment',
-  'Professional Memberships',
-  'Phone & Internet',
-  'Donations',
-  'Investment Expenses',
-  'Investment Property',
-  'Other Deductions',
-];
-
-const SPENDING_CATEGORIES = [
-  'Groceries',
-  'Dining & Takeaway',
-  'Transport',
-  'Utilities & Bills',
-  'Shopping',
-  'Healthcare',
-  'Entertainment',
-  'Subscriptions',
-  'Education',
-  'Insurance',
-  'Home & Garden',
-  'Personal Care',
-  'Travel & Holidays',
-  'Gifts & Donations',
-  'Financial & Banking',
-  'Cafe',
-  'Bakery',
-  'Car',
-  'Personal Project',
-  'Kids Entertainment',
-  'Other',
-];
-
-const CATEGORISE_PROMPT = `You are an Australian financial categorisation engine.
-Given a list of expense transactions, categorise each one into:
-1. A TAX deduction category (for ATO tax purposes)
-2. A SPENDING category (for personal budgeting)
-
-TAX categories (use exactly these names):
-${CATEGORIES.map((c, i) => `${i + 1}. ${c}`).join('\n')}
-
-SPENDING categories (use exactly these names):
-${SPENDING_CATEGORIES.map((c, i) => `${i + 1}. ${c}`).join('\n')}
-
-Rules:
-- Return a JSON array: [{"index": 0, "category": "tax category name", "spendingCategory": "spending category name"}]
-- Use ONLY the exact category names listed above
-- If unsure about tax category, use "Other Deductions"
-- If unsure about spending category, use "Other"
-- Consider Australian context — e.g. "Coles" is "Groceries", "Uber" is "Transport", "Netflix" is "Subscriptions"
-- Do NOT wrap in markdown code fences, return raw JSON only
-- The index must match the position in the input array (0-based)`;
+// Imports above this row-count categorise synchronously at preview time so the
+// user can review AI-picked categories before confirming. Above it we skip the
+// preview-time AI call (risk of timeout / huge prompt) and fan out to the
+// Pub/Sub worker after save.
+const ASYNC_CATEGORISE_THRESHOLD = 50;
 
 interface PreviewData {
   action: 'preview';
@@ -74,6 +25,12 @@ interface SaveData {
 }
 
 type ExpensesImportData = PreviewData | SaveData;
+
+let pubsubClient: PubSub | null = null;
+function getPubSub(): PubSub {
+  if (!pubsubClient) pubsubClient = new PubSub();
+  return pubsubClient;
+}
 
 function splitCSVLine(line: string): string[] {
   const result: string[] = [];
@@ -233,14 +190,11 @@ export const expensesImport = onCall<ExpensesImportData>(
       const newRules: { pattern: string; taxCategory?: string; spendingCategory?: string; nonDeductible?: boolean }[] = [];
 
       parsed.forEach((p, i) => {
-        // 1. Explicit Tax Deductible column
         if (p.explicitDeductible === false) {
           nonDeductibleMap.set(i, true);
-          // Non-deductible rows go into the Other Deductions tax bucket by convention
           categoryMap.set(i, 'Other Deductions');
         }
 
-        // 2. Explicit Category column — match against tax, then spending, then treat as custom spending
         if (p.explicitCategory) {
           const exact = CATEGORIES.find(c => c.toLowerCase() === p.explicitCategory!.toLowerCase());
           const exactSpending = SPENDING_CATEGORIES.find(c => c.toLowerCase() === p.explicitCategory!.toLowerCase());
@@ -249,12 +203,10 @@ export const expensesImport = onCall<ExpensesImportData>(
           } else if (exactSpending) {
             spendingCategoryMap.set(i, exactSpending);
           } else {
-            // Treat as a custom spending category (user-defined, e.g. "Kids")
             spendingCategoryMap.set(i, p.explicitCategory);
           }
         }
 
-        // Capture a rule to persist for future imports when anything was explicit
         if (p.explicitCategory || p.explicitDeductible !== undefined) {
           newRules.push({
             pattern: p.description.toLowerCase(),
@@ -264,7 +216,6 @@ export const expensesImport = onCall<ExpensesImportData>(
           });
         }
 
-        // 3. Existing saved rules — only fill gaps
         const rule = findRule(p.description);
         if (rule?.taxCategory && !categoryMap.has(i)) categoryMap.set(i, rule.taxCategory);
         if (rule?.spendingCategory && !spendingCategoryMap.has(i)) spendingCategoryMap.set(i, rule.spendingCategory);
@@ -275,7 +226,7 @@ export const expensesImport = onCall<ExpensesImportData>(
         }
       });
 
-      // 4. AI fills what's still missing. A row needs AI if any of: tax category (unless non-deductible) or spending category is absent.
+      // Rows that still need AI (either category or spendingCategory unresolved)
       const needsAI: { row: ParsedRow; idx: number }[] = [];
       parsed.forEach((p, i) => {
         const needsTax = !nonDeductibleMap.get(i) && !categoryMap.has(i);
@@ -283,35 +234,21 @@ export const expensesImport = onCall<ExpensesImportData>(
         if (needsTax || needsSpending) needsAI.push({ row: p, idx: i });
       });
 
-      if (needsAI.length > 0) {
-        const descriptions = needsAI.map(({ row }, i) => `${i}. "${row.description}" ($${row.amount.toFixed(2)})`).join('\n');
-        const prompt = `Categorise these ${needsAI.length} expense transactions:\n${descriptions}`;
-        const model = getGeminiModel();
-        const result = await model.generateContent({
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          systemInstruction: { role: 'system', parts: [{ text: CATEGORISE_PROMPT }] },
+      // Small imports: categorise synchronously so user reviews AI picks before save.
+      // Large imports: defer to post-save Pub/Sub fan-out (flag with awaitingCategorisation).
+      const deferCategorisation = parsed.length > ASYNC_CATEGORISE_THRESHOLD;
+      let aiCategorisedCount = 0;
+
+      if (needsAI.length > 0 && !deferCategorisation) {
+        const results = await categoriseBatch(needsAI.map(({ row }) => ({ description: row.description, amount: row.amount })));
+        results.forEach((r, i) => {
+          const origIdx = needsAI[i].idx;
+          if (!categoryMap.has(origIdx)) categoryMap.set(origIdx, r.category);
+          if (!spendingCategoryMap.has(origIdx)) spendingCategoryMap.set(origIdx, r.spendingCategory);
         });
-
-        const responseText = result.response?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
-        const cleaned = responseText.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
-
-        let aiCategories: { index: number; category: string; spendingCategory?: string }[] = [];
-        try {
-          aiCategories = JSON.parse(cleaned);
-        } catch {
-          aiCategories = needsAI.map((_, i) => ({ index: i, category: 'Other Deductions' }));
-        }
-
-        for (const cat of aiCategories) {
-          const entry = needsAI[cat.index];
-          if (!entry) continue;
-          const origIdx = entry.idx;
-          if (!categoryMap.has(origIdx)) categoryMap.set(origIdx, CATEGORIES.includes(cat.category) ? cat.category : 'Other Deductions');
-          if (!spendingCategoryMap.has(origIdx)) spendingCategoryMap.set(origIdx, SPENDING_CATEGORIES.includes(cat.spendingCategory || '') ? cat.spendingCategory! : 'Other');
-        }
+        aiCategorisedCount = needsAI.length;
       }
 
-      // Persist rules derived from explicit columns (one per unique description)
       if (newRules.length > 0) {
         const seenPatterns = new Set<string>();
         const ruleCol = db.collection('users').doc(email).collection('category-rules');
@@ -333,17 +270,23 @@ export const expensesImport = onCall<ExpensesImportData>(
         return `${data.date}|${data.description}|${data.amount}`;
       }));
 
-      const preview = parsed.map((p, i) => ({
-        date: p.date,
-        description: p.description,
-        amount: p.amount,
-        category: categoryMap.get(i) || 'Other Deductions',
-        spendingCategory: spendingCategoryMap.get(i) || 'Other',
-        ...(spendingSubCategoryMap.get(i) ? { spendingSubCategory: spendingSubCategoryMap.get(i) } : {}),
-        ...(nonDeductibleMap.get(i) ? { nonDeductible: true } : {}),
-        financialYear: getFinancialYear(p.date),
-        duplicate: existingSet.has(`${p.date}|${p.description}|${p.amount}`),
-      }));
+      const needsAISet = new Set(needsAI.map(n => n.idx));
+
+      const preview = parsed.map((p, i) => {
+        const awaitingCategorisation = deferCategorisation && needsAISet.has(i);
+        return {
+          date: p.date,
+          description: p.description,
+          amount: p.amount,
+          category: categoryMap.get(i) || 'Other Deductions',
+          spendingCategory: spendingCategoryMap.get(i) || 'Other',
+          ...(spendingSubCategoryMap.get(i) ? { spendingSubCategory: spendingSubCategoryMap.get(i) } : {}),
+          ...(nonDeductibleMap.get(i) ? { nonDeductible: true } : {}),
+          financialYear: getFinancialYear(p.date),
+          duplicate: existingSet.has(`${p.date}|${p.description}|${p.amount}`),
+          ...(awaitingCategorisation ? { awaitingCategorisation: true } : {}),
+        };
+      });
 
       const duplicateCount = preview.filter(p => p.duplicate).length;
       const explicitCount = parsed.filter(p => p.explicitCategory || p.explicitDeductible !== undefined).length;
@@ -352,14 +295,20 @@ export const expensesImport = onCall<ExpensesImportData>(
         email,
         durationMs: Date.now() - start,
         action: 'preview',
-        geminiCalled: needsAI.length > 0,
+        geminiCalled: aiCategorisedCount > 0,
         rowCount: parsed.length,
         explicitRowCount: explicitCount,
-        aiCategorised: needsAI.length,
+        aiCategorised: aiCategorisedCount,
         ruleCategorised: parsed.length - needsAI.length - explicitCount,
         duplicateCount,
+        deferredCategorisation: deferCategorisation ? needsAI.length : 0,
       });
-      return { preview, total: preview.length, duplicateCount };
+      return {
+        preview,
+        total: preview.length,
+        duplicateCount,
+        deferredCategorisation: deferCategorisation ? needsAI.length : 0,
+      };
     }
 
     if (request.data.action === 'save') {
@@ -370,10 +319,12 @@ export const expensesImport = onCall<ExpensesImportData>(
 
       const batch = db.batch();
       const saved: Expense[] = [];
+      const toCategorise: CategoriseMessage[] = [];
 
       for (const data of expenseData) {
-        const { duplicate: _dup, owner, ...rest } = data as Record<string, unknown>;
+        const { duplicate: _dup, owner, awaitingCategorisation, ...rest } = data as Record<string, unknown>;
         const ref = db.collection('users').doc(email).collection('expenses').doc();
+        const needsAsyncCategorisation = Boolean(awaitingCategorisation);
         const expense: Expense = {
           id: ref.id,
           date: rest.date as string,
@@ -385,12 +336,35 @@ export const expensesImport = onCall<ExpensesImportData>(
           financialYear: rest.financialYear as string,
           ...(owner ? { owner: owner as string } : {}),
           ...(rest.nonDeductible ? { nonDeductible: true } : {}),
+          ...(needsAsyncCategorisation ? { categorisationStatus: 'pending' as const } : {}),
         };
         batch.set(ref, expense);
         saved.push(expense);
+
+        if (needsAsyncCategorisation) {
+          toCategorise.push({
+            email,
+            expenseId: ref.id,
+            description: expense.description,
+            amount: expense.amount,
+          });
+        }
       }
 
       await batch.commit();
+
+      let published = 0;
+      if (toCategorise.length > 0) {
+        const topic = getPubSub().topic(EXPENSE_CATEGORISE_TOPIC);
+        const results = await Promise.allSettled(
+          toCategorise.map(msg => topic.publishMessage({ json: msg })),
+        );
+        for (const r of results) {
+          if (r.status === 'fulfilled') published++;
+          else logger.error('Failed to publish categorise message', { error: r.reason });
+        }
+      }
+
       auditLog({
         endpoint: 'expensesImport',
         email,
@@ -398,8 +372,9 @@ export const expensesImport = onCall<ExpensesImportData>(
         action: 'save',
         geminiCalled: false,
         savedCount: saved.length,
+        enqueuedForCategorisation: published,
       });
-      return { saved, total: saved.length };
+      return { saved, total: saved.length, enqueuedForCategorisation: published };
     }
 
     throw new HttpsError('invalid-argument', 'Invalid action.');

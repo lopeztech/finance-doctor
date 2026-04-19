@@ -9,6 +9,7 @@ import {
   deleteField,
   writeBatch,
   orderBy,
+  onSnapshot,
   type CollectionReference,
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
@@ -65,6 +66,28 @@ export async function addExpenses(items: Omit<Expense, 'id'>[]): Promise<Expense
   }
   await batch.commit();
   return saved;
+}
+
+export function watchPendingCategorisation(
+  onChange: (counts: { pending: number; failed: number }) => void,
+): () => void {
+  if (guest.isGuest()) return () => {};
+  try {
+    const col = expensesCollection();
+    const q = query(col, where('categorisationStatus', 'in', ['pending', 'failed']));
+    return onSnapshot(q, snap => {
+      let pending = 0;
+      let failed = 0;
+      snap.forEach(d => {
+        const s = (d.data() as Expense).categorisationStatus;
+        if (s === 'pending') pending++;
+        else if (s === 'failed') failed++;
+      });
+      onChange({ pending, failed });
+    }, () => onChange({ pending: 0, failed: 0 }));
+  } catch {
+    return () => {};
+  }
 }
 
 export async function deleteExpense(id: string): Promise<void> {

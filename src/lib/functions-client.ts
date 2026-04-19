@@ -79,22 +79,36 @@ export interface ImportPreviewRow {
   nonDeductible?: boolean;
   financialYear: string;
   duplicate: boolean;
+  awaitingCategorisation?: boolean;
 }
 
-export async function importPreview(csvText: string): Promise<{ preview: ImportPreviewRow[]; total: number; duplicateCount: number }> {
+export interface ImportPreviewResponse {
+  preview: ImportPreviewRow[];
+  total: number;
+  duplicateCount: number;
+  deferredCategorisation?: number;
+}
+
+export interface ImportSaveResponse {
+  saved: Expense[];
+  total: number;
+  enqueuedForCategorisation?: number;
+}
+
+export async function importPreview(csvText: string): Promise<ImportPreviewResponse> {
   if (guest.isGuest()) {
     throw new Error('CSV import is disabled in Guest mode — sign in with Google to import real data.');
   }
-  const fn = httpsCallable<{ action: 'preview'; csvText: string }, { preview: ImportPreviewRow[]; total: number; duplicateCount: number }>(assertFunctions(), 'expensesImport');
+  const fn = httpsCallable<{ action: 'preview'; csvText: string }, ImportPreviewResponse>(assertFunctions(), 'expensesImport');
   const res = await fn({ action: 'preview', csvText });
   return res.data;
 }
 
-export async function importSave(expenses: Omit<Expense, 'id'>[]): Promise<{ saved: Expense[]; total: number }> {
+export async function importSave(expenses: (Omit<Expense, 'id'> & { awaitingCategorisation?: boolean })[]): Promise<ImportSaveResponse> {
   if (guest.isGuest()) {
     throw new Error('CSV import is disabled in Guest mode.');
   }
-  const fn = httpsCallable<{ action: 'save'; expenses: Omit<Expense, 'id'>[] }, { saved: Expense[]; total: number }>(assertFunctions(), 'expensesImport');
+  const fn = httpsCallable<{ action: 'save'; expenses: typeof expenses }, ImportSaveResponse>(assertFunctions(), 'expensesImport');
   const res = await fn({ action: 'save', expenses });
   return res.data;
 }
