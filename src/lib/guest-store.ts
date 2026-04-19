@@ -1,5 +1,5 @@
 import { GUEST_SEED } from './guest-seed';
-import type { Expense, FamilyMember, Investment } from './types';
+import type { Expense, FamilyMember, Investment, IncomeSource } from './types';
 
 const FLAG_KEY = 'fd_guest';
 
@@ -45,6 +45,7 @@ interface GuestState {
   categoryRules: CategoryRule[];
   adviceChats: Record<string, ChatMessage[] | string[]>;
   categorySettings?: CategorySettings;
+  incomeSources?: IncomeSource[];
 }
 
 function clone<T>(v: T): T {
@@ -167,4 +168,24 @@ export function setCategorySettings(settings: CategorySettings) {
     types: { ...settings.types },
     excluded: [...settings.excluded],
   };
+}
+
+// Income sources -----------------------------------------------------------
+
+export function listIncomeSources(): IncomeSource[] {
+  return [...(state.incomeSources || [])];
+}
+
+export function addIncomeSource(data: Omit<IncomeSource, 'id'>): IncomeSource {
+  const item: IncomeSource = { id: rid('inc'), ...data };
+  state.incomeSources = [...(state.incomeSources || []), item];
+  return item;
+}
+
+export function updateIncomeSource(id: string, patch: Partial<IncomeSource>) {
+  state.incomeSources = (state.incomeSources || []).map(i => i.id === id ? { ...i, ...patch } : i);
+}
+
+export function deleteIncomeSource(id: string) {
+  state.incomeSources = (state.incomeSources || []).filter(i => i.id !== id);
 }

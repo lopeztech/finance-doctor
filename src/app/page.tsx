@@ -348,7 +348,7 @@ export default function Dashboard() {
       {familyMembers.length === 0 && expenses.length > 0 && (
         <div className="alert alert-info mb-3">
           <i className="fa fa-info-circle me-2"></i>
-          <Link href="/investments" className="alert-link">Add family members</Link> with their salaries to see a personalised tax estimate on the dashboard.
+          <Link href="/cashflow" className="alert-link">Add family members</Link> with their salaries to see a personalised tax estimate on the dashboard.
         </div>
       )}
 

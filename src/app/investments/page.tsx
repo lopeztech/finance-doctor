@@ -107,6 +107,7 @@ interface FormState {
   purchasePrice: string;
   rentalIncome: string;
   liability: string;
+  monthlyRepayment: string;
   // Cash
   amount: string;
   interestRate: string;
@@ -122,7 +123,7 @@ interface FormState {
 const EMPTY_FORM: FormState = {
   name: '', type: INVESTMENT_TYPES[0], owner: '',
   units: '', buyPricePerUnit: '', currentValue: '',
-  propertyType: 'Investment', purchasePrice: '', rentalIncome: '', liability: '',
+  propertyType: 'Investment', purchasePrice: '', rentalIncome: '', liability: '', monthlyRepayment: '',
   amount: '', interestRate: '',
   faceValue: '', couponRate: '', maturityDate: '',
   balance: '', employerContribution: '',
@@ -138,7 +139,18 @@ function buildInvestment(form: FormState): Investment {
   }
   if (form.type === 'Property') {
     const pp = parseFloat(form.purchasePrice);
-    return { ...base, propertyType: form.propertyType as 'Investment' | 'Owner Occupied', costBasis: pp, currentValue: parseFloat(form.currentValue), rentalIncomeAnnual: parseFloat(form.rentalIncome) || 0, liability: parseFloat(form.liability) || 0 };
+    const rate = parseFloat(form.interestRate);
+    const repayment = parseFloat(form.monthlyRepayment);
+    return {
+      ...base,
+      propertyType: form.propertyType as 'Investment' | 'Owner Occupied',
+      costBasis: pp,
+      currentValue: parseFloat(form.currentValue),
+      rentalIncomeAnnual: parseFloat(form.rentalIncome) || 0,
+      liability: parseFloat(form.liability) || 0,
+      ...(Number.isFinite(rate) && rate > 0 ? { interestRate: rate } : {}),
+      ...(Number.isFinite(repayment) && repayment > 0 ? { monthlyRepayment: repayment } : {}),
+    };
   }
   if (form.type === 'Cash / Term Deposit') {
     const amt = parseFloat(form.amount);
@@ -217,6 +229,14 @@ function TypeSpecificFields({ form, setForm }: { form: FormState; setForm: (f: F
         <div className="col-12">
           <label className="form-label text-muted small mb-1">Mortgage / liability</label>
           <CurrencyInput placeholder="0.00" value={form.liability} onChange={v => setForm({ ...form, liability: v })} step="1" />
+        </div>
+        <div className="col-12">
+          <label className="form-label text-muted small mb-1">Interest rate</label>
+          <PercentInput placeholder="0.00" value={form.interestRate} onChange={v => setForm({ ...form, interestRate: v })} />
+        </div>
+        <div className="col-12">
+          <label className="form-label text-muted small mb-1">Monthly repayment (P&amp;I)</label>
+          <CurrencyInput placeholder="0.00" value={form.monthlyRepayment} onChange={v => setForm({ ...form, monthlyRepayment: v })} step="1" />
         </div>
         <div className="col-12">
           <label className="form-label text-muted small mb-1">Rental income per year</label>
@@ -464,6 +484,8 @@ export default function InvestmentsPage() {
       f.currentValue = String(inv.currentValue);
       f.liability = String(inv.liability || '');
       f.rentalIncome = String(inv.rentalIncomeAnnual || '');
+      f.interestRate = String(inv.interestRate || '');
+      f.monthlyRepayment = String(inv.monthlyRepayment || '');
     } else if (inv.type === 'Cash / Term Deposit') {
       f.amount = String(inv.currentValue);
       f.interestRate = String(inv.interestRate || '');

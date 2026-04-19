@@ -4,7 +4,8 @@ import { getGeminiModel } from '../lib/gemini';
 import { requireUserEmail } from '../lib/auth';
 import { auditLog } from '../lib/audit';
 import { EXPENSES_SYSTEM_PROMPT, buildExpensesPrompt } from '../lib/prompts';
-import type { Expense, ChatMessage } from '../lib/types';
+import { computeCashflowSummary } from '../lib/cashflow-calc';
+import type { Expense, ChatMessage, FamilyMember, Investment, IncomeSource } from '../lib/types';
 
 interface ExpensesAdviceData {
   history?: ChatMessage[];
@@ -19,9 +20,12 @@ export const expensesAdvice = onCall<ExpensesAdviceData, Promise<{ text: string 
     const { history, followUp } = request.data;
     const db = getDb();
 
-    const [expensesSnap, settingsSnap] = await Promise.all([
+    const [expensesSnap, settingsSnap, membersSnap, investmentsSnap, incomeSourcesSnap] = await Promise.all([
       db.collection('users').doc(email).collection('expenses').get(),
       db.collection('users').doc(email).collection('meta').doc('category-settings').get(),
+      db.collection('users').doc(email).collection('family-members').get(),
+      db.collection('users').doc(email).collection('investments').get(),
+      db.collection('users').doc(email).collection('income-sources').get(),
     ]);
     const allExpenses: Expense[] = expensesSnap.docs.map(d => d.data() as Expense);
     const settings = settingsSnap.exists ? (settingsSnap.data() as { types?: Record<string, string>; excluded?: string[] }) : {};
@@ -31,7 +35,23 @@ export const expensesAdvice = onCall<ExpensesAdviceData, Promise<{ text: string 
       throw new HttpsError('failed-precondition', 'No expenses found to analyse.');
     }
 
-    const initialPrompt = buildExpensesPrompt(expenses, (settings.types || {}) as Record<string, 'essential' | 'committed' | 'discretionary'>);
+    const members: FamilyMember[] = membersSnap.docs.map(d => d.data() as FamilyMember);
+    const investments: Investment[] = investmentsSnap.docs.map(d => d.data() as Investment);
+    const incomeSources: IncomeSource[] = incomeSourcesSnap.docs.map(d => d.data() as IncomeSource);
+    const cashflow = computeCashflowSummary({
+      members,
+      investments,
+      expenses: allExpenses,
+      incomeSources,
+      categoryTypes: (settings.types || {}) as Record<string, 'essential' | 'committed' | 'discretionary'>,
+      excluded: Array.from(excluded),
+    });
+
+    const initialPrompt = buildExpensesPrompt(
+      expenses,
+      (settings.types || {}) as Record<string, 'essential' | 'committed' | 'discretionary'>,
+      cashflow,
+    );
 
     const contents: { role: string; parts: { text: string }[] }[] = [
       { role: 'user', parts: [{ text: initialPrompt }] },
@@ -67,6 +87,11 @@ export const expensesAdvice = onCall<ExpensesAdviceData, Promise<{ text: string 
       geminiCalled: true,
       expenseCount: expenses.length,
       excludedCount: allExpenses.length - expenses.length,
+      membersCount: members.length,
+      investmentsCount: investments.length,
+      incomeSourcesCount: incomeSources.length,
+      surplusMonthly: Math.round(cashflow.surplusMonthly),
+      savingsRatePct: Math.round(cashflow.savingsRatePct * 10) / 10,
       followUp: Boolean(followUp),
       responseChars: full.length,
       streamed: Boolean(request.acceptsStreaming),

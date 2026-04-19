@@ -16,6 +16,19 @@ export interface FamilyMember {
   name: string;
   salary: number;
   job?: string;
+  superSalarySacrifice?: number;
+}
+
+export type IncomeSourceType = 'dividend' | 'interest' | 'side' | 'other';
+export type IncomeCadence = 'weekly' | 'fortnightly' | 'monthly' | 'annual';
+
+export interface IncomeSource {
+  id: string;
+  type: IncomeSourceType;
+  description: string;
+  amount: number;
+  cadence: IncomeCadence;
+  owner?: string;
 }
 
 export interface Investment {
@@ -34,6 +47,7 @@ export interface Investment {
   employerContribution?: number;
   couponRate?: number;
   maturityDate?: string;
+  monthlyRepayment?: number;
 }
 
 export interface ChatMessage {

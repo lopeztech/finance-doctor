@@ -67,6 +67,7 @@ Key context:
 - Each spending category is classified into one of three types: ESSENTIAL (unavoidable — groceries, utilities, transport, healthcare, insurance, housing), COMMITTED (reducible fixed costs — subscriptions, phone plans, gyms), or DISCRETIONARY (fully avoidable — dining, entertainment, shopping, travel).
 - The user has already excluded tax-only expenses (e.g. investment property interest) from the data you see, so everything below reflects genuine cashflow.
 - Prioritise cuts on DISCRETIONARY first, then COMMITTED (renegotiate/downgrade/cancel), and treat ESSENTIAL as a floor unless there is a clear overspend signal.
+- The user provides a full household cashflow context: net income, outflows, surplus/deficit, and savings rate. Anchor your diagnosis in that context — a $500/mo subscription is very different against $6k vs $20k monthly income. Recommend cuts that raise the savings rate toward a healthy 20%+ target for Australian households.
 - Subscription creep is a common cashflow leak — flag repeat small charges
 - Lifestyle inflation: rising dining/takeaway and shopping often mask underlying budget drift
 - Tax-deductible expenses (nonDeductible=false and tax category ≠ "Other Deductions") shouldn't be cut without considering the after-tax cost
@@ -252,9 +253,24 @@ const DEFAULT_CATEGORY_TYPES: Record<string, 'essential' | 'committed' | 'discre
   'Travel & Holidays': 'discretionary', 'Utilities & Bills': 'essential', 'Other': 'discretionary',
 };
 
+interface CashflowSummaryInput {
+  salariesGrossMonthly: number;
+  salariesNetMonthly: number;
+  otherIncomeMonthly: number;
+  rentalIncomeMonthly: number;
+  totalIncomeMonthly: number;
+  loanRepaymentsMonthly: number;
+  expensesMonthly: number;
+  outflowsMonthly: number;
+  surplusMonthly: number;
+  savingsRatePct: number;
+  members: Array<{ name: string; grossAnnual: number; netAnnual: number; totalTax: number; taxableIncome: number }>;
+}
+
 export function buildExpensesPrompt(
   expenses: ExpenseInput[],
   categoryTypes: Record<string, 'essential' | 'committed' | 'discretionary'> = {},
+  cashflow?: CashflowSummaryInput,
 ): string {
   const resolveType = (cat: string) => categoryTypes[cat] ?? DEFAULT_CATEGORY_TYPES[cat];
   const totalSpend = expenses.reduce((s, e) => s + e.amount, 0);
@@ -325,8 +341,26 @@ export function buildExpensesPrompt(
     .map(([m, t]) => `- ${m}: $${t.toFixed(2)}`)
     .join('\n');
 
-  return `Analyse my household spending and deliver a cashflow diagnosis and a prescription for what to drop or cut.
+  const cashflowBlock = cashflow && cashflow.members.length > 0 ? `
+Family cashflow context (use this as the denominator for your analysis):
+- Net household income (monthly, after tax + super sacrifice): $${cashflow.totalIncomeMonthly.toFixed(2)}
+- Salaries gross (monthly): $${cashflow.salariesGrossMonthly.toFixed(2)}
+- Rental income (monthly): $${cashflow.rentalIncomeMonthly.toFixed(2)}
+- Other income (monthly): $${cashflow.otherIncomeMonthly.toFixed(2)}
+- Loan repayments (monthly): $${cashflow.loanRepaymentsMonthly.toFixed(2)}
+- Reported household expenses (monthly, excluding user-excluded categories): $${cashflow.expensesMonthly.toFixed(2)}
+- Total monthly outflows (loan repayments + expenses): $${cashflow.outflowsMonthly.toFixed(2)}
+- Monthly surplus (or deficit if negative): $${cashflow.surplusMonthly.toFixed(2)}
+- Savings rate: ${cashflow.savingsRatePct.toFixed(1)}%
 
+Per-member tax position:
+${cashflow.members.map(m => `- ${m.name}: gross $${m.grossAnnual.toFixed(0)}/yr, taxable $${m.taxableIncome.toFixed(0)}, tax $${m.totalTax.toFixed(0)}, net $${m.netAnnual.toFixed(0)}`).join('\n')}
+
+Your diagnosis MUST reference the savings rate, surplus/deficit, and whether outflows are sustainable given income. Frame cuts around raising the savings rate, not just lowering a category total.
+` : '';
+
+  return `Analyse my household spending and deliver a cashflow diagnosis and a prescription for what to drop or cut.
+${cashflowBlock}
 Overall:
 - Total spend observed: $${totalSpend.toFixed(2)}
 - Transactions: ${expenses.length}
@@ -349,8 +383,8 @@ Likely recurring vendors (3+ hits):
 ${recurringVendors}
 
 Please provide:
-1. A cashflow health assessment (where the money goes, which categories dominate, any drift)
-2. A ranked list of specific expenses to consider dropping or reducing, with estimated monthly saving per item
+1. A cashflow health assessment — including the current savings rate, whether income comfortably covers outflows, and the biggest structural risks
+2. A ranked list of specific expenses to consider dropping or reducing, with estimated monthly saving per item AND the impact on savings rate
 3. Subscription / recurring creep to review
 4. Lifestyle shifts that would have the biggest impact
 5. Any risks if these cuts are made (e.g. cutting deductible work expenses, kid-related needs)`;
