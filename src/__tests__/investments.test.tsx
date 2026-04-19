@@ -13,6 +13,14 @@ jest.mock('@/components/allocation-chart', () => ({
   default: () => null,
 }));
 
+jest.mock('@/components/investment-charts', () => ({
+  __esModule: true,
+  CostVsValueChart: () => null,
+  GainLossChart: () => null,
+  OwnerAllocationChart: () => null,
+  ReturnByTypeChart: () => null,
+}));
+
 const mockListInvestments = jest.fn();
 jest.mock('@/lib/investments-repo', () => ({
   listInvestments: () => mockListInvestments(),
