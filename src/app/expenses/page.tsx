@@ -10,7 +10,7 @@ import { upsertCategoryRule } from '@/lib/category-rules-repo';
 import { getCategorySettings, setCategoryType, resolveType, type CategorySettings, type SpendingCategoryType } from '@/lib/category-settings-repo';
 import RecurringModal from '@/components/recurring-modal';
 import BulkActionsBar from '@/components/bulk-actions-bar';
-import { CategoryDonut, MonthlyTrend, TopVendorsChart } from '@/components/spending-charts';
+import { MonthlyTrend, TopVendorsChart } from '@/components/spending-charts';
 import { ViewToggle, useViewMode } from '@/components/view-toggle';
 import { PageFilters, type FilterGroup } from '@/components/page-filters';
 
@@ -743,43 +743,6 @@ export default function ExpensesPage() {
       {filteredExpenses.length > 0 && (
         <Panel>
           <PanelHeader noButton>
-            <i className="fa fa-chart-simple me-2"></i>Overview Charts
-          </PanelHeader>
-          <PanelBody>
-            <div className="row g-3">
-              <div className="col-xl-4 col-md-6">
-                <h6 className="small text-muted text-uppercase mb-2"><i className="fa fa-chart-pie me-1"></i>By Category</h6>
-                <CategoryDonut totals={categoryTotals} colors={SPENDING_COLORS} />
-              </div>
-              <div className="col-xl-4 col-md-6">
-                <h6 className="small text-muted text-uppercase mb-2"><i className="fa fa-chart-line me-1"></i>Monthly Trend</h6>
-                <MonthlyTrend monthlyTotals={monthlyTotals} />
-              </div>
-              <div className="col-xl-4 col-md-12">
-                <h6 className="small text-muted text-uppercase mb-2"><i className="fa fa-ranking-star me-1"></i>Top Vendors</h6>
-                <TopVendorsChart vendors={vendorList} colors={SPENDING_COLORS} />
-              </div>
-            </div>
-          </PanelBody>
-        </Panel>
-      )}
-      </>}
-
-      {mode === 'detail' && <>
-      {selectedIds.size > 0 && (
-        <BulkActionsBar
-          count={selectedIds.size}
-          categories={allSpendingCategories}
-          changeCategoryLabel="Move to"
-          onChangeCategory={bulkChangeCategory}
-          onDelete={bulkDelete}
-          onClear={clearSelection}
-        />
-      )}
-
-      {filteredExpenses.length > 0 && (
-        <Panel>
-          <PanelHeader noButton>
             <i className="fa fa-chart-column me-2"></i>Spending Overview
           </PanelHeader>
           <PanelBody>
@@ -817,6 +780,30 @@ export default function ExpensesPage() {
             </div>
           </PanelBody>
         </Panel>
+      )}
+
+      {filteredExpenses.length > 0 && vendorList.length > 0 && (
+        <Panel>
+          <PanelHeader noButton>
+            <i className="fa fa-ranking-star me-2"></i>Top Vendors
+          </PanelHeader>
+          <PanelBody>
+            <TopVendorsChart vendors={vendorList} colors={SPENDING_COLORS} />
+          </PanelBody>
+        </Panel>
+      )}
+      </>}
+
+      {mode === 'detail' && <>
+      {selectedIds.size > 0 && (
+        <BulkActionsBar
+          count={selectedIds.size}
+          categories={allSpendingCategories}
+          changeCategoryLabel="Move to"
+          onChangeCategory={bulkChangeCategory}
+          onDelete={bulkDelete}
+          onClear={clearSelection}
+        />
       )}
 
       <Panel>
