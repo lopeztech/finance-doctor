@@ -11,6 +11,7 @@ import { listIncome, deleteIncome } from '@/lib/income-repo';
 import { getCategorySettings, type CategorySettings, type SpendingCategoryType } from '@/lib/category-settings-repo';
 import { computeCashflow, type CashflowSnapshot } from '@/lib/cashflow-calc';
 import { ViewToggle, useViewMode } from '@/components/view-toggle';
+import { PageFilters, type FilterGroup } from '@/components/page-filters';
 
 const INCOME_TYPES: { value: IncomeSourceType; label: string; icon: string }[] = [
   { value: 'dividend', label: 'Dividend', icon: 'fa-chart-line' },
@@ -18,6 +19,25 @@ const INCOME_TYPES: { value: IncomeSourceType; label: string; icon: string }[] =
   { value: 'side', label: 'Side income', icon: 'fa-briefcase' },
   { value: 'other', label: 'Other', icon: 'fa-circle-dollar-to-slot' },
 ];
+
+const INCOME_TX_TYPE_ORDER = ['Salary', 'Dividend', 'Interest', 'Side Income', 'Other Income', 'Rental'] as const;
+type IncomeTxType = typeof INCOME_TX_TYPE_ORDER[number];
+const INCOME_TX_ICONS: Record<IncomeTxType, string> = {
+  'Salary': 'fa-briefcase',
+  'Dividend': 'fa-chart-line',
+  'Interest': 'fa-percent',
+  'Side Income': 'fa-laptop-code',
+  'Other Income': 'fa-circle-dollar-to-slot',
+  'Rental': 'fa-house',
+};
+const INCOME_TX_COLORS: Record<IncomeTxType, string> = {
+  'Salary': '#0d6efd',
+  'Dividend': '#20c997',
+  'Interest': '#ffc107',
+  'Side Income': '#6f42c1',
+  'Other Income': '#6c757d',
+  'Rental': '#dc3545',
+};
 
 const CADENCES: IncomeCadence[] = ['weekly', 'fortnightly', 'monthly', 'annual'];
 
@@ -41,6 +61,18 @@ export default function CashflowPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [incomeSources, setIncomeSources] = useState<IncomeSource[]>([]);
   const [income, setIncome] = useState<Income[]>([]);
+  const [selectedOwner, setSelectedOwner] = useState('');
+  const [selectedYear, setSelectedYear] = useState('all');
+  const [selectedMonth, setSelectedMonth] = useState('all');
+  const [expandedIncomeTypes, setExpandedIncomeTypes] = useState<Set<string>>(new Set());
+
+  const toggleIncomeType = (t: string) => {
+    setExpandedIncomeTypes(prev => {
+      const n = new Set(prev);
+      if (n.has(t)) n.delete(t); else n.add(t);
+      return n;
+    });
+  };
   const [categorySettings, setCategorySettings] = useState<CategorySettings>({ types: {}, excluded: [] });
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<View>('monthly');
@@ -166,7 +198,18 @@ export default function CashflowPage() {
     );
   }
 
-  const snap: CashflowSnapshot = computeCashflow({ members, investments, expenses, incomeSources, categorySettings, income });
+  const matchesFilters = (date: string, owner: string | undefined): boolean => {
+    if (selectedYear !== 'all' && date.substring(0, 4) !== selectedYear) return false;
+    if (selectedMonth !== 'all' && date.substring(5, 7) !== selectedMonth) return false;
+    if (selectedOwner && owner !== selectedOwner) return false;
+    return true;
+  };
+
+  const filteredExpenses = expenses.filter(e => matchesFilters(e.date, e.owner));
+  const filteredIncome = income.filter(r => matchesFilters(r.date, r.owner));
+  const anyFilterActive = selectedOwner !== '' || selectedYear !== 'all' || selectedMonth !== 'all';
+
+  const snap: CashflowSnapshot = computeCashflow({ members, investments, expenses: filteredExpenses, incomeSources, categorySettings, income: filteredIncome });
 
   const removeIncomeRow = async (id: string) => {
     await deleteIncome(id);
@@ -189,6 +232,44 @@ export default function CashflowPage() {
           <ViewToggle value={mode} onChange={setMode} />
         </div>
       </div>
+
+      {(() => {
+        const years = [...new Set([
+          ...income.map(r => r.date?.substring(0, 4)),
+          ...expenses.map(e => e.date?.substring(0, 4)),
+        ].filter(Boolean) as string[])].sort().reverse();
+        const groups: FilterGroup[] = [];
+        if (members.length > 0) {
+          groups.push({
+            id: 'owner', icon: 'fa-user', label: 'Member',
+            value: selectedOwner, onChange: (v: string) => setSelectedOwner(v),
+            options: [
+              { value: '', label: 'All' },
+              ...members.map(m => ({ value: m.name, label: m.name })),
+            ],
+          });
+        }
+        groups.push({
+          id: 'year', icon: 'fa-calendar', label: 'Year',
+          value: selectedYear, onChange: (v: string) => setSelectedYear(v),
+          options: [
+            { value: 'all', label: 'All' },
+            ...years.map(y => ({ value: y, label: y })),
+          ],
+        });
+        groups.push({
+          id: 'month', icon: 'fa-calendar-day', label: 'Month',
+          value: selectedMonth, onChange: (v: string) => setSelectedMonth(v),
+          options: [
+            { value: 'all', label: 'All' },
+            ...['01','02','03','04','05','06','07','08','09','10','11','12'].map(m => ({
+              value: m,
+              label: new Date(`2000-${m}-01`).toLocaleDateString('en-AU', { month: 'short' }),
+            })),
+          ],
+        });
+        return <PageFilters groups={groups} className="mb-3" />;
+      })()}
 
       {hasData && mode === 'summary' && (
         <div className="row mb-3">
@@ -414,70 +495,85 @@ export default function CashflowPage() {
             </div>
           )}
 
-          {income.length > 0 && (() => {
-            const byType = income.reduce((acc, row) => {
+          {filteredIncome.length > 0 && (() => {
+            const byType = filteredIncome.reduce((acc, row) => {
               if (!acc[row.type]) acc[row.type] = [];
               acc[row.type].push(row);
               return acc;
             }, {} as Record<string, Income[]>);
-            const typeOrder = ['Salary', 'Dividend', 'Interest', 'Side Income', 'Other Income', 'Rental'] as const;
+            const grandTotal = filteredIncome.reduce((s, r) => s + r.amount, 0);
+            const visible = INCOME_TX_TYPE_ORDER.filter(t => byType[t]?.length);
             return (
               <div className="mt-4 pt-3 border-top">
-                <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
-                  <h6 className="mb-0"><i className="fa fa-upload me-2 text-muted"></i>Uploaded income transactions</h6>
-                  <span className="badge bg-light text-dark border">{income.length} row{income.length === 1 ? '' : 's'}</span>
-                  <span className="text-muted small ms-auto">
-                    Salary and Rental rows are shown here but excluded from totals to avoid double-counting the family-member salaries and property rentals above.
-                  </span>
-                </div>
-                {typeOrder.filter(t => byType[t]?.length).map(type => {
+                {visible.map(type => {
                   const rows = byType[type];
                   const total = rows.reduce((s, r) => s + r.amount, 0);
+                  const pct = grandTotal > 0 ? (total / grandTotal) * 100 : 0;
+                  const isExpanded = expandedIncomeTypes.has(type);
                   const excludedFromCalc = type === 'Salary' || type === 'Rental';
+                  const color = INCOME_TX_COLORS[type];
                   return (
-                    <div key={type} className="mb-3">
-                      <div className="d-flex align-items-center mb-1">
-                        <span className="fw-bold small">{type}</span>
-                        <span className="badge bg-light text-dark border ms-2">{rows.length}</span>
-                        <span className="ms-auto small text-muted">Total ${fmt(total)}</span>
-                        {excludedFromCalc && <span className="badge bg-warning text-dark ms-2 small" title="Not summed into cashflow totals">not summed</span>}
+                    <div key={type} className="mb-2">
+                      <div
+                        className="d-flex align-items-center p-2 rounded"
+                        style={{ cursor: 'pointer', backgroundColor: isExpanded ? 'var(--bs-light)' : 'transparent' }}
+                        onClick={() => toggleIncomeType(type)}
+                      >
+                        <i className={`fa fa-chevron-${isExpanded ? 'down' : 'right'} me-2 text-muted`} style={{ width: '12px', fontSize: '0.7rem' }}></i>
+                        <i className={`fa ${INCOME_TX_ICONS[type]} me-2`} style={{ color }}></i>
+                        <span className="fw-bold flex-grow-1">{type}</span>
+                        {excludedFromCalc && (
+                          <span className="badge bg-warning text-dark me-2 small" title="Not summed into Cashflow totals — the definitional salary / property rental above is the source of truth.">not summed</span>
+                        )}
+                        <span className="badge bg-secondary me-2">{rows.length}</span>
+                        <span className="fw-bold me-2">${fmt(total)}</span>
+                        <span className="small text-muted" style={{ width: '45px', textAlign: 'right' }}>{pct.toFixed(1)}%</span>
                       </div>
-                      <div className="table-responsive">
-                        <table className="table table-sm table-hover mb-0">
-                          <thead>
-                            <tr>
-                              <th style={{ width: '110px' }}>Date</th>
-                              <th>Description</th>
-                              <th>Owner</th>
-                              <th className="text-end" style={{ width: '120px' }}>Amount</th>
-                              <th style={{ width: '80px' }}>FY</th>
-                              <th style={{ width: '40px' }}></th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {rows.map(row => (
-                              <tr key={row.id}>
-                                <td className="small">{new Date(row.date).toLocaleDateString('en-AU')}</td>
-                                <td className="small">{row.description}</td>
-                                <td className="small text-muted">{row.owner || 'Shared'}</td>
-                                <td className="text-end small">${fmt(row.amount)}</td>
-                                <td className="small text-muted">{row.financialYear}</td>
-                                <td>
-                                  <button className="btn btn-xs btn-outline-danger" onClick={() => removeIncomeRow(row.id)} title="Delete">
-                                    <i className="fa fa-times"></i>
-                                  </button>
-                                </td>
+                      {isExpanded && (
+                        <div className="ms-4 mt-1 mb-2 table-responsive">
+                          <table className="table table-sm table-hover mb-0">
+                            <thead>
+                              <tr>
+                                <th style={{ width: '110px' }}>Date</th>
+                                <th>Description</th>
+                                <th>Owner</th>
+                                <th className="text-end" style={{ width: '120px' }}>Amount</th>
+                                <th style={{ width: '80px' }}>FY</th>
+                                <th style={{ width: '40px' }}></th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                            </thead>
+                            <tbody>
+                              {rows.map(row => (
+                                <tr key={row.id}>
+                                  <td className="small">{new Date(row.date).toLocaleDateString('en-AU')}</td>
+                                  <td className="small">{row.description}</td>
+                                  <td className="small text-muted">{row.owner || 'Shared'}</td>
+                                  <td className="text-end small">${fmt(row.amount)}</td>
+                                  <td className="small text-muted">{row.financialYear}</td>
+                                  <td>
+                                    <button className="btn btn-xs btn-outline-danger" onClick={() => removeIncomeRow(row.id)} title="Delete">
+                                      <i className="fa fa-times"></i>
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
               </div>
             );
           })()}
+
+          {income.length > 0 && filteredIncome.length === 0 && anyFilterActive && (
+            <div className="mt-3 text-muted small text-center py-3">
+              <i className="fa fa-filter-circle-xmark me-2"></i>
+              No uploaded income transactions match the current filters.
+            </div>
+          )}
         </PanelBody>
       </Panel>
 
