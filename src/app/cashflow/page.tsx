@@ -8,7 +8,7 @@ import { listFamilyMembers, addFamilyMember, updateFamilyMember, deleteFamilyMem
 import { listInvestments } from '@/lib/investments-repo';
 import { listExpenses } from '@/lib/expenses-repo';
 import { listIncomeSources, addIncomeSource, updateIncomeSource, deleteIncomeSource } from '@/lib/income-sources-repo';
-import { listIncome, deleteIncome } from '@/lib/income-repo';
+import { listIncome, deleteIncome, updateIncome } from '@/lib/income-repo';
 import { getCategorySettings, type CategorySettings, type SpendingCategoryType } from '@/lib/category-settings-repo';
 import { computeCashflow, type CashflowSnapshot } from '@/lib/cashflow-calc';
 import { ViewToggle, useViewMode } from '@/components/view-toggle';
@@ -223,6 +223,23 @@ export default function CashflowPage() {
   const removeIncomeRow = async (id: string) => {
     await deleteIncome(id);
     setIncome(prev => prev.filter(i => i.id !== id));
+  };
+
+  const reassignIncomeOwner = async (id: string, nextOwner: string) => {
+    const prevRow = income.find(r => r.id === id);
+    if (!prevRow) return;
+    const patch: Partial<Income> = nextOwner ? { owner: nextOwner } : { owner: undefined };
+    setIncome(prev => prev.map(r => {
+      if (r.id !== id) return r;
+      const { owner: _drop, ...rest } = r;
+      return nextOwner ? { ...rest, owner: nextOwner } : (rest as Income);
+    }));
+    try {
+      await updateIncome(id, patch);
+    } catch (err) {
+      setIncome(prev => prev.map(r => r.id === id ? prevRow : r));
+      alert(err instanceof Error ? err.message : 'Failed to update owner');
+    }
   };
   const mult = view === 'monthly' ? 1 : 12;
   const periodLabel = view === 'monthly' ? '/mo' : '/yr';
@@ -610,11 +627,28 @@ export default function CashflowPage() {
                               </tr>
                             </thead>
                             <tbody>
-                              {rows.map(row => (
+                              {rows.map(row => {
+                                const knownOwner = !row.owner
+                                  || row.owner === 'Joint'
+                                  || members.some(m => m.name.toLowerCase() === row.owner!.toLowerCase());
+                                return (
                                 <tr key={row.id}>
                                   <td className="small">{new Date(row.date).toLocaleDateString('en-AU')}</td>
                                   <td className="small">{row.description}</td>
-                                  <td className="small text-muted">{row.owner || 'Shared'}</td>
+                                  <td>
+                                    <select
+                                      className={`form-select form-select-sm ${!knownOwner ? 'border-warning' : ''}`}
+                                      style={{ fontSize: '0.75rem', paddingTop: '0.15rem', paddingBottom: '0.15rem', minWidth: '110px' }}
+                                      value={row.owner || ''}
+                                      onChange={e => reassignIncomeOwner(row.id, e.target.value)}
+                                      title={!knownOwner ? `"${row.owner}" doesn't match any family member — not attributed to anyone's Taxable.` : undefined}
+                                    >
+                                      <option value="">— Shared —</option>
+                                      {members.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                                      <option value="Joint">Joint</option>
+                                      {!knownOwner && row.owner && <option value={row.owner}>{row.owner} (unmatched)</option>}
+                                    </select>
+                                  </td>
                                   <td className="text-end small">${fmt(row.amount)}</td>
                                   <td className="small text-muted">{row.financialYear}</td>
                                   <td>
@@ -623,7 +657,8 @@ export default function CashflowPage() {
                                     </button>
                                   </td>
                                 </tr>
-                              ))}
+                                );
+                              })}
                             </tbody>
                           </table>
                         </div>

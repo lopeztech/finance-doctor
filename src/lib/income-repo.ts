@@ -3,6 +3,8 @@ import {
   getDocs,
   doc,
   deleteDoc,
+  updateDoc,
+  deleteField,
   query,
   orderBy,
   type CollectionReference,
@@ -26,6 +28,17 @@ export async function listIncome(): Promise<Income[]> {
   if (guest.isGuest()) return [];
   const snap = await getDocs(query(incomeCollection(), orderBy('date', 'desc')));
   return snap.docs.map(d => ({ id: d.id, ...d.data() } as Income));
+}
+
+export async function updateIncome(id: string, patch: Partial<Income>): Promise<void> {
+  if (guest.isGuest()) return;
+  if (!db) throw new Error('Firestore is not initialised');
+  const ref = doc(db, 'users', getUserKey(), 'income', id);
+  const payload: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(patch)) {
+    payload[k] = v === undefined ? deleteField() : v;
+  }
+  await updateDoc(ref, payload);
 }
 
 export async function deleteIncome(id: string): Promise<void> {
