@@ -143,51 +143,41 @@ export async function migrateCategorise(batchSize = 50): Promise<MigrateCategori
   return res.data;
 }
 
-export type CashflowDestination = 'family-member' | 'income-source' | 'property' | 'skip';
-export type CashflowAction = 'create' | 'update' | 'skip';
+import type { IncomeType, Income } from './types';
 
 export interface CashflowPreviewRow {
-  rowIndex: number;
-  rawType: string;
-  destination: CashflowDestination;
-  action: CashflowAction;
-  label: string;
+  date: string;
+  description: string;
   amount: number;
-  cadence?: 'weekly' | 'fortnightly' | 'monthly' | 'annual';
+  type: IncomeType;
+  financialYear: string;
   owner?: string;
+  duplicate: boolean;
   error?: string;
-  // Payloads are opaque to the client; we round-trip them back to save.
-  familyMember?: Record<string, unknown>;
-  familyMemberId?: string;
-  incomeSource?: Record<string, unknown>;
-  investmentId?: string;
-  investmentRentalMonthly?: number;
 }
 
 export interface CashflowImportPreviewResponse {
   preview: CashflowPreviewRow[];
   total: number;
-  skipped: number;
-  creates: number;
-  updates: number;
+  duplicateCount: number;
+  errorCount: number;
 }
 
 export interface CashflowImportSaveResponse {
-  familyMembersWritten: number;
-  incomeSourcesWritten: number;
-  propertiesUpdated: number;
+  saved: Income[];
+  total: number;
 }
 
-export async function cashflowImportPreview(csvText: string): Promise<CashflowImportPreviewResponse> {
+export async function cashflowImportPreview(csvText: string, owner?: string): Promise<CashflowImportPreviewResponse> {
   if (guest.isGuest()) throw new Error('Cashflow CSV import is disabled in Guest mode.');
-  const fn = httpsCallable<{ action: 'preview'; csvText: string }, CashflowImportPreviewResponse>(assertFunctions(), 'cashflowImport');
-  const res = await fn({ action: 'preview', csvText });
+  const fn = httpsCallable<{ action: 'preview'; csvText: string; owner?: string }, CashflowImportPreviewResponse>(assertFunctions(), 'cashflowImport');
+  const res = await fn({ action: 'preview', csvText, ...(owner ? { owner } : {}) });
   return res.data;
 }
 
-export async function cashflowImportSave(rows: CashflowPreviewRow[]): Promise<CashflowImportSaveResponse> {
+export async function cashflowImportSave(rows: Omit<Income, 'id'>[]): Promise<CashflowImportSaveResponse> {
   if (guest.isGuest()) throw new Error('Cashflow CSV import is disabled in Guest mode.');
-  const fn = httpsCallable<{ action: 'save'; rows: CashflowPreviewRow[] }, CashflowImportSaveResponse>(assertFunctions(), 'cashflowImport');
+  const fn = httpsCallable<{ action: 'save'; rows: Omit<Income, 'id'>[] }, CashflowImportSaveResponse>(assertFunctions(), 'cashflowImport');
   const res = await fn({ action: 'save', rows });
   return res.data;
 }

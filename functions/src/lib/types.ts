@@ -35,6 +35,20 @@ export interface IncomeSource {
   owner?: string;
 }
 
+export type IncomeType = 'Salary' | 'Dividend' | 'Interest' | 'Side Income' | 'Other Income' | 'Rental';
+
+export const INCOME_TYPES: IncomeType[] = ['Salary', 'Dividend', 'Interest', 'Side Income', 'Other Income', 'Rental'];
+
+export interface Income {
+  id: string;
+  date: string;
+  description: string;
+  amount: number;
+  type: IncomeType;
+  financialYear: string;
+  owner?: string;
+}
+
 export interface Investment {
   id: string;
   name: string;

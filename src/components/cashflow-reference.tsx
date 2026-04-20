@@ -2,70 +2,16 @@
 
 import { useState } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
+import { INCOME_TYPES } from '@/lib/types';
 
-interface TypeSpec {
-  name: string;
-  destination: string;
-  required: string[];
-  optional: string[];
-  note: string;
-}
-
-const TYPES: TypeSpec[] = [
-  {
-    name: 'Salary',
-    destination: 'Family members',
-    required: ['Owner (member name)', 'Amount (annual)'],
-    optional: ['Job', 'Super Salary Sacrifice (annual)'],
-    note: 'Upserts by Owner. Cadence is implicitly annual and ignored.',
-  },
-  {
-    name: 'Dividend',
-    destination: 'Income sources',
-    required: ['Description (e.g. VAS)', 'Amount', 'Cadence'],
-    optional: ['Owner'],
-    note: 'Creates one income source per row.',
-  },
-  {
-    name: 'Interest',
-    destination: 'Income sources',
-    required: ['Description (e.g. ING Savings)', 'Amount', 'Cadence'],
-    optional: ['Owner'],
-    note: 'Creates one income source per row.',
-  },
-  {
-    name: 'Side Income',
-    destination: 'Income sources',
-    required: ['Description', 'Amount', 'Cadence'],
-    optional: ['Owner'],
-    note: 'e.g. freelancing, consulting.',
-  },
-  {
-    name: 'Other Income',
-    destination: 'Income sources',
-    required: ['Description', 'Amount', 'Cadence'],
-    optional: ['Owner'],
-    note: 'Catch-all for anything not covered by the types above.',
-  },
-  {
-    name: 'Rental',
-    destination: 'Existing property investment',
-    required: ['Description (matches property address or name)', 'Amount'],
-    optional: ['Cadence (defaults to monthly)'],
-    note: 'Updates the property\'s rental income. Rows with no matching property are skipped.',
-  },
-];
-
-const CADENCES = ['weekly', 'fortnightly', 'monthly', 'annual'];
-
-const EXAMPLE = `Type,Owner,Description,Amount,Cadence,Job,Super Salary Sacrifice
-Salary,Alex,,120000,annual,Software Engineer,5000
-Salary,Sam,,95000,annual,Designer,
-Dividend,Alex,VAS,800,annual,,
-Interest,Joint,ING Maximiser,1400,annual,,
-Side Income,Sam,Freelance design,500,monthly,,
-Other Income,,Tax refund,1200,annual,,
-Rental,,42 Moreland St,2600,monthly,,`;
+const EXAMPLE = `Date,Amount,Description,Type
+2026-03-14,4615.38,Employer payrun,Salary
+2026-03-21,4615.38,Employer payrun,Salary
+2026-02-28,812.50,VAS dividend,Dividend
+2026-02-01,2600.00,42 Moreland St rent,Rental
+2026-01-15,420.00,ING Maximiser interest,Interest
+2026-01-05,500.00,Freelance design — Stripe payout,Side Income
+2025-12-18,1200.00,ATO tax refund,Other Income`;
 
 export default function CashflowReference() {
   const [expanded, setExpanded] = useState(false);
@@ -83,49 +29,32 @@ export default function CashflowReference() {
       {expanded && (
         <PanelBody>
           <p className="text-muted small mb-3">
-            The Cashflow CSV uses a <code>Type</code> column to route each row to the right destination (family members, income sources, or an existing property). Upload it from <strong>Data Management → Import CSV → Cashflow CSV</strong>. The importer matches Type values case-insensitively.
+            Upload from <strong>Data Management → Import CSV → Cashflow CSV</strong>. The importer expects four columns: <strong>Date</strong>, <strong>Amount</strong>, <strong>Description</strong>, and <strong>Type</strong>. Financial year is auto-detected from each date (AU FY starts 1 July). Owner is applied from the dropdown at upload time to every row. Rows are deduped by date + description + amount + owner.
           </p>
 
-          <div className="table-responsive mb-3">
-            <table className="table table-sm align-middle mb-0">
-              <thead className="table-light">
-                <tr>
-                  <th style={{ width: '140px' }}>Type</th>
-                  <th style={{ width: '180px' }}>Destination</th>
-                  <th>Required columns</th>
-                  <th>Optional columns</th>
-                </tr>
-              </thead>
-              <tbody>
-                {TYPES.map(t => (
-                  <tr key={t.name}>
-                    <td><span className="badge bg-light text-dark border">{t.name}</span></td>
-                    <td className="small text-muted">{t.destination}</td>
-                    <td className="small">
-                      {t.required.map(r => <div key={r}>• {r}</div>)}
-                    </td>
-                    <td className="small text-muted">
-                      {t.optional.length > 0 ? t.optional.map(o => <div key={o}>• {o}</div>) : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <h6 className="fw-bold small mb-2"><i className="fa fa-clock me-1 text-teal"></i>Cadence values</h6>
+          <h6 className="fw-bold small mb-2"><i className="fa fa-tags me-1 text-teal"></i>Allowed <code>Type</code> values</h6>
           <div className="mb-3">
-            {CADENCES.map(c => (
-              <span key={c} className="badge bg-light text-dark border me-1 mb-1">{c}</span>
+            {INCOME_TYPES.map(t => (
+              <span key={t} className="badge bg-light text-dark border me-1 mb-1">{t}</span>
+            ))}
+          </div>
+          <p className="text-muted small mb-3">
+            Matching is case-insensitive. Common aliases (<code>wages</code>, <code>dividends</code>, <code>rent</code>, <code>side</code>) are accepted too. Rows with an unknown Type can have their Type fixed inline in the preview table before confirming.
+          </p>
+
+          <h6 className="fw-bold small mb-2"><i className="fa fa-calendar-day me-1 text-indigo"></i><code>Date</code> formats</h6>
+          <div className="mb-3">
+            {['YYYY-MM-DD', 'DD/MM/YYYY', 'DD-MM-YYYY', 'DD/MM/YY'].map(f => (
+              <span key={f} className="badge bg-light text-dark border me-1 mb-1">{f}</span>
             ))}
           </div>
 
-          <h6 className="fw-bold small mb-2"><i className="fa fa-file-csv me-1 text-indigo"></i>Example</h6>
+          <h6 className="fw-bold small mb-2"><i className="fa fa-file-csv me-1 text-teal"></i>Example</h6>
           <pre className="bg-light border rounded p-2 small mb-3" style={{ fontSize: '0.75rem', overflowX: 'auto' }}>{EXAMPLE}</pre>
 
           <div className="alert alert-info mb-0 small">
             <i className="fa fa-circle-info me-2"></i>
-            <strong>Salaries</strong> are upserted by <code>Owner</code> name, so re-uploading the same CSV updates existing members rather than duplicating them. <strong>Income sources</strong> are deduped by (type + description + owner). <strong>Rental</strong> rows only apply when <code>Description</code> matches an existing property — otherwise they&apos;re skipped with a warning.
+            Each row is a <strong>single income event</strong> (a payrun, a dividend hit, a rent receipt), not a recurring rate. Import as many rows as you like — Cashflow views aggregate them across the period.
           </div>
         </PanelBody>
       )}

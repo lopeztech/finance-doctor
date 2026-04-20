@@ -58,7 +58,8 @@ export default function DataManagement() {
   const [importOwner, setImportOwner] = useState('');
   const [importType, setImportType] = useState<'expenses' | 'cashflow'>('expenses');
   const [cashflowPreview, setCashflowPreview] = useState<CashflowPreviewRow[] | null>(null);
-  const [cashflowCounts, setCashflowCounts] = useState({ skipped: 0, creates: 0, updates: 0 });
+  const [cashflowDuplicateCount, setCashflowDuplicateCount] = useState(0);
+  const [cashflowErrorCount, setCashflowErrorCount] = useState(0);
   const [cashflowResult, setCashflowResult] = useState<CashflowImportSaveResponse | null>(null);
   const [migrating, setMigrating] = useState(false);
   const [migrateResult, setMigrateResult] = useState<MigrateFixResult | null>(null);
@@ -96,9 +97,10 @@ export default function DataManagement() {
     try {
       const csvText = await file.text();
       if (importType === 'cashflow') {
-        const data = await callCashflowPreview(csvText);
+        const data = await callCashflowPreview(csvText, importOwner || undefined);
         setCashflowPreview(data.preview);
-        setCashflowCounts({ skipped: data.skipped, creates: data.creates, updates: data.updates });
+        setCashflowDuplicateCount(data.duplicateCount);
+        setCashflowErrorCount(data.errorCount);
       } else {
         const data = await callImportPreview(csvText);
         setImportDuplicateCount(data.duplicateCount || 0);
@@ -145,15 +147,32 @@ export default function DataManagement() {
     setImportSaving(false);
   };
 
+  const removeCashflowRow = (index: number) => {
+    setCashflowPreview(prev => prev ? prev.filter((_, i) => i !== index) : null);
+  };
+  const updateCashflowType = (index: number, type: CashflowPreviewRow['type']) => {
+    setCashflowPreview(prev => prev ? prev.map((r, i) => i === index ? { ...r, type, error: r.error?.startsWith('Unknown Type') ? undefined : r.error } : r) : null);
+  };
+
   const confirmCashflowImport = async () => {
     if (!cashflowPreview) return;
+    const toSave = cashflowPreview
+      .filter(r => !r.duplicate && !r.error)
+      .map(r => ({
+        date: r.date,
+        description: r.description,
+        amount: r.amount,
+        type: r.type,
+        financialYear: r.financialYear,
+        ...(r.owner ? { owner: r.owner } : {}),
+      }));
+    if (!toSave.length) return;
     setImportSaving(true);
     setCashflowResult(null);
     try {
-      const result = await callCashflowSave(cashflowPreview);
+      const result = await callCashflowSave(toSave);
       setCashflowResult(result);
       setCashflowPreview(null);
-      listFamilyMembers().then(setFamilyMembers).catch(() => {});
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Cashflow import failed');
     }
@@ -161,7 +180,7 @@ export default function DataManagement() {
   };
 
   const newCount = importPreviewRows?.filter(r => !r.duplicate).length || 0;
-  const cashflowApplyCount = (cashflowCounts.creates || 0) + (cashflowCounts.updates || 0);
+  const cashflowNewCount = cashflowPreview?.filter(r => !r.duplicate && !r.error).length || 0;
 
   return (
     <>
@@ -184,15 +203,14 @@ export default function DataManagement() {
               </p>
             ) : (
               <p className="text-muted small mb-3">
-                Upload a CSV with a <strong>Type</strong> column that routes each row: <code>Salary</code>, <code>Dividend</code>, <code>Interest</code>, <code>Side Income</code>, <code>Other Income</code>, or <code>Rental</code>.
-                {' '}Required columns: <strong>Type</strong>, <strong>Amount</strong>. Other columns (<strong>Owner</strong>, <strong>Description</strong>, <strong>Cadence</strong>, <strong>Job</strong>, <strong>Super Salary Sacrifice</strong>) are used depending on Type. See the Cashflow CSV reference below for full details.
+                Upload a CSV with <strong>Date</strong>, <strong>Amount</strong>, <strong>Description</strong>, <strong>Type</strong> columns. Financial year is auto-detected from each date. <strong>Type</strong> must be one of <code>Salary</code>, <code>Dividend</code>, <code>Interest</code>, <code>Side Income</code>, <code>Other Income</code>, or <code>Rental</code>. Owner is applied from the dropdown below to every row. See the Cashflow CSV reference below for full details.
               </p>
             )}
 
             {cashflowResult && (
               <div className="alert alert-success py-2 small mb-3" role="alert">
                 <i className="fa fa-check-circle me-2"></i>
-                Saved — <strong>{cashflowResult.familyMembersWritten}</strong> salary rows, <strong>{cashflowResult.incomeSourcesWritten}</strong> income sources, <strong>{cashflowResult.propertiesUpdated}</strong> property rental updates.
+                Saved <strong>{cashflowResult.saved.length}</strong> income row{cashflowResult.saved.length === 1 ? '' : 's'}.
               </div>
             )}
 
@@ -205,7 +223,7 @@ export default function DataManagement() {
                     <option value="cashflow">Cashflow CSV</option>
                   </select>
                 </div>
-                {importType === 'expenses' && familyMembers.length > 0 && (
+                {familyMembers.length > 0 && (
                   <div>
                     <label className="form-label text-muted small mb-1">Owner</label>
                     <select className="form-select form-select-sm" value={importOwner} onChange={e => setImportOwner(e.target.value)} style={{ width: '200px' }}>
@@ -224,14 +242,17 @@ export default function DataManagement() {
             ) : cashflowPreview ? (
               <>
                 <div className="d-flex align-items-center flex-wrap gap-2 mb-2">
-                  <span className="badge bg-success">{cashflowCounts.creates} create</span>
-                  <span className="badge bg-primary">{cashflowCounts.updates} update</span>
-                  {cashflowCounts.skipped > 0 && (
-                    <span className="badge bg-warning text-dark"><i className="fa fa-triangle-exclamation me-1"></i>{cashflowCounts.skipped} skipped</span>
+                  <span className="badge bg-teal">{cashflowNewCount} new</span>
+                  {cashflowDuplicateCount > 0 && (
+                    <span className="badge bg-warning text-dark"><i className="fa fa-copy me-1"></i>{cashflowDuplicateCount} duplicates skipped</span>
                   )}
-                  <span className="text-muted small">Review, then apply.</span>
-                  <button className="btn btn-sm btn-success ms-auto me-2" onClick={confirmCashflowImport} disabled={importSaving || cashflowApplyCount === 0}>
-                    {importSaving ? <><i className="fa fa-spinner fa-spin me-1"></i>Saving...</> : <><i className="fa fa-check me-1"></i>Apply ({cashflowApplyCount})</>}
+                  {cashflowErrorCount > 0 && (
+                    <span className="badge bg-danger"><i className="fa fa-triangle-exclamation me-1"></i>{cashflowErrorCount} errored</span>
+                  )}
+                  {importOwner && <span className="badge bg-primary"><i className="fa fa-user me-1"></i>{importOwner}</span>}
+                  <span className="text-muted small">Review, then confirm.</span>
+                  <button className="btn btn-sm btn-success ms-auto me-2" onClick={confirmCashflowImport} disabled={importSaving || cashflowNewCount === 0}>
+                    {importSaving ? <><i className="fa fa-spinner fa-spin me-1"></i>Saving...</> : <><i className="fa fa-check me-1"></i>Confirm Import ({cashflowNewCount})</>}
                   </button>
                   <button className="btn btn-sm btn-outline-secondary" onClick={() => { setCashflowPreview(null); setCashflowResult(null); }}>
                     <i className="fa fa-times me-1"></i>Cancel
@@ -242,30 +263,43 @@ export default function DataManagement() {
                     <thead className="sticky-top bg-light">
                       <tr>
                         <th></th>
-                        <th>Type</th>
-                        <th>Owner</th>
+                        <th>Date</th>
+                        <th>FY</th>
                         <th>Description</th>
                         <th className="text-end">Amount</th>
-                        <th>Cadence</th>
-                        <th>Result</th>
+                        <th>Type</th>
+                        <th style={{ width: '30px' }}></th>
                       </tr>
                     </thead>
                     <tbody>
                       {cashflowPreview.map((row, i) => {
-                        const actionBadge = row.action === 'create'
-                          ? <span className="badge bg-success">Create</span>
-                          : row.action === 'update'
-                            ? <span className="badge bg-primary">Update</span>
-                            : <span className="badge bg-warning text-dark">Skip</span>;
+                        const dim = row.duplicate || row.error;
                         return (
-                          <tr key={i} className={row.action === 'skip' ? 'text-muted' : ''} style={row.action === 'skip' ? { opacity: 0.6 } : undefined}>
-                            <td>{actionBadge}</td>
-                            <td className="small">{row.rawType || '—'}</td>
-                            <td className="small">{row.owner || '—'}</td>
-                            <td className="small">{row.label}</td>
-                            <td className="text-end small">{row.amount ? `$${row.amount.toLocaleString('en-AU', { minimumFractionDigits: 2 })}` : '—'}</td>
-                            <td className="small text-muted">{row.cadence || '—'}</td>
-                            <td className="small text-danger">{row.error || ''}</td>
+                          <tr key={i} className={dim ? 'text-muted' : ''} style={dim ? { opacity: 0.55 } : undefined}>
+                            <td>
+                              {row.duplicate && <span className="badge bg-warning text-dark me-1" title="Already exists"><i className="fa fa-copy"></i></span>}
+                              {row.error && <span className="badge bg-danger" title={row.error}><i className="fa fa-triangle-exclamation"></i></span>}
+                            </td>
+                            <td className="small">{row.date ? new Date(row.date).toLocaleDateString('en-AU') : '—'}</td>
+                            <td className="small text-muted">{row.financialYear || '—'}</td>
+                            <td className="small">{row.description || '—'}</td>
+                            <td className="text-end small">{row.amount ? `$${row.amount.toFixed(2)}` : '—'}</td>
+                            <td>
+                              {row.duplicate || row.error ? (
+                                <span className="small text-muted">{row.error || 'Duplicate'}</span>
+                              ) : (
+                                <select className="form-select form-select-sm" value={row.type} onChange={e => updateCashflowType(i, e.target.value as CashflowPreviewRow['type'])}>
+                                  {(['Salary', 'Dividend', 'Interest', 'Side Income', 'Other Income', 'Rental'] as const).map(t => <option key={t} value={t}>{t}</option>)}
+                                </select>
+                              )}
+                            </td>
+                            <td>
+                              {!row.duplicate && (
+                                <button className="btn btn-xs btn-outline-danger" onClick={() => removeCashflowRow(i)} title="Remove">
+                                  <i className="fa fa-times"></i>
+                                </button>
+                              )}
+                            </td>
                           </tr>
                         );
                       })}
