@@ -1,4 +1,4 @@
-import type { Expense, FamilyMember, IncomeSource, IncomeCadence, Investment } from './types';
+import type { Expense, FamilyMember, IncomeSource, IncomeCadence, Investment, Income } from './types';
 import type { CategorySettings, SpendingCategoryType } from './category-settings-repo';
 import { resolveType } from './category-settings-repo';
 
@@ -174,8 +174,9 @@ export function computeCashflow(input: {
   expenses: Expense[];
   incomeSources: IncomeSource[];
   categorySettings: CategorySettings;
+  income?: Income[];
 }): CashflowSnapshot {
-  const { members, investments, expenses, incomeSources, categorySettings } = input;
+  const { members, investments, expenses, incomeSources, categorySettings, income = [] } = input;
 
   const monthCount = Math.max(monthsCoveredBy(expenses), 1);
   const excluded = new Set(categorySettings.excluded);
@@ -236,6 +237,22 @@ export function computeCashflow(input: {
     }
   }
 
+  // Uploaded income transactions. Salary and Rental rows are shown in the UI
+  // but excluded from the cashflow calc — FamilyMember.salary and
+  // Investment.rentalIncomeMonthly are the definitional sources of truth for
+  // those, and summing the transactions on top would double-count.
+  const incomeMonthsCovered = Math.max(monthsCoveredBy(income as unknown as Expense[]), 1);
+  let transactionalOtherAnnual = 0;
+  for (const row of income) {
+    if (row.type === 'Salary' || row.type === 'Rental') continue;
+    const annualised = (row.amount / incomeMonthsCovered) * 12;
+    transactionalOtherAnnual += annualised;
+    const attribution = attribute(annualised, row.owner, members);
+    for (const [id, amt] of attribution) {
+      otherIncomeByMember.set(id, (otherIncomeByMember.get(id) || 0) + amt);
+    }
+  }
+
   const memberCashflows: MemberCashflow[] = members.map(m => {
     const superSacrifice = m.superSalarySacrifice || 0;
     const invIncome = invIncomeByMember.get(m.id) || 0;
@@ -269,7 +286,8 @@ export function computeCashflow(input: {
 
   const salariesGrossMonthly = members.reduce((s, m) => s + m.salary / 12, 0);
   const salariesNetMonthly = memberCashflows.reduce((s, m) => s + m.netMonthly, 0);
-  const otherIncomeMonthly = incomeSources.reduce((s, src) => s + toMonthly(src.amount, src.cadence), 0);
+  const otherIncomeMonthly = incomeSources.reduce((s, src) => s + toMonthly(src.amount, src.cadence), 0)
+    + transactionalOtherAnnual / 12;
   const investmentCashflow = computeInvestmentCashflow(investments, expenses);
   const investmentIncomeMonthly = investmentCashflow.rentalIncomeMonthly - investmentCashflow.interestMonthly - investmentCashflow.linkedExpensesMonthly;
 

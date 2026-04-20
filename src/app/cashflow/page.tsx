@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
-import type { FamilyMember, Investment, Expense, IncomeSource, IncomeSourceType, IncomeCadence } from '@/lib/types';
+import type { FamilyMember, Investment, Expense, IncomeSource, IncomeSourceType, IncomeCadence, Income } from '@/lib/types';
 import { listFamilyMembers, addFamilyMember, updateFamilyMember, deleteFamilyMember } from '@/lib/family-members-repo';
 import { listInvestments } from '@/lib/investments-repo';
 import { listExpenses } from '@/lib/expenses-repo';
 import { listIncomeSources, addIncomeSource, updateIncomeSource, deleteIncomeSource } from '@/lib/income-sources-repo';
+import { listIncome, deleteIncome } from '@/lib/income-repo';
 import { getCategorySettings, type CategorySettings, type SpendingCategoryType } from '@/lib/category-settings-repo';
 import { computeCashflow, type CashflowSnapshot } from '@/lib/cashflow-calc';
 import { ViewToggle, useViewMode } from '@/components/view-toggle';
@@ -39,6 +40,7 @@ export default function CashflowPage() {
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [incomeSources, setIncomeSources] = useState<IncomeSource[]>([]);
+  const [income, setIncome] = useState<Income[]>([]);
   const [categorySettings, setCategorySettings] = useState<CategorySettings>({ types: {}, excluded: [] });
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<View>('monthly');
@@ -57,17 +59,19 @@ export default function CashflowPage() {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [m, inv, exp, inc, settings] = await Promise.all([
+      const [m, inv, exp, inc, incomeTx, settings] = await Promise.all([
         listFamilyMembers(),
         listInvestments(),
         listExpenses('all'),
         listIncomeSources(),
+        listIncome().catch(() => [] as Income[]),
         getCategorySettings(),
       ]);
       setMembers(m);
       setInvestments(inv);
       setExpenses(exp);
       setIncomeSources(inc);
+      setIncome(incomeTx);
       setCategorySettings(settings);
     } finally {
       setLoading(false);
@@ -162,7 +166,12 @@ export default function CashflowPage() {
     );
   }
 
-  const snap: CashflowSnapshot = computeCashflow({ members, investments, expenses, incomeSources, categorySettings });
+  const snap: CashflowSnapshot = computeCashflow({ members, investments, expenses, incomeSources, categorySettings, income });
+
+  const removeIncomeRow = async (id: string) => {
+    await deleteIncome(id);
+    setIncome(prev => prev.filter(i => i.id !== id));
+  };
   const mult = view === 'monthly' ? 1 : 12;
   const periodLabel = view === 'monthly' ? '/mo' : '/yr';
   const hasData = members.length > 0;
@@ -404,6 +413,71 @@ export default function CashflowPage() {
               </table>
             </div>
           )}
+
+          {income.length > 0 && (() => {
+            const byType = income.reduce((acc, row) => {
+              if (!acc[row.type]) acc[row.type] = [];
+              acc[row.type].push(row);
+              return acc;
+            }, {} as Record<string, Income[]>);
+            const typeOrder = ['Salary', 'Dividend', 'Interest', 'Side Income', 'Other Income', 'Rental'] as const;
+            return (
+              <div className="mt-4 pt-3 border-top">
+                <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
+                  <h6 className="mb-0"><i className="fa fa-upload me-2 text-muted"></i>Uploaded income transactions</h6>
+                  <span className="badge bg-light text-dark border">{income.length} row{income.length === 1 ? '' : 's'}</span>
+                  <span className="text-muted small ms-auto">
+                    Salary and Rental rows are shown here but excluded from totals to avoid double-counting the family-member salaries and property rentals above.
+                  </span>
+                </div>
+                {typeOrder.filter(t => byType[t]?.length).map(type => {
+                  const rows = byType[type];
+                  const total = rows.reduce((s, r) => s + r.amount, 0);
+                  const excludedFromCalc = type === 'Salary' || type === 'Rental';
+                  return (
+                    <div key={type} className="mb-3">
+                      <div className="d-flex align-items-center mb-1">
+                        <span className="fw-bold small">{type}</span>
+                        <span className="badge bg-light text-dark border ms-2">{rows.length}</span>
+                        <span className="ms-auto small text-muted">Total ${fmt(total)}</span>
+                        {excludedFromCalc && <span className="badge bg-warning text-dark ms-2 small" title="Not summed into cashflow totals">not summed</span>}
+                      </div>
+                      <div className="table-responsive">
+                        <table className="table table-sm table-hover mb-0">
+                          <thead>
+                            <tr>
+                              <th style={{ width: '110px' }}>Date</th>
+                              <th>Description</th>
+                              <th>Owner</th>
+                              <th className="text-end" style={{ width: '120px' }}>Amount</th>
+                              <th style={{ width: '80px' }}>FY</th>
+                              <th style={{ width: '40px' }}></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rows.map(row => (
+                              <tr key={row.id}>
+                                <td className="small">{new Date(row.date).toLocaleDateString('en-AU')}</td>
+                                <td className="small">{row.description}</td>
+                                <td className="small text-muted">{row.owner || 'Shared'}</td>
+                                <td className="text-end small">${fmt(row.amount)}</td>
+                                <td className="small text-muted">{row.financialYear}</td>
+                                <td>
+                                  <button className="btn btn-xs btn-outline-danger" onClick={() => removeIncomeRow(row.id)} title="Delete">
+                                    <i className="fa fa-times"></i>
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </PanelBody>
       </Panel>
 
