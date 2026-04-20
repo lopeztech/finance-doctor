@@ -429,7 +429,23 @@ export default function CashflowPage() {
                         )}
                       </td>
                       <td className="text-end text-muted">{mc.superSalarySacrifice > 0 ? `$${fmt(mc.superSalarySacrifice)}` : '—'}</td>
-                      <td className="text-end text-muted">${fmt(mc.taxableIncome)}</td>
+                      <td className="text-end text-muted">
+                        ${fmt(mc.taxableIncome)}
+                        {(() => {
+                          const parts: string[] = [];
+                          if (mc.investmentIncomeAnnual > 0) parts.push(`+ inv $${fmt(mc.investmentIncomeAnnual)}`);
+                          if (mc.otherIncomeAnnual > 0) parts.push(`+ other $${fmt(mc.otherIncomeAnnual)}`);
+                          if (mc.deductionsAnnual > 0) parts.push(`− deduct $${fmt(mc.deductionsAnnual)}`);
+                          if (mc.superSalarySacrifice > 0) parts.push(`− super $${fmt(mc.superSalarySacrifice)}`);
+                          if (parts.length === 0) return null;
+                          const tooltip = `Salary $${fmt(mc.salary)}${mc.superSalarySacrifice > 0 ? ` − super $${fmt(mc.superSalarySacrifice)}` : ''}${mc.investmentIncomeAnnual > 0 ? ` + inv income $${fmt(mc.investmentIncomeAnnual)}` : ''}${mc.otherIncomeAnnual > 0 ? ` + other income $${fmt(mc.otherIncomeAnnual)}` : ''}${mc.deductionsAnnual > 0 ? ` − deductions $${fmt(mc.deductionsAnnual)}` : ''} = $${fmt(mc.taxableIncome)}`;
+                          return (
+                            <div className="small text-muted" style={{ fontSize: '0.7rem' }} title={tooltip}>
+                              {parts.join(' ')}
+                            </div>
+                          );
+                        })()}
+                      </td>
                       <td className="text-end text-danger">${fmt(mc.totalTax)}</td>
                       <td className="text-end fw-bold">${fmt(view === 'monthly' ? mc.netMonthly : mc.netAnnual)}</td>
                       <td><span className="badge bg-secondary">{(mc.marginalRate * 100).toFixed(0)}%</span></td>

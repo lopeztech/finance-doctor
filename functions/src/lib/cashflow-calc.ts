@@ -43,17 +43,27 @@ function toAnnual(amount: number, cadence: IncomeCadence): number {
   return amount;
 }
 
-function attribute(amount: number, owner: string | undefined, members: FamilyMember[]): Map<string, number> {
+function attribute(
+  amount: number,
+  owner: string | undefined,
+  members: FamilyMember[],
+  onUnresolved: 'split' | 'none' = 'split',
+): Map<string, number> {
   const result = new Map<string, number>();
   if (members.length === 0) return result;
-  if (!owner || owner === 'Joint') {
+  if (owner === 'Joint') {
     const share = amount / members.length;
     for (const m of members) result.set(m.id, share);
     return result;
   }
-  const match = members.find(m => m.name === owner);
-  if (match) result.set(match.id, amount);
-  else {
+  if (owner) {
+    const match = members.find(m => m.name.toLowerCase() === owner.toLowerCase());
+    if (match) {
+      result.set(match.id, amount);
+      return result;
+    }
+  }
+  if (onUnresolved === 'split') {
     const share = amount / members.length;
     for (const m of members) result.set(m.id, share);
   }
@@ -122,7 +132,7 @@ export function computeCashflowSummary(input: {
     const interest = (inv.liability && inv.interestRate) ? (inv.liability * inv.interestRate) / 100 : 0;
     const linkedAnnual = expenses.filter(e => e.investmentId === inv.id).reduce((s, e) => s + e.amount, 0) * (12 / monthCount);
     const net = rental - interest - linkedAnnual;
-    for (const [id, amt] of attribute(net, inv.owner, members)) {
+    for (const [id, amt] of attribute(net, inv.owner, members, 'none')) {
       invIncomeByMember.set(id, (invIncomeByMember.get(id) || 0) + amt);
     }
   }
@@ -131,7 +141,7 @@ export function computeCashflowSummary(input: {
   for (const m of members) otherIncomeByMember.set(m.id, 0);
   for (const src of incomeSources) {
     const annual = toAnnual(src.amount, src.cadence);
-    for (const [id, amt] of attribute(annual, src.owner, members)) {
+    for (const [id, amt] of attribute(annual, src.owner, members, 'none')) {
       otherIncomeByMember.set(id, (otherIncomeByMember.get(id) || 0) + amt);
     }
   }

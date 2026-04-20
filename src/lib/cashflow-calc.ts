@@ -104,23 +104,24 @@ function attribute(
   amount: number,
   owner: string | undefined,
   members: FamilyMember[],
+  onUnresolved: 'split' | 'none' = 'split',
 ): Map<string, number> {
   const result = new Map<string, number>();
   if (members.length === 0) return result;
-  if (!owner) {
-    const share = amount / members.length;
-    for (const m of members) result.set(m.id, share);
-    return result;
-  }
   if (owner === 'Joint') {
     const share = amount / Math.max(members.length, 1);
     for (const m of members) result.set(m.id, share);
     return result;
   }
-  const match = members.find(m => m.name === owner);
-  if (match) {
-    result.set(match.id, amount);
-  } else {
+  if (owner) {
+    const match = members.find(m => m.name.toLowerCase() === owner.toLowerCase());
+    if (match) {
+      result.set(match.id, amount);
+      return result;
+    }
+  }
+  // Unresolved: no owner, or owner string doesn't match any member name.
+  if (onUnresolved === 'split') {
     const share = amount / members.length;
     for (const m of members) result.set(m.id, share);
   }
@@ -210,7 +211,9 @@ export function computeCashflow(input: {
     }
   }
 
-  // Investment income per member (annualised rental − interest − linked expenses)
+  // Investment income per member (annualised rental − interest − linked expenses).
+  // Un-owned investments stay in the aggregate but do NOT inflate any specific
+  // member's taxable income.
   const invIncomeByMember = new Map<string, number>();
   for (const m of members) invIncomeByMember.set(m.id, 0);
   for (const inv of investments) {
@@ -221,18 +224,18 @@ export function computeCashflow(input: {
       .filter(e => e.investmentId === inv.id)
       .reduce((s, e) => s + e.amount, 0) * (12 / monthCount);
     const net = rental - interest - linkedExpensesAnnual;
-    const attribution = attribute(net, inv.owner, members);
+    const attribution = attribute(net, inv.owner, members, 'none');
     for (const [id, amt] of attribution) {
       invIncomeByMember.set(id, (invIncomeByMember.get(id) || 0) + amt);
     }
   }
 
-  // Other income per member (annualised)
+  // Other income per member (annualised). Un-owned stays unattributed.
   const otherIncomeByMember = new Map<string, number>();
   for (const m of members) otherIncomeByMember.set(m.id, 0);
   for (const source of incomeSources) {
     const annual = toAnnual(source.amount, source.cadence);
-    const attribution = attribute(annual, source.owner, members);
+    const attribution = attribute(annual, source.owner, members, 'none');
     for (const [id, amt] of attribution) {
       otherIncomeByMember.set(id, (otherIncomeByMember.get(id) || 0) + amt);
     }
@@ -248,7 +251,7 @@ export function computeCashflow(input: {
     if (row.type === 'Salary' || row.type === 'Rental') continue;
     const annualised = (row.amount / incomeMonthsCovered) * 12;
     transactionalOtherAnnual += annualised;
-    const attribution = attribute(annualised, row.owner, members);
+    const attribution = attribute(annualised, row.owner, members, 'none');
     for (const [id, amt] of attribution) {
       otherIncomeByMember.set(id, (otherIncomeByMember.get(id) || 0) + amt);
     }
