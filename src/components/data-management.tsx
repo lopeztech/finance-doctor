@@ -3,7 +3,17 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { Expense, FamilyMember } from '@/lib/types';
-import { importPreview as callImportPreview, importSave as callImportSave, migrateFix, migrateCategorise, type MigrateFixResult } from '@/lib/functions-client';
+import {
+  importPreview as callImportPreview,
+  importSave as callImportSave,
+  cashflowImportPreview as callCashflowPreview,
+  cashflowImportSave as callCashflowSave,
+  migrateFix,
+  migrateCategorise,
+  type MigrateFixResult,
+  type CashflowPreviewRow,
+  type CashflowImportSaveResponse,
+} from '@/lib/functions-client';
 import { listExpenses, watchPendingCategorisation } from '@/lib/expenses-repo';
 import { listFamilyMembers } from '@/lib/family-members-repo';
 
@@ -46,6 +56,10 @@ export default function DataManagement() {
   const [importDeferredCount, setImportDeferredCount] = useState(0);
   const [importSaving, setImportSaving] = useState(false);
   const [importOwner, setImportOwner] = useState('');
+  const [importType, setImportType] = useState<'expenses' | 'cashflow'>('expenses');
+  const [cashflowPreview, setCashflowPreview] = useState<CashflowPreviewRow[] | null>(null);
+  const [cashflowCounts, setCashflowCounts] = useState({ skipped: 0, creates: 0, updates: 0 });
+  const [cashflowResult, setCashflowResult] = useState<CashflowImportSaveResponse | null>(null);
   const [migrating, setMigrating] = useState(false);
   const [migrateResult, setMigrateResult] = useState<MigrateFixResult | null>(null);
   const [categorising, setCategorising] = useState(false);
@@ -76,13 +90,21 @@ export default function DataManagement() {
     if (!file) return;
     setImportLoading(true);
     setImportPreviewRows(null);
+    setCashflowPreview(null);
     setImportDuplicateCount(0);
+    setCashflowResult(null);
     try {
       const csvText = await file.text();
-      const data = await callImportPreview(csvText);
-      setImportDuplicateCount(data.duplicateCount || 0);
-      setImportDeferredCount(data.deferredCategorisation || 0);
-      setImportPreviewRows(data.preview);
+      if (importType === 'cashflow') {
+        const data = await callCashflowPreview(csvText);
+        setCashflowPreview(data.preview);
+        setCashflowCounts({ skipped: data.skipped, creates: data.creates, updates: data.updates });
+      } else {
+        const data = await callImportPreview(csvText);
+        setImportDuplicateCount(data.duplicateCount || 0);
+        setImportDeferredCount(data.deferredCategorisation || 0);
+        setImportPreviewRows(data.preview);
+      }
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Import failed');
     }
@@ -123,7 +145,23 @@ export default function DataManagement() {
     setImportSaving(false);
   };
 
+  const confirmCashflowImport = async () => {
+    if (!cashflowPreview) return;
+    setImportSaving(true);
+    setCashflowResult(null);
+    try {
+      const result = await callCashflowSave(cashflowPreview);
+      setCashflowResult(result);
+      setCashflowPreview(null);
+      listFamilyMembers().then(setFamilyMembers).catch(() => {});
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Cashflow import failed');
+    }
+    setImportSaving(false);
+  };
+
   const newCount = importPreviewRows?.filter(r => !r.duplicate).length || 0;
+  const cashflowApplyCount = (cashflowCounts.creates || 0) + (cashflowCounts.updates || 0);
 
   return (
     <>
@@ -138,15 +176,36 @@ export default function DataManagement() {
         </PanelHeader>
         {showImport && (
           <PanelBody>
-            <p className="text-muted small mb-3">
-              Upload a CSV with <strong>Date</strong>, <strong>Amount</strong>, <strong>Description</strong> columns. Financial year is auto-detected from each expense date.
-              {' '}Optional columns: <strong>Category</strong> (a tax category like &quot;Work from Home&quot;, a spending category like &quot;Groceries&quot;, or any custom label) and <strong>Tax Deductible</strong> (TRUE/FALSE, Yes/No, or 1/0).
-              {' '}Dr Finance will auto-categorise anything you don&apos;t fill in using AI.
-            </p>
+            {importType === 'expenses' ? (
+              <p className="text-muted small mb-3">
+                Upload a CSV with <strong>Date</strong>, <strong>Amount</strong>, <strong>Description</strong> columns. Financial year is auto-detected from each expense date.
+                {' '}Optional columns: <strong>Category</strong> (a tax category like &quot;Work from Home&quot;, a spending category like &quot;Groceries&quot;, or any custom label) and <strong>Tax Deductible</strong> (TRUE/FALSE, Yes/No, or 1/0).
+                {' '}Dr Finance will auto-categorise anything you don&apos;t fill in using AI.
+              </p>
+            ) : (
+              <p className="text-muted small mb-3">
+                Upload a CSV with a <strong>Type</strong> column that routes each row: <code>Salary</code>, <code>Dividend</code>, <code>Interest</code>, <code>Side Income</code>, <code>Other Income</code>, or <code>Rental</code>.
+                {' '}Required columns: <strong>Type</strong>, <strong>Amount</strong>. Other columns (<strong>Owner</strong>, <strong>Description</strong>, <strong>Cadence</strong>, <strong>Job</strong>, <strong>Super Salary Sacrifice</strong>) are used depending on Type. See the Cashflow CSV reference below for full details.
+              </p>
+            )}
 
-            {!importPreviewRows ? (
+            {cashflowResult && (
+              <div className="alert alert-success py-2 small mb-3" role="alert">
+                <i className="fa fa-check-circle me-2"></i>
+                Saved — <strong>{cashflowResult.familyMembersWritten}</strong> salary rows, <strong>{cashflowResult.incomeSourcesWritten}</strong> income sources, <strong>{cashflowResult.propertiesUpdated}</strong> property rental updates.
+              </div>
+            )}
+
+            {!importPreviewRows && !cashflowPreview ? (
               <div className="d-flex flex-wrap align-items-end gap-3">
-                {familyMembers.length > 0 && (
+                <div>
+                  <label className="form-label text-muted small mb-1">File type</label>
+                  <select className="form-select form-select-sm" value={importType} onChange={e => setImportType(e.target.value as 'expenses' | 'cashflow')} style={{ width: '180px' }} disabled={importLoading}>
+                    <option value="expenses">Expenses CSV</option>
+                    <option value="cashflow">Cashflow CSV</option>
+                  </select>
+                </div>
+                {importType === 'expenses' && familyMembers.length > 0 && (
                   <div>
                     <label className="form-label text-muted small mb-1">Owner</label>
                     <select className="form-select form-select-sm" value={importOwner} onChange={e => setImportOwner(e.target.value)} style={{ width: '200px' }}>
@@ -162,7 +221,59 @@ export default function DataManagement() {
                   <input id="csv-upload" type="file" accept=".csv" className="d-none" onChange={handleImportFile} disabled={importLoading} />
                 </div>
               </div>
-            ) : (
+            ) : cashflowPreview ? (
+              <>
+                <div className="d-flex align-items-center flex-wrap gap-2 mb-2">
+                  <span className="badge bg-success">{cashflowCounts.creates} create</span>
+                  <span className="badge bg-primary">{cashflowCounts.updates} update</span>
+                  {cashflowCounts.skipped > 0 && (
+                    <span className="badge bg-warning text-dark"><i className="fa fa-triangle-exclamation me-1"></i>{cashflowCounts.skipped} skipped</span>
+                  )}
+                  <span className="text-muted small">Review, then apply.</span>
+                  <button className="btn btn-sm btn-success ms-auto me-2" onClick={confirmCashflowImport} disabled={importSaving || cashflowApplyCount === 0}>
+                    {importSaving ? <><i className="fa fa-spinner fa-spin me-1"></i>Saving...</> : <><i className="fa fa-check me-1"></i>Apply ({cashflowApplyCount})</>}
+                  </button>
+                  <button className="btn btn-sm btn-outline-secondary" onClick={() => { setCashflowPreview(null); setCashflowResult(null); }}>
+                    <i className="fa fa-times me-1"></i>Cancel
+                  </button>
+                </div>
+                <div className="table-responsive" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                  <table className="table table-sm table-hover mb-0">
+                    <thead className="sticky-top bg-light">
+                      <tr>
+                        <th></th>
+                        <th>Type</th>
+                        <th>Owner</th>
+                        <th>Description</th>
+                        <th className="text-end">Amount</th>
+                        <th>Cadence</th>
+                        <th>Result</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {cashflowPreview.map((row, i) => {
+                        const actionBadge = row.action === 'create'
+                          ? <span className="badge bg-success">Create</span>
+                          : row.action === 'update'
+                            ? <span className="badge bg-primary">Update</span>
+                            : <span className="badge bg-warning text-dark">Skip</span>;
+                        return (
+                          <tr key={i} className={row.action === 'skip' ? 'text-muted' : ''} style={row.action === 'skip' ? { opacity: 0.6 } : undefined}>
+                            <td>{actionBadge}</td>
+                            <td className="small">{row.rawType || '—'}</td>
+                            <td className="small">{row.owner || '—'}</td>
+                            <td className="small">{row.label}</td>
+                            <td className="text-end small">{row.amount ? `$${row.amount.toLocaleString('en-AU', { minimumFractionDigits: 2 })}` : '—'}</td>
+                            <td className="small text-muted">{row.cadence || '—'}</td>
+                            <td className="small text-danger">{row.error || ''}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            ) : importPreviewRows ? (
               <>
                 <div className="d-flex align-items-center flex-wrap gap-2 mb-2">
                   <span className="badge bg-teal">{newCount} new</span>
@@ -241,7 +352,7 @@ export default function DataManagement() {
                   </table>
                 </div>
               </>
-            )}
+            ) : null}
           </PanelBody>
         )}
       </Panel>

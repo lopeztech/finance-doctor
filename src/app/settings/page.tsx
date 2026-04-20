@@ -4,6 +4,7 @@ import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import DataManagement from '@/components/data-management';
 import ExpensesExclusionSettings from '@/components/expenses-exclusion-settings';
 import CategoryReference from '@/components/category-reference';
+import CashflowReference from '@/components/cashflow-reference';
 
 export default function SettingsPage() {
   return (
@@ -13,6 +14,9 @@ export default function SettingsPage() {
       <h2 className="h4 mt-4 mb-3"><i className="fa fa-wallet me-2"></i>Expenses</h2>
       <ExpensesExclusionSettings />
       <CategoryReference />
+
+      <h2 className="h4 mt-4 mb-3"><i className="fa fa-sack-dollar me-2"></i>Cashflow</h2>
+      <CashflowReference />
 
       <h2 className="h4 mt-4 mb-3"><i className="fa fa-database me-2"></i>Data Management</h2>
       <DataManagement />

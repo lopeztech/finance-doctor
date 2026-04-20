@@ -143,6 +143,55 @@ export async function migrateCategorise(batchSize = 50): Promise<MigrateCategori
   return res.data;
 }
 
+export type CashflowDestination = 'family-member' | 'income-source' | 'property' | 'skip';
+export type CashflowAction = 'create' | 'update' | 'skip';
+
+export interface CashflowPreviewRow {
+  rowIndex: number;
+  rawType: string;
+  destination: CashflowDestination;
+  action: CashflowAction;
+  label: string;
+  amount: number;
+  cadence?: 'weekly' | 'fortnightly' | 'monthly' | 'annual';
+  owner?: string;
+  error?: string;
+  // Payloads are opaque to the client; we round-trip them back to save.
+  familyMember?: Record<string, unknown>;
+  familyMemberId?: string;
+  incomeSource?: Record<string, unknown>;
+  investmentId?: string;
+  investmentRentalMonthly?: number;
+}
+
+export interface CashflowImportPreviewResponse {
+  preview: CashflowPreviewRow[];
+  total: number;
+  skipped: number;
+  creates: number;
+  updates: number;
+}
+
+export interface CashflowImportSaveResponse {
+  familyMembersWritten: number;
+  incomeSourcesWritten: number;
+  propertiesUpdated: number;
+}
+
+export async function cashflowImportPreview(csvText: string): Promise<CashflowImportPreviewResponse> {
+  if (guest.isGuest()) throw new Error('Cashflow CSV import is disabled in Guest mode.');
+  const fn = httpsCallable<{ action: 'preview'; csvText: string }, CashflowImportPreviewResponse>(assertFunctions(), 'cashflowImport');
+  const res = await fn({ action: 'preview', csvText });
+  return res.data;
+}
+
+export async function cashflowImportSave(rows: CashflowPreviewRow[]): Promise<CashflowImportSaveResponse> {
+  if (guest.isGuest()) throw new Error('Cashflow CSV import is disabled in Guest mode.');
+  const fn = httpsCallable<{ action: 'save'; rows: CashflowPreviewRow[] }, CashflowImportSaveResponse>(assertFunctions(), 'cashflowImport');
+  const res = await fn({ action: 'save', rows });
+  return res.data;
+}
+
 export async function reanalyseExpenses(payload: { financialYear?: string; type?: 'tax' | 'spending' | 'sub-category' }): Promise<{ updated: number; total: number }> {
   if (guest.isGuest()) return { updated: 0, total: 0 };
   const fn = httpsCallable<typeof payload, { updated: number; total: number }>(assertFunctions(), 'expensesReanalyse');
