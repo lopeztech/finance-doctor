@@ -1,4 +1,5 @@
 import type { Expense, FamilyMember, IncomeSource, IncomeCadence, Investment } from './types';
+import { effectiveSalary } from './types';
 
 type SpendingCategoryType = 'essential' | 'committed' | 'discretionary';
 
@@ -136,18 +137,19 @@ export function computeCashflowSummary(input: {
   }
 
   const memberSummaries = members.map(m => {
+    const effective = effectiveSalary(m);
     const superSac = m.superSalarySacrifice || 0;
     const invIncome = invIncomeByMember.get(m.id) || 0;
     const otherIncome = otherIncomeByMember.get(m.id) || 0;
     const deductions = deductionsByMember.get(m.id) || 0;
-    const taxable = Math.max(0, m.salary - superSac + invIncome + otherIncome - deductions);
+    const taxable = Math.max(0, effective - superSac + invIncome + otherIncome - deductions);
     const tax = incomeTax(taxable) + taxable * MEDICARE_LEVY_RATE;
-    const grossAnnual = m.salary + invIncome + otherIncome;
+    const grossAnnual = effective + invIncome + otherIncome;
     const netAnnual = grossAnnual - tax - superSac;
     return { name: m.name, grossAnnual, netAnnual, totalTax: tax, taxableIncome: taxable };
   });
 
-  const salariesGrossMonthly = members.reduce((s, m) => s + m.salary / 12, 0);
+  const salariesGrossMonthly = members.reduce((s, m) => s + effectiveSalary(m) / 12, 0);
   const salariesNetMonthly = memberSummaries.reduce((s, m) => s + m.netAnnual / 12, 0);
   const otherIncomeMonthly = incomeSources.reduce((s, src) => s + toAnnual(src.amount, src.cadence) / 12, 0);
   const rentalIncomeMonthly = rentalAnnualTotal / 12;

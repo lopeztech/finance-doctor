@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
-import type { FamilyMember, Investment, Expense, IncomeSource, IncomeSourceType, IncomeCadence, Income } from '@/lib/types';
+import type { FamilyMember, Investment, Expense, IncomeSource, IncomeSourceType, IncomeCadence, Income, EmploymentType } from '@/lib/types';
+import { effectiveSalary } from '@/lib/types';
 import { listFamilyMembers, addFamilyMember, updateFamilyMember, deleteFamilyMember } from '@/lib/family-members-repo';
 import { listInvestments } from '@/lib/investments-repo';
 import { listExpenses } from '@/lib/expenses-repo';
@@ -79,7 +80,9 @@ export default function CashflowPage() {
   const [mode, setMode] = useViewMode('viewMode.cashflow');
 
   const [showMemberForm, setShowMemberForm] = useState(false);
-  const [memberForm, setMemberForm] = useState({ name: '', job: '', salary: '', superSalarySacrifice: '' });
+  const [memberForm, setMemberForm] = useState<{ name: string; job: string; salary: string; superSalarySacrifice: string; employmentType: EmploymentType; daysPerWeek: string }>({
+    name: '', job: '', salary: '', superSalarySacrifice: '', employmentType: 'full-time', daysPerWeek: '5',
+  });
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
 
   const [showIncomeForm, setShowIncomeForm] = useState(false);
@@ -114,15 +117,19 @@ export default function CashflowPage() {
 
   const submitMember = async (e: React.FormEvent) => {
     e.preventDefault();
+    const isPartTime = memberForm.employmentType === 'part-time';
+    const daysRaw = parseFloat(memberForm.daysPerWeek);
+    const days = Number.isFinite(daysRaw) ? Math.min(5, Math.max(0.5, daysRaw)) : 5;
     const body: Omit<FamilyMember, 'id'> = {
       name: memberForm.name,
       salary: parseFloat(memberForm.salary) || 0,
       ...(memberForm.job ? { job: memberForm.job } : {}),
       ...(memberForm.superSalarySacrifice ? { superSalarySacrifice: parseFloat(memberForm.superSalarySacrifice) } : {}),
+      ...(isPartTime ? { employmentType: 'part-time', daysPerWeek: days } : {}),
     };
     if (editingMemberId) {
       await updateFamilyMember(editingMemberId, body);
-      setMembers(prev => prev.map(m => m.id === editingMemberId ? { ...m, ...body } : m));
+      setMembers(prev => prev.map(m => m.id === editingMemberId ? { id: m.id, ...body } : m));
     } else {
       const created = await addFamilyMember(body);
       setMembers(prev => [...prev, created]);
@@ -136,12 +143,14 @@ export default function CashflowPage() {
       job: m.job || '',
       salary: String(m.salary),
       superSalarySacrifice: m.superSalarySacrifice ? String(m.superSalarySacrifice) : '',
+      employmentType: m.employmentType || 'full-time',
+      daysPerWeek: m.daysPerWeek ? String(m.daysPerWeek) : '5',
     });
     setEditingMemberId(m.id);
     setShowMemberForm(true);
   };
   const cancelMemberForm = () => {
-    setMemberForm({ name: '', job: '', salary: '', superSalarySacrifice: '' });
+    setMemberForm({ name: '', job: '', salary: '', superSalarySacrifice: '', employmentType: 'full-time', daysPerWeek: '5' });
     setEditingMemberId(null);
     setShowMemberForm(false);
   };
@@ -319,37 +328,62 @@ export default function CashflowPage() {
           </div>
         </PanelHeader>
         <PanelBody>
-          {showMemberForm && (
-            <form onSubmit={submitMember} className="row g-2 mb-3 p-3 bg-light rounded">
-              <div className="col-md-3">
-                <label className="form-label text-muted small mb-1">Name</label>
-                <input type="text" className="form-control" placeholder="e.g. Josh" value={memberForm.name} onChange={e => setMemberForm({ ...memberForm, name: e.target.value })} required />
-              </div>
-              <div className="col-md-3">
-                <label className="form-label text-muted small mb-1">Job / Industry</label>
-                <input type="text" className="form-control" placeholder="e.g. Software Engineer" value={memberForm.job} onChange={e => setMemberForm({ ...memberForm, job: e.target.value })} />
-              </div>
-              <div className="col-md-2">
-                <label className="form-label text-muted small mb-1">Annual Salary</label>
-                <div className="input-group">
-                  <span className="input-group-text">$</span>
-                  <input type="number" className="form-control" placeholder="0" step="1" min="0" value={memberForm.salary} onChange={e => setMemberForm({ ...memberForm, salary: e.target.value })} required />
+          {showMemberForm && (() => {
+            const salaryNum = parseFloat(memberForm.salary) || 0;
+            const daysNum = parseFloat(memberForm.daysPerWeek) || 5;
+            const isPartTime = memberForm.employmentType === 'part-time';
+            const effective = isPartTime ? salaryNum * Math.max(0, Math.min(5, daysNum)) / 5 : salaryNum;
+            return (
+              <form onSubmit={submitMember} className="row g-2 mb-3 p-3 bg-light rounded">
+                <div className="col-md-3">
+                  <label className="form-label text-muted small mb-1">Name</label>
+                  <input type="text" className="form-control" placeholder="e.g. Josh" value={memberForm.name} onChange={e => setMemberForm({ ...memberForm, name: e.target.value })} required />
                 </div>
-              </div>
-              <div className="col-md-2">
-                <label className="form-label text-muted small mb-1">Super sacrifice /yr</label>
-                <div className="input-group">
-                  <span className="input-group-text">$</span>
-                  <input type="number" className="form-control" placeholder="0" step="1" min="0" value={memberForm.superSalarySacrifice} onChange={e => setMemberForm({ ...memberForm, superSalarySacrifice: e.target.value })} />
+                <div className="col-md-3">
+                  <label className="form-label text-muted small mb-1">Job / Industry</label>
+                  <input type="text" className="form-control" placeholder="e.g. Software Engineer" value={memberForm.job} onChange={e => setMemberForm({ ...memberForm, job: e.target.value })} />
                 </div>
-              </div>
-              <div className="col-md-2 d-flex align-items-end">
-                <button type="submit" className="btn btn-success w-100">
-                  {editingMemberId ? <><i className="fa fa-check me-1"></i>Update</> : <><i className="fa fa-plus me-1"></i>Add</>}
-                </button>
-              </div>
-            </form>
-          )}
+                <div className="col-md-2">
+                  <label className="form-label text-muted small mb-1">Employment</label>
+                  <select className="form-select" value={memberForm.employmentType} onChange={e => setMemberForm({ ...memberForm, employmentType: e.target.value as EmploymentType })}>
+                    <option value="full-time">Full-time</option>
+                    <option value="part-time">Part-time</option>
+                  </select>
+                </div>
+                {isPartTime && (
+                  <div className="col-md-2">
+                    <label className="form-label text-muted small mb-1">Days / week</label>
+                    <input type="number" className="form-control" step="0.5" min="0.5" max="5" value={memberForm.daysPerWeek} onChange={e => setMemberForm({ ...memberForm, daysPerWeek: e.target.value })} />
+                  </div>
+                )}
+                <div className="col-md-2">
+                  <label className="form-label text-muted small mb-1">{isPartTime ? 'FTE Salary' : 'Annual Salary'}</label>
+                  <div className="input-group">
+                    <span className="input-group-text">$</span>
+                    <input type="number" className="form-control" placeholder="0" step="1" min="0" value={memberForm.salary} onChange={e => setMemberForm({ ...memberForm, salary: e.target.value })} required />
+                  </div>
+                  {isPartTime && salaryNum > 0 && (
+                    <div className="form-text small">
+                      <i className="fa fa-arrow-right me-1 text-muted"></i>
+                      Effective ${effective.toLocaleString('en-AU', { maximumFractionDigits: 0 })} (at {daysNum}/5 days)
+                    </div>
+                  )}
+                </div>
+                <div className="col-md-2">
+                  <label className="form-label text-muted small mb-1">Super sacrifice /yr</label>
+                  <div className="input-group">
+                    <span className="input-group-text">$</span>
+                    <input type="number" className="form-control" placeholder="0" step="1" min="0" value={memberForm.superSalarySacrifice} onChange={e => setMemberForm({ ...memberForm, superSalarySacrifice: e.target.value })} />
+                  </div>
+                </div>
+                <div className="col-md-2 d-flex align-items-end">
+                  <button type="submit" className="btn btn-success w-100">
+                    {editingMemberId ? <><i className="fa fa-check me-1"></i>Update</> : <><i className="fa fa-plus me-1"></i>Add</>}
+                  </button>
+                </div>
+              </form>
+            );
+          })()}
 
           {members.length === 0 ? (
             <div className="text-center py-5 text-muted">
@@ -363,6 +397,7 @@ export default function CashflowPage() {
                   <tr>
                     <th>Name</th>
                     <th>Job / Industry</th>
+                    <th>Employment</th>
                     <th className="text-end">Salary</th>
                     <th className="text-end">Super Sac</th>
                     <th className="text-end">Taxable</th>
@@ -373,11 +408,26 @@ export default function CashflowPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {snap.members.map(mc => (
+                  {snap.members.map(mc => {
+                    const raw = members.find(m => m.id === mc.id);
+                    const isPT = raw?.employmentType === 'part-time';
+                    const days = raw?.daysPerWeek ?? 5;
+                    const rawSalary = raw?.salary ?? mc.salary;
+                    return (
                     <tr key={mc.id}>
                       <td className="fw-bold">{mc.name}</td>
-                      <td className="text-muted small">{members.find(m => m.id === mc.id)?.job || '—'}</td>
-                      <td className="text-end">${fmt(mc.salary)}</td>
+                      <td className="text-muted small">{raw?.job || '—'}</td>
+                      <td>
+                        {isPT
+                          ? <span className="badge bg-info text-dark" title={`Part-time at ${days}/5 days per week`}>Part-time {days}/5</span>
+                          : <span className="badge bg-light text-dark border">Full-time</span>}
+                      </td>
+                      <td className="text-end">
+                        ${fmt(mc.salary)}
+                        {isPT && (
+                          <div className="small text-muted">FTE ${fmt(rawSalary)}</div>
+                        )}
+                      </td>
                       <td className="text-end text-muted">{mc.superSalarySacrifice > 0 ? `$${fmt(mc.superSalarySacrifice)}` : '—'}</td>
                       <td className="text-end text-muted">${fmt(mc.taxableIncome)}</td>
                       <td className="text-end text-danger">${fmt(mc.totalTax)}</td>
@@ -392,7 +442,8 @@ export default function CashflowPage() {
                         </button>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

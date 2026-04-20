@@ -15,12 +15,22 @@ export interface Expense {
   categorisationError?: string;
 }
 
+export type EmploymentType = 'full-time' | 'part-time';
+
 export interface FamilyMember {
   id: string;
   name: string;
   salary: number;
   job?: string;
   superSalarySacrifice?: number;
+  employmentType?: EmploymentType;
+  daysPerWeek?: number;
+}
+
+export function effectiveSalary(m: { salary: number; employmentType?: EmploymentType; daysPerWeek?: number }): number {
+  if (m.employmentType !== 'part-time') return m.salary;
+  const days = m.daysPerWeek ?? 5;
+  return m.salary * Math.max(0, Math.min(5, days)) / 5;
 }
 
 export type IncomeSourceType = 'dividend' | 'interest' | 'side' | 'other';

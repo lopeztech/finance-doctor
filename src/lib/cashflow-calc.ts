@@ -1,4 +1,5 @@
 import type { Expense, FamilyMember, IncomeSource, IncomeCadence, Investment, Income } from './types';
+import { effectiveSalary } from './types';
 import type { CategorySettings, SpendingCategoryType } from './category-settings-repo';
 import { resolveType } from './category-settings-repo';
 
@@ -254,20 +255,21 @@ export function computeCashflow(input: {
   }
 
   const memberCashflows: MemberCashflow[] = members.map(m => {
+    const effective = effectiveSalary(m);
     const superSacrifice = m.superSalarySacrifice || 0;
     const invIncome = invIncomeByMember.get(m.id) || 0;
     const otherIncome = otherIncomeByMember.get(m.id) || 0;
     const deductions = deductionsByMember.get(m.id) || 0;
-    const taxable = Math.max(0, m.salary - superSacrifice + invIncome + otherIncome - deductions);
+    const taxable = Math.max(0, effective - superSacrifice + invIncome + otherIncome - deductions);
     const incomeTax = computeIncomeTax(taxable);
     const medicare = computeMedicareLevy(taxable);
     const totalTax = incomeTax + medicare;
-    const grossAnnual = m.salary + invIncome + otherIncome;
+    const grossAnnual = effective + invIncome + otherIncome;
     const netAnnual = grossAnnual - totalTax - superSacrifice;
     return {
       id: m.id,
       name: m.name,
-      salary: m.salary,
+      salary: effective,
       superSalarySacrifice: superSacrifice,
       otherIncomeAnnual: otherIncome,
       investmentIncomeAnnual: invIncome,
@@ -284,7 +286,7 @@ export function computeCashflow(input: {
     };
   });
 
-  const salariesGrossMonthly = members.reduce((s, m) => s + m.salary / 12, 0);
+  const salariesGrossMonthly = members.reduce((s, m) => s + effectiveSalary(m) / 12, 0);
   const salariesNetMonthly = memberCashflows.reduce((s, m) => s + m.netMonthly, 0);
   const otherIncomeMonthly = incomeSources.reduce((s, src) => s + toMonthly(src.amount, src.cadence), 0)
     + transactionalOtherAnnual / 12;

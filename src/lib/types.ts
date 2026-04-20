@@ -15,12 +15,28 @@ export interface Expense {
   categorisationError?: string;
 }
 
+export type EmploymentType = 'full-time' | 'part-time';
+
 export interface FamilyMember {
   id: string;
   name: string;
   salary: number;
   job?: string;
   superSalarySacrifice?: number;
+  employmentType?: EmploymentType;
+  daysPerWeek?: number;
+}
+
+/**
+ * Effective (actual earned) annual salary. `salary` on a FamilyMember is the
+ * full-time-equivalent figure; part-time members earn a pro-rated share based
+ * on daysPerWeek (out of 5). Members without employmentType set default to
+ * full-time.
+ */
+export function effectiveSalary(m: { salary: number; employmentType?: EmploymentType; daysPerWeek?: number }): number {
+  if (m.employmentType !== 'part-time') return m.salary;
+  const days = m.daysPerWeek ?? 5;
+  return m.salary * Math.max(0, Math.min(5, days)) / 5;
 }
 
 export type IncomeSourceType = 'dividend' | 'interest' | 'side' | 'other';

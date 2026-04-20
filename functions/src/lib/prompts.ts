@@ -119,6 +119,20 @@ interface FamilyMemberInput {
   name: string;
   salary: number;
   job?: string;
+  employmentType?: 'full-time' | 'part-time';
+  daysPerWeek?: number;
+}
+
+function effective(m: FamilyMemberInput): number {
+  if (m.employmentType !== 'part-time') return m.salary;
+  const days = m.daysPerWeek ?? 5;
+  return m.salary * Math.max(0, Math.min(5, days)) / 5;
+}
+
+function employmentSuffix(m: FamilyMemberInput): string {
+  if (m.employmentType !== 'part-time') return '';
+  const days = m.daysPerWeek ?? 5;
+  return ` [part-time ${days}/5 days]`;
 }
 
 function getTaxBracket(salary: number): string {
@@ -147,9 +161,10 @@ export function buildTaxPrompt(expenses: ExpenseInput[], financialYear: string, 
 
   let memberSection = '';
   if (familyMembers && familyMembers.length > 0) {
-    const memberDetails = familyMembers.map(m =>
-      `- ${m.name}${m.job ? ` (${m.job})` : ''}: Salary $${m.salary.toLocaleString()}, Marginal rate: ${getTaxBracket(m.salary)}`
-    ).join('\n');
+    const memberDetails = familyMembers.map(m => {
+      const eff = effective(m);
+      return `- ${m.name}${m.job ? ` (${m.job})` : ''}${employmentSuffix(m)}: Salary $${eff.toLocaleString()}, Marginal rate: ${getTaxBracket(eff)}`;
+    }).join('\n');
     memberSection = `\nFamily members:\n${memberDetails}\n`;
   }
 
@@ -204,9 +219,10 @@ export function buildInvestmentPrompt(investments: InvestmentInput[], familyMemb
 
   let familySection = '';
   if (familyMembers && familyMembers.length > 0) {
-    const memberDetails = familyMembers.map(m =>
-      `- ${m.name}${m.job ? ` (${m.job})` : ''}: Salary $${m.salary.toLocaleString()}, Marginal tax rate: ${getTaxBracket(m.salary)} (+2% Medicare Levy)`
-    ).join('\n');
+    const memberDetails = familyMembers.map(m => {
+      const eff = effective(m);
+      return `- ${m.name}${m.job ? ` (${m.job})` : ''}${employmentSuffix(m)}: Salary $${eff.toLocaleString()}, Marginal tax rate: ${getTaxBracket(eff)} (+2% Medicare Levy)`;
+    }).join('\n');
 
     const ownershipByMember: Record<string, { value: number; gain: number }> = {};
     investments.forEach(i => {
