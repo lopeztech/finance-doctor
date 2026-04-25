@@ -16,6 +16,7 @@ import {
 } from '@/lib/functions-client';
 import { listExpenses, watchPendingCategorisation } from '@/lib/expenses-repo';
 import { listFamilyMembers } from '@/lib/family-members-repo';
+import ReceiptScan from '@/components/receipt-scan';
 
 const CATEGORIES = [
   'Work from Home',
@@ -184,6 +185,8 @@ export default function DataManagement() {
 
   return (
     <>
+      <ReceiptScan familyMembers={familyMembers} onSaved={fetchExpenses} />
+
       <Panel className="mb-3">
         <PanelHeader noButton>
           <div className="d-flex flex-wrap align-items-center gap-2">

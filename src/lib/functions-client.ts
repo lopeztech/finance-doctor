@@ -188,3 +188,24 @@ export async function reanalyseExpenses(payload: { financialYear?: string; type?
   const res = await fn(payload);
   return res.data;
 }
+
+export interface ReceiptScanResult {
+  date?: string;
+  amount?: number;
+  description?: string;
+  merchant?: string;
+  category?: string;
+  spendingCategory?: string;
+  spendingSubCategory?: string;
+  notes?: string;
+  confidence?: 'high' | 'medium' | 'low';
+}
+
+export async function scanReceipt(imageBase64: string, mimeType: string): Promise<ReceiptScanResult> {
+  if (guest.isGuest()) {
+    throw new Error('Receipt scanning is disabled in Guest mode — sign in with Google to use Dr Finance Vision.');
+  }
+  const fn = httpsCallable<{ imageBase64: string; mimeType: string }, ReceiptScanResult>(assertFunctions(), 'expensesReceiptScan');
+  const res = await fn({ imageBase64, mimeType });
+  return res.data;
+}
