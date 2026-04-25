@@ -4,6 +4,7 @@ export { taxAdvice } from './handlers/tax-advice';
 export { investmentsAdvice } from './handlers/investments-advice';
 export { expensesAdvice } from './handlers/expenses-advice';
 export { expensesImport } from './handlers/expenses-import';
+export { expensesReceiptScan } from './handlers/receipt-scan';
 export { expensesMigrate } from './handlers/expenses-migrate';
 export { expensesReanalyse } from './handlers/expenses-reanalyse';
 export { expensesCategoriseWorker } from './handlers/expenses-categorise-worker';
