@@ -12,6 +12,7 @@ import { PageFilters, type FilterGroup } from '@/components/page-filters';
 import { currentFinancialYear, maybeEmitEofyReminder } from '@/lib/tax-deadline';
 import { usePreferences } from '@/lib/use-preferences';
 import BudgetsWidget from '@/components/budgets-widget';
+import NetWorthWidget from '@/components/networth-widget';
 
 const CATEGORY_ICONS: Record<string, string> = {
   'Work from Home': 'fa-house-laptop',
@@ -261,6 +262,7 @@ export default function Dashboard() {
         </div>
       </div>
 
+      <NetWorthWidget />
       <BudgetsWidget />
 
       {(tips.length > 0 || tipsLoading) && (

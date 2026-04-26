@@ -12,3 +12,4 @@ export { expensesCategoriseWorker } from './handlers/expenses-categorise-worker'
 export { cashflowImport } from './handlers/cashflow-import';
 export { notificationsCleanup } from './handlers/notifications-cleanup';
 export { budgetsAlerts } from './handlers/budgets-alerts';
+export { networthSnapshot } from './handlers/networth-snapshot';
