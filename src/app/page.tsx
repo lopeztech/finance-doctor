@@ -9,6 +9,7 @@ import { listExpenses } from '@/lib/expenses-repo';
 import { listInvestments } from '@/lib/investments-repo';
 import { listFamilyMembers } from '@/lib/family-members-repo';
 import { PageFilters, type FilterGroup } from '@/components/page-filters';
+import { maybeEmitEofyReminder } from '@/lib/tax-deadline';
 
 const CATEGORY_ICONS: Record<string, string> = {
   'Work from Home': 'fa-house-laptop',
@@ -70,6 +71,8 @@ export default function Dashboard() {
     fetchDashboardTips()
       .then(result => { setTips(result); setTipsLoading(false); })
       .catch(() => setTipsLoading(false));
+
+    maybeEmitEofyReminder().catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

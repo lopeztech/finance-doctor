@@ -9,6 +9,7 @@ import { listFamilyMembers } from '@/lib/family-members-repo';
 import { upsertCategoryRule } from '@/lib/category-rules-repo';
 import { getCategorySettings, setCategoryType, resolveType, type CategorySettings, type SpendingCategoryType } from '@/lib/category-settings-repo';
 import RecurringModal from '@/components/recurring-modal';
+import { notify } from '@/lib/notifications-repo';
 import BulkActionsBar from '@/components/bulk-actions-bar';
 import { MonthlyTrend, TopVendorsChart } from '@/components/spending-charts';
 import { ViewToggle, useViewMode } from '@/components/view-toggle';
@@ -1041,6 +1042,16 @@ export default function ExpensesPage() {
           onConfirm={async (items) => {
             const saved = await addExpenses(items);
             setExpenses(prev => [...prev, ...saved]);
+            const first = saved[0];
+            if (first) {
+              const last = saved[saved.length - 1];
+              notify({
+                kind: 'recurring-due',
+                title: `${saved.length} recurring expense${saved.length === 1 ? '' : 's'} created`,
+                body: `${first.description} · scheduled through ${new Date(last.date).toLocaleDateString('en-AU')}`,
+                link: '/expenses',
+              }).catch(() => {});
+            }
           }}
         />
       )}

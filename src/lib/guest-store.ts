@@ -1,5 +1,6 @@
 import { GUEST_SEED } from './guest-seed';
 import type { Expense, FamilyMember, Investment, IncomeSource } from './types';
+import type { Notification, NotificationKind, NotificationPreferences } from './notification-types';
 
 const FLAG_KEY = 'fd_guest';
 
@@ -46,6 +47,8 @@ interface GuestState {
   adviceChats: Record<string, ChatMessage[] | string[]>;
   categorySettings?: CategorySettings;
   incomeSources?: IncomeSource[];
+  notifications?: Notification[];
+  notificationPreferences?: NotificationPreferences;
 }
 
 function clone<T>(v: T): T {
@@ -240,4 +243,57 @@ export function updateIncomeSource(id: string, patch: Partial<IncomeSource>) {
 
 export function deleteIncomeSource(id: string) {
   state.incomeSources = (state.incomeSources || []).filter(i => i.id !== id);
+}
+
+// Notifications -----------------------------------------------------------
+
+export function listNotifications(): Notification[] {
+  return [...(state.notifications || [])].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+}
+
+interface AddNotificationInput {
+  kind: NotificationKind;
+  title: string;
+  body: string;
+  link?: string;
+  dedupeId?: string;
+}
+
+export function addNotification(input: AddNotificationInput): Notification {
+  const list = state.notifications || [];
+  if (input.dedupeId) {
+    const existing = list.find(n => n.id === input.dedupeId);
+    if (existing) return existing;
+  }
+  const notif: Notification = {
+    id: input.dedupeId || rid('n'),
+    kind: input.kind,
+    title: input.title,
+    body: input.body,
+    link: input.link,
+    createdAt: new Date().toISOString(),
+    readAt: null,
+  };
+  state.notifications = [notif, ...list];
+  return notif;
+}
+
+export function markNotificationRead(id: string) {
+  const now = new Date().toISOString();
+  state.notifications = (state.notifications || []).map(n =>
+    n.id === id ? { ...n, readAt: n.readAt || now } : n,
+  );
+}
+
+export function markAllNotificationsRead() {
+  const now = new Date().toISOString();
+  state.notifications = (state.notifications || []).map(n => ({ ...n, readAt: n.readAt || now }));
+}
+
+export function getNotificationPreferences(): NotificationPreferences | undefined {
+  return state.notificationPreferences;
+}
+
+export function setNotificationPreferences(prefs: NotificationPreferences) {
+  state.notificationPreferences = prefs;
 }
