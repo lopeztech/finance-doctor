@@ -52,3 +52,26 @@ Get the app production-ready.
 - [ ] **Budget alerts** — set up GCP budget alerts for Gemini API spend
 - [ ] **E2E tests** — Playwright tests for login flow, add expense, add investment
 - [ ] **Mobile responsive** — verify and fix layout on mobile devices
+
+## Phase 6: User-friendly polish
+Friction points that hurt activation and retention. Tracked under epic #77.
+
+- [ ] **Onboarding wizard + demo data** (#62) — first-run flow, sample household, restart from settings
+- [ ] **Functional notification center** (#63) — replace the hardcoded stub, in-app feed + preferences
+- [ ] **Command palette + global search** (#64) — Cmd+K to run any action or jump to any record
+- [ ] **Accessibility audit (WCAG 2.1 AA)** (#65) — Lighthouse ≥ 95, axe-clean, keyboard + screen reader
+- [ ] **PWA: install, offline, push** (#66) — installable to home screen, FCM push notifications
+- [ ] **User preferences** (#75) — date format, currency, defaults, notification routing, AI kill switch
+
+## Phase 7: Premium features (paid-tier)
+Features that justify a subscription. Tracked under epic #77.
+
+- [ ] **Budgets with alerts** (#67) — category caps, threshold alerts, Gemini-suggested defaults
+- [ ] **Savings goals** (#68) — targets, projections, milestone notifications, emergency-fund preset
+- [ ] **Bill & subscription manager** (#69) — auto-detect recurring spend, due-date reminders, "what to cancel"
+- [ ] **Document vault** (#70) — attach receipts to expenses, FY-bundle ZIP for accountant, ATO retention
+- [ ] **Scheduled reports + EOFY checklist** (#71) — weekly/monthly digest, May-June tax-prep flow
+- [ ] **Net worth dashboard** (#72) — assets minus liabilities over time, per-member, per-class
+- [ ] **What-if scenario simulator** (#73) — clone household, change variables, side-by-side projections
+- [ ] **Open Banking (CDR) bank feeds** (#74) — auto-import via accredited provider, daily sync
+- [ ] **Subscription tiers + Stripe paywall** (#76) — Free / Pro / Family, webhook-driven gating
