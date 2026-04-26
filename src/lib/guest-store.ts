@@ -2,6 +2,7 @@ import { GUEST_SEED } from './guest-seed';
 import type { Expense, FamilyMember, Investment, IncomeSource } from './types';
 import type { Notification, NotificationKind, NotificationPreferences } from './notification-types';
 import type { UserPreferences } from './user-preferences-types';
+import type { Budget } from './budgets-types';
 
 const FLAG_KEY = 'fd_guest';
 
@@ -51,6 +52,7 @@ interface GuestState {
   notifications?: Notification[];
   notificationPreferences?: NotificationPreferences;
   userPreferences?: UserPreferences;
+  budgets?: Budget[];
 }
 
 function clone<T>(v: T): T {
@@ -308,4 +310,24 @@ export function getUserPreferences(): UserPreferences | undefined {
 
 export function setUserPreferences(prefs: UserPreferences) {
   state.userPreferences = prefs;
+}
+
+// Budgets -----------------------------------------------------------------
+
+export function listBudgets(): Budget[] {
+  return [...(state.budgets || [])];
+}
+
+export function addBudget(data: Omit<Budget, 'id'>): Budget {
+  const budget: Budget = { id: rid('b'), ...data };
+  state.budgets = [...(state.budgets || []), budget];
+  return budget;
+}
+
+export function updateBudget(id: string, patch: Partial<Budget>) {
+  state.budgets = (state.budgets || []).map(b => b.id === id ? { ...b, ...patch } : b);
+}
+
+export function deleteBudget(id: string) {
+  state.budgets = (state.budgets || []).filter(b => b.id !== id);
 }
