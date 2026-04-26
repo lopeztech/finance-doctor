@@ -6,11 +6,15 @@ import ExpensesExclusionSettings from '@/components/expenses-exclusion-settings'
 import CategoryReference from '@/components/category-reference';
 import CashflowReference from '@/components/cashflow-reference';
 import NotificationPreferencesPanel from '@/components/notification-preferences';
+import PreferencesPanel from '@/components/preferences-panel';
 
 export default function SettingsPage() {
   return (
     <>
       <h1 className="page-header">Settings</h1>
+
+      <h2 className="h4 mt-4 mb-3"><i className="fa fa-sliders me-2"></i>Preferences</h2>
+      <PreferencesPanel />
 
       <h2 className="h4 mt-4 mb-3"><i className="fa fa-wallet me-2"></i>Expenses</h2>
       <ExpensesExclusionSettings />

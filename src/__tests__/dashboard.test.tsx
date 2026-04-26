@@ -19,6 +19,17 @@ jest.mock('@/lib/family-members-repo', () => ({
   listFamilyMembers: jest.fn().mockResolvedValue([]),
 }));
 
+jest.mock('@/lib/use-preferences', () => {
+  const { DEFAULT_PREFERENCES } = jest.requireActual('@/lib/user-preferences-types');
+  return {
+    usePreferences: () => ({ prefs: DEFAULT_PREFERENCES, ready: true, update: jest.fn() }),
+    PreferencesProvider: ({ children }: { children: React.ReactNode }) => children,
+    getCachedPreferences: () => DEFAULT_PREFERENCES,
+    isAiAdviceAllowed: () => true,
+    isAiContextOptOut: () => false,
+  };
+});
+
 import Dashboard from '@/app/page';
 
 jest.mock('next/link', () => {

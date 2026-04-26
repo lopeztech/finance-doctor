@@ -9,7 +9,8 @@ import { listExpenses } from '@/lib/expenses-repo';
 import { listInvestments } from '@/lib/investments-repo';
 import { listFamilyMembers } from '@/lib/family-members-repo';
 import { PageFilters, type FilterGroup } from '@/components/page-filters';
-import { maybeEmitEofyReminder } from '@/lib/tax-deadline';
+import { currentFinancialYear, maybeEmitEofyReminder } from '@/lib/tax-deadline';
+import { usePreferences } from '@/lib/use-preferences';
 
 const CATEGORY_ICONS: Record<string, string> = {
   'Work from Home': 'fa-house-laptop',
@@ -49,13 +50,30 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 export default function Dashboard() {
-  const [financialYear, setFinancialYear] = useState('2025-2026');
+  const { prefs, ready: prefsReady } = usePreferences();
+  const initialFy = prefs.defaults.defaultFinancialYear === 'current'
+    ? currentFinancialYear()
+    : prefs.defaults.defaultFinancialYear;
+  const [financialYear, setFinancialYear] = useState(initialFy);
+  const [fyLockedFromPrefs, setFyLockedFromPrefs] = useState(false);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [tips, setTips] = useState<DashboardTip[]>([]);
   const [tipsLoading, setTipsLoading] = useState(true);
+
+  // When prefs land after the initial render (e.g. logged-in fetch finishes),
+  // sync the FY to the saved default — but only if the user hasn't manually
+  // changed it yet.
+  useEffect(() => {
+    if (!prefsReady || fyLockedFromPrefs) return;
+    const desired = prefs.defaults.defaultFinancialYear === 'current'
+      ? currentFinancialYear()
+      : prefs.defaults.defaultFinancialYear;
+    setFinancialYear(desired);
+    setFyLockedFromPrefs(true);
+  }, [prefsReady, fyLockedFromPrefs, prefs.defaults.defaultFinancialYear]);
 
   const fetchExpenses = useCallback(async () => {
     setExpenses(await listExpenses(financialYear));

@@ -16,6 +16,7 @@ import TopMenu from '@/components/top-menu/top-menu';
 import Sidebar from '@/components/sidebar/sidebar';
 import SidebarRight from '@/components/sidebar-right/sidebar-right';
 import { AppSettingsProvider, useAppSettings } from '@/config/app-settings';
+import { PreferencesProvider } from '@/lib/use-preferences';
 import { Open_Sans } from 'next/font/google';
 
 const openSans = Open_Sans({
@@ -117,9 +118,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     	</head>
       <body>
 				<AppSettingsProvider>
-					<AuthGate>
-						<Layout>{children}</Layout>
-					</AuthGate>
+					<PreferencesProvider>
+						<AuthGate>
+							<Layout>{children}</Layout>
+						</AuthGate>
+					</PreferencesProvider>
 				</AppSettingsProvider>
       </body>
     </html>

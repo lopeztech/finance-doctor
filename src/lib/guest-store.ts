@@ -1,6 +1,7 @@
 import { GUEST_SEED } from './guest-seed';
 import type { Expense, FamilyMember, Investment, IncomeSource } from './types';
 import type { Notification, NotificationKind, NotificationPreferences } from './notification-types';
+import type { UserPreferences } from './user-preferences-types';
 
 const FLAG_KEY = 'fd_guest';
 
@@ -49,6 +50,7 @@ interface GuestState {
   incomeSources?: IncomeSource[];
   notifications?: Notification[];
   notificationPreferences?: NotificationPreferences;
+  userPreferences?: UserPreferences;
 }
 
 function clone<T>(v: T): T {
@@ -296,4 +298,14 @@ export function getNotificationPreferences(): NotificationPreferences | undefine
 
 export function setNotificationPreferences(prefs: NotificationPreferences) {
   state.notificationPreferences = prefs;
+}
+
+// User preferences --------------------------------------------------------
+
+export function getUserPreferences(): UserPreferences | undefined {
+  return state.userPreferences;
+}
+
+export function setUserPreferences(prefs: UserPreferences) {
+  state.userPreferences = prefs;
 }
