@@ -1,6 +1,9 @@
 import { GUEST_SEED } from './guest-seed';
 import type { Expense, FamilyMember, Investment, IncomeSource } from './types';
 import type { Notification, NotificationKind, NotificationPreferences } from './notification-types';
+import type { UserPreferences } from './user-preferences-types';
+import type { Budget } from './budgets-types';
+import type { Liability, NetWorthSnapshot } from './networth-types';
 
 const FLAG_KEY = 'fd_guest';
 
@@ -49,6 +52,10 @@ interface GuestState {
   incomeSources?: IncomeSource[];
   notifications?: Notification[];
   notificationPreferences?: NotificationPreferences;
+  userPreferences?: UserPreferences;
+  budgets?: Budget[];
+  liabilities?: Liability[];
+  netWorthHistory?: NetWorthSnapshot[];
 }
 
 function clone<T>(v: T): T {
@@ -296,4 +303,70 @@ export function getNotificationPreferences(): NotificationPreferences | undefine
 
 export function setNotificationPreferences(prefs: NotificationPreferences) {
   state.notificationPreferences = prefs;
+}
+
+// User preferences --------------------------------------------------------
+
+export function getUserPreferences(): UserPreferences | undefined {
+  return state.userPreferences;
+}
+
+export function setUserPreferences(prefs: UserPreferences) {
+  state.userPreferences = prefs;
+}
+
+// Budgets -----------------------------------------------------------------
+
+export function listBudgets(): Budget[] {
+  return [...(state.budgets || [])];
+}
+
+export function addBudget(data: Omit<Budget, 'id'>): Budget {
+  const budget: Budget = { id: rid('b'), ...data };
+  state.budgets = [...(state.budgets || []), budget];
+  return budget;
+}
+
+export function updateBudget(id: string, patch: Partial<Budget>) {
+  state.budgets = (state.budgets || []).map(b => b.id === id ? { ...b, ...patch } : b);
+}
+
+export function deleteBudget(id: string) {
+  state.budgets = (state.budgets || []).filter(b => b.id !== id);
+}
+
+// Liabilities -------------------------------------------------------------
+
+export function listLiabilities(): Liability[] {
+  return [...(state.liabilities || [])];
+}
+
+export function addLiability(data: Omit<Liability, 'id'>): Liability {
+  const liability: Liability = { id: rid('l'), ...data };
+  state.liabilities = [...(state.liabilities || []), liability];
+  return liability;
+}
+
+export function updateLiability(id: string, patch: Partial<Liability>) {
+  state.liabilities = (state.liabilities || []).map(l => l.id === id ? { ...l, ...patch } : l);
+}
+
+export function deleteLiability(id: string) {
+  state.liabilities = (state.liabilities || []).filter(l => l.id !== id);
+}
+
+// Net worth history -------------------------------------------------------
+
+export function listNetWorthHistory(): NetWorthSnapshot[] {
+  return [...(state.netWorthHistory || [])].sort((a, b) => a.id.localeCompare(b.id));
+}
+
+export function saveNetWorthSnapshot(snapshot: NetWorthSnapshot) {
+  const list = state.netWorthHistory || [];
+  const idx = list.findIndex(s => s.id === snapshot.id);
+  if (idx >= 0) {
+    state.netWorthHistory = list.map((s, i) => i === idx ? snapshot : s);
+  } else {
+    state.netWorthHistory = [...list, snapshot];
+  }
 }

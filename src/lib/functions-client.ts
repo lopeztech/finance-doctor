@@ -3,12 +3,24 @@ import { functions } from './firebase';
 import type { Expense } from './types';
 import * as guest from './guest-store';
 import { GUEST_DASHBOARD_TIPS, mockTaxAdviceStream, mockInvestmentsAdviceStream, mockExpensesAdviceStream } from './guest-mocks';
+import { isAiAdviceAllowed, isAiContextOptOut } from './preferences-cache';
 
 type ChatMessage = { role: 'user' | 'model'; text: string };
 
 function assertFunctions() {
   if (!functions) throw new Error('Firebase Functions is not initialised');
   return functions;
+}
+
+export class AiDisabledError extends Error {
+  constructor() {
+    super('AI features are disabled in Settings → Privacy.');
+    this.name = 'AiDisabledError';
+  }
+}
+
+function assertAiAllowed() {
+  if (!isAiAdviceAllowed()) throw new AiDisabledError();
 }
 
 export async function adviceChatGet<T = ChatMessage>(type: 'tax' | 'investments' | 'expenses' | 'custom-spending-categories'): Promise<T[]> {
@@ -37,9 +49,10 @@ export interface DashboardTip {
 }
 
 export async function fetchDashboardTips(): Promise<DashboardTip[]> {
+  if (!isAiAdviceAllowed()) return [];
   if (guest.isGuest()) return GUEST_DASHBOARD_TIPS;
-  const fn = httpsCallable<unknown, { tips: DashboardTip[] }>(assertFunctions(), 'dashboardTips');
-  const res = await fn({});
+  const fn = httpsCallable<{ aiContextOptOut?: boolean }, { tips: DashboardTip[] }>(assertFunctions(), 'dashboardTips');
+  const res = await fn({ aiContextOptOut: isAiContextOptOut() });
   return res.data.tips ?? [];
 }
 
@@ -49,23 +62,26 @@ export interface AdviceStreamHandle {
 }
 
 export async function streamTaxAdvice(payload: { financialYear?: string; history?: ChatMessage[]; followUp?: string }): Promise<AdviceStreamHandle> {
+  assertAiAllowed();
   if (guest.isGuest()) return mockTaxAdviceStream();
-  const fn = httpsCallable<typeof payload, { text: string }, string>(assertFunctions(), 'taxAdvice');
-  const result = await fn.stream(payload);
+  const fn = httpsCallable<typeof payload & { aiContextOptOut?: boolean }, { text: string }, string>(assertFunctions(), 'taxAdvice');
+  const result = await fn.stream({ ...payload, aiContextOptOut: isAiContextOptOut() });
   return { stream: result.stream, final: result.data.then(d => d.text) };
 }
 
 export async function streamInvestmentsAdvice(payload: { history?: ChatMessage[]; followUp?: string }): Promise<AdviceStreamHandle> {
+  assertAiAllowed();
   if (guest.isGuest()) return mockInvestmentsAdviceStream();
-  const fn = httpsCallable<typeof payload, { text: string }, string>(assertFunctions(), 'investmentsAdvice');
-  const result = await fn.stream(payload);
+  const fn = httpsCallable<typeof payload & { aiContextOptOut?: boolean }, { text: string }, string>(assertFunctions(), 'investmentsAdvice');
+  const result = await fn.stream({ ...payload, aiContextOptOut: isAiContextOptOut() });
   return { stream: result.stream, final: result.data.then(d => d.text) };
 }
 
 export async function streamExpensesAdvice(payload: { history?: ChatMessage[]; followUp?: string }): Promise<AdviceStreamHandle> {
+  assertAiAllowed();
   if (guest.isGuest()) return mockExpensesAdviceStream();
-  const fn = httpsCallable<typeof payload, { text: string }, string>(assertFunctions(), 'expensesAdvice');
-  const result = await fn.stream(payload);
+  const fn = httpsCallable<typeof payload & { aiContextOptOut?: boolean }, { text: string }, string>(assertFunctions(), 'expensesAdvice');
+  const result = await fn.stream({ ...payload, aiContextOptOut: isAiContextOptOut() });
   return { stream: result.stream, final: result.data.then(d => d.text) };
 }
 
@@ -183,9 +199,10 @@ export async function cashflowImportSave(rows: Omit<Income, 'id'>[]): Promise<Ca
 }
 
 export async function reanalyseExpenses(payload: { financialYear?: string; type?: 'tax' | 'spending' | 'sub-category' }): Promise<{ updated: number; total: number }> {
+  assertAiAllowed();
   if (guest.isGuest()) return { updated: 0, total: 0 };
-  const fn = httpsCallable<typeof payload, { updated: number; total: number }>(assertFunctions(), 'expensesReanalyse');
-  const res = await fn(payload);
+  const fn = httpsCallable<typeof payload & { aiContextOptOut?: boolean }, { updated: number; total: number }>(assertFunctions(), 'expensesReanalyse');
+  const res = await fn({ ...payload, aiContextOptOut: isAiContextOptOut() });
   return res.data;
 }
 
@@ -202,6 +219,7 @@ export interface ReceiptScanResult {
 }
 
 export async function scanReceipt(imageBase64: string, mimeType: string): Promise<ReceiptScanResult> {
+  assertAiAllowed();
   if (guest.isGuest()) {
     throw new Error('Receipt scanning is disabled in Guest mode — sign in with Google to use Dr Finance Vision.');
   }
