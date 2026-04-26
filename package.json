@@ -70,7 +70,7 @@
     "@types/react-dom": "^19",
     "@types/react-highlight": "^0.12.8",
     "eslint": "^9",
-    "eslint-config-next": "15.3.5",
+    "eslint-config-next": "16.2.2",
     "jest": "^30.3.0",
     "jest-environment-jsdom": "^30.3.0",
     "ts-node": "^10.9.2",
