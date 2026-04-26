@@ -4,7 +4,7 @@ import {
   isInAppEnabled,
   type NotificationPreferences,
 } from '@/lib/notification-types';
-import { currentFinancialYear, daysUntilEofy } from '@/lib/tax-deadline';
+import { currentFinancialYear, daysUntilEofy, daysUntilLodgement } from '@/lib/tax-deadline';
 
 const mockUnreadWatchers: Array<(c: number) => void> = [];
 const mockListWatchers: Array<(items: unknown[]) => void> = [];
@@ -142,5 +142,10 @@ describe('tax deadline helpers', () => {
   it('counts days down to 30 June', () => {
     expect(daysUntilEofy(new Date(2026, 5, 29, 12, 0))).toBeGreaterThanOrEqual(1);
     expect(daysUntilEofy(new Date(2026, 5, 30, 23, 0))).toBe(1);
+  });
+
+  it('counts days down to 31 October for lodgement', () => {
+    expect(daysUntilLodgement(new Date(2026, 9, 30, 12))).toBeGreaterThanOrEqual(1);
+    expect(daysUntilLodgement(new Date(2026, 10, 1))).toBe(0);
   });
 });

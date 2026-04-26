@@ -24,9 +24,13 @@ export interface QuietHours {
   endHHmm: string;
 }
 
+export type DigestFrequency = 'off' | 'weekly' | 'monthly' | 'quarterly';
+
 export interface NotificationPreferences {
   perKind: Partial<Record<NotificationKind, NotificationChannel>>;
   quietHours: QuietHours;
+  /** How often the scheduled email digest fires for this user. */
+  digestFrequency?: DigestFrequency;
 }
 
 export const DEFAULT_PREFERENCES: NotificationPreferences = {
@@ -39,7 +43,15 @@ export const DEFAULT_PREFERENCES: NotificationPreferences = {
     'system': 'in-app',
   },
   quietHours: { enabled: false, startHHmm: '22:00', endHHmm: '07:00' },
+  digestFrequency: 'monthly',
 };
+
+export const DIGEST_FREQUENCY_OPTIONS: { value: DigestFrequency; label: string }[] = [
+  { value: 'off', label: 'Off — never email me' },
+  { value: 'weekly', label: 'Weekly (Monday morning)' },
+  { value: 'monthly', label: 'Monthly (1st of the month)' },
+  { value: 'quarterly', label: 'Quarterly (1st of Jan / Apr / Jul / Oct)' },
+];
 
 export const KIND_META: Record<NotificationKind, { label: string; icon: string; description: string }> = {
   'tax-deadline': {

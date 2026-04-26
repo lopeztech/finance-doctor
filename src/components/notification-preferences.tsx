@@ -9,7 +9,9 @@ import {
 import {
   CHANNEL_OPTIONS,
   DEFAULT_PREFERENCES,
+  DIGEST_FREQUENCY_OPTIONS,
   KIND_META,
+  type DigestFrequency,
   type NotificationChannel,
   type NotificationKind,
   type NotificationPreferences,
@@ -104,6 +106,29 @@ export default function NotificationPreferencesPanel() {
                   })}
                 </tbody>
               </table>
+            </div>
+
+            <h6 className="mb-2">Email digest</h6>
+            <p className="text-muted small mb-2">
+              How often should the rolled-up summary land in your inbox? Each
+              digest stays in-app under the bell as well so you can catch up on
+              anything you missed.
+            </p>
+            <div className="row g-2 align-items-center mb-3">
+              <div className="col-auto">
+                <label className="form-label small mb-0 me-1">Frequency</label>
+                <select
+                  className="form-select form-select-sm d-inline-block"
+                  style={{ width: 280 }}
+                  value={prefs.digestFrequency || 'off'}
+                  onChange={e => persist({ ...prefs, digestFrequency: e.target.value as DigestFrequency })}
+                  disabled={saving}
+                >
+                  {DIGEST_FREQUENCY_OPTIONS.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <h6 className="mb-2">Quiet hours</h6>

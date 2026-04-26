@@ -14,3 +14,4 @@ export { notificationsCleanup } from './handlers/notifications-cleanup';
 export { budgetsAlerts } from './handlers/budgets-alerts';
 export { networthSnapshot } from './handlers/networth-snapshot';
 export { goalsMilestones } from './handlers/goals-milestones';
+export { digestCron } from './handlers/digest-cron';

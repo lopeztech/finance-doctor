@@ -14,6 +14,7 @@ import { usePreferences } from '@/lib/use-preferences';
 import BudgetsWidget from '@/components/budgets-widget';
 import GoalsWidget from '@/components/goals-widget';
 import NetWorthWidget from '@/components/networth-widget';
+import EofyBanner from '@/components/eofy-banner';
 
 const CATEGORY_ICONS: Record<string, string> = {
   'Work from Home': 'fa-house-laptop',
@@ -263,6 +264,7 @@ export default function Dashboard() {
         </div>
       </div>
 
+      <EofyBanner />
       <NetWorthWidget />
       <BudgetsWidget />
       <GoalsWidget />
