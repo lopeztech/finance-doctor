@@ -27,10 +27,10 @@ Reduce manual data entry.
 - [x] **CSV/Excel import for expenses** — upload bank statement or accounting export, auto-map columns
 - [x] **Cashflow CSV import** — transactional Date/Amount/Description/Type with owner tagging
 - [x] **Gemini auto-categorisation** — send expense descriptions to Gemini to auto-assign ATO + spending categories (Pub/Sub fan-out for large imports)
-- [ ] **Receipt scanning** — upload receipt photo, Gemini extracts date/amount/description
+- [x] **Receipt scanning** — upload receipt photo, Gemini extracts date/amount/description
 - [x] **Bulk edit expenses** — select multiple, change category, delete
 - [x] **Recurring expenses** — mark an expense as recurring, auto-populate future months
-- [ ] **Live share prices** — fetch current prices for ASX/US tickers via API to auto-update portfolio values
+- [x] **Live share prices** — fetch current prices for ASX/US tickers via API to auto-update portfolio values
 
 ## Phase 4: Dashboard & Reporting
 Make the dashboard more useful.

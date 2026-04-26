@@ -209,3 +209,30 @@ export async function scanReceipt(imageBase64: string, mimeType: string): Promis
   const res = await fn({ imageBase64, mimeType });
   return res.data;
 }
+
+export interface PriceRefreshResult {
+  id: string;
+  ticker: string;
+  ok: boolean;
+  price?: number;
+  currency?: string;
+  fxToAud?: number;
+  currentValue?: number;
+  previousValue?: number;
+  updatedAt?: string;
+  error?: string;
+}
+
+export interface RefreshPricesResponse {
+  total: number;
+  updated: number;
+  failed: number;
+  results: PriceRefreshResult[];
+}
+
+export async function refreshInvestmentPrices(ids?: string[]): Promise<RefreshPricesResponse> {
+  if (guest.isGuest()) return guest.mockRefreshPrices(ids);
+  const fn = httpsCallable<{ ids?: string[] }, RefreshPricesResponse>(assertFunctions(), 'investmentsRefreshPrices');
+  const res = await fn(ids && ids.length > 0 ? { ids } : {});
+  return res.data;
+}

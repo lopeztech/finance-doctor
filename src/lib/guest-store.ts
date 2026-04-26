@@ -104,6 +104,58 @@ export function deleteInvestment(id: string) {
   state.investments = state.investments.filter(i => i.id !== id);
 }
 
+const TRADED_TYPES = new Set(['Australian Shares', 'International Shares', 'ETFs', 'Cryptocurrency']);
+
+export function mockRefreshPrices(ids?: string[]): {
+  total: number;
+  updated: number;
+  failed: number;
+  results: {
+    id: string;
+    ticker: string;
+    ok: boolean;
+    price?: number;
+    currency?: string;
+    fxToAud?: number;
+    currentValue?: number;
+    previousValue?: number;
+    updatedAt?: string;
+    error?: string;
+  }[];
+} {
+  const eligible = state.investments.filter(inv => {
+    if (!inv.ticker || !TRADED_TYPES.has(inv.type) || !inv.units || inv.units <= 0) return false;
+    if (ids && ids.length > 0) return ids.includes(inv.id);
+    return true;
+  });
+  const nowIso = new Date().toISOString();
+  const results = eligible.map(inv => {
+    // Nudge price ±2.5% deterministically off current value to simulate a refresh.
+    const seed = (inv.id.charCodeAt(0) + inv.id.length + nowIso.length) % 50;
+    const drift = 1 + (seed - 25) / 1000;
+    const newValue = Number((inv.currentValue * drift).toFixed(2));
+    const newPrice = Number((newValue / (inv.units || 1)).toFixed(4));
+    const previousValue = inv.currentValue;
+    state.investments = state.investments.map(i =>
+      i.id === inv.id
+        ? { ...i, currentValue: newValue, lastPrice: newPrice, lastPriceCurrency: 'AUD', lastPriceUpdate: nowIso }
+        : i,
+    );
+    return {
+      id: inv.id,
+      ticker: inv.ticker!.toUpperCase(),
+      ok: true,
+      price: newPrice,
+      currency: 'AUD',
+      fxToAud: 1,
+      currentValue: newValue,
+      previousValue,
+      updatedAt: nowIso,
+    };
+  });
+  return { total: eligible.length, updated: results.length, failed: 0, results };
+}
+
 // Family members -----------------------------------------------------------
 
 export function listFamilyMembers(): FamilyMember[] {

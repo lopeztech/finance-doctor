@@ -83,4 +83,10 @@ export interface Investment {
   couponRate?: number;
   maturityDate?: string;
   monthlyRepayment?: number;
+  // Live-price tracking (traded assets only). Yahoo Finance ticker, e.g.
+  // "BHP.AX", "AAPL", "BTC-AUD". `lastPrice` is per-unit in AUD after FX.
+  ticker?: string;
+  lastPrice?: number;
+  lastPriceCurrency?: string;
+  lastPriceUpdate?: string;
 }
