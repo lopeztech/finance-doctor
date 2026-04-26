@@ -12,6 +12,7 @@ import { PageFilters, type FilterGroup } from '@/components/page-filters';
 import { currentFinancialYear, maybeEmitEofyReminder } from '@/lib/tax-deadline';
 import { usePreferences } from '@/lib/use-preferences';
 import BudgetsWidget from '@/components/budgets-widget';
+import GoalsWidget from '@/components/goals-widget';
 import NetWorthWidget from '@/components/networth-widget';
 
 const CATEGORY_ICONS: Record<string, string> = {
@@ -264,6 +265,7 @@ export default function Dashboard() {
 
       <NetWorthWidget />
       <BudgetsWidget />
+      <GoalsWidget />
 
       {(tips.length > 0 || tipsLoading) && (
         <Panel className="mb-3">

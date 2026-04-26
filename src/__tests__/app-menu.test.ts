@@ -9,12 +9,12 @@ describe('App Menu', () => {
 
   it('has all navigation items', () => {
     const titles = Menu.filter((item: any) => !item.is_header).map((item: any) => item.title);
-    expect(titles).toEqual(['Dashboard', 'Cashflow', 'Tax', 'Expenses', 'Investment Portfolio', 'Budgets', 'Net Worth', 'Settings']);
+    expect(titles).toEqual(['Dashboard', 'Cashflow', 'Tax', 'Expenses', 'Investment Portfolio', 'Budgets', 'Goals', 'Net Worth', 'Settings']);
   });
 
   it('has correct paths', () => {
     const paths = Menu.filter((item: any) => !item.is_header).map((item: any) => item.path);
-    expect(paths).toEqual(['/', '/cashflow', '/tax', '/expenses', '/investments', '/budgets', '/net-worth', '/settings']);
+    expect(paths).toEqual(['/', '/cashflow', '/tax', '/expenses', '/investments', '/budgets', '/goals', '/net-worth', '/settings']);
   });
 
   it('has icons for all nav items', () => {

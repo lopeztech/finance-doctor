@@ -4,6 +4,7 @@ import type { Notification, NotificationKind, NotificationPreferences } from './
 import type { UserPreferences } from './user-preferences-types';
 import type { Budget } from './budgets-types';
 import type { Liability, NetWorthSnapshot } from './networth-types';
+import type { Goal } from './goals-types';
 
 const FLAG_KEY = 'fd_guest';
 
@@ -56,6 +57,7 @@ interface GuestState {
   budgets?: Budget[];
   liabilities?: Liability[];
   netWorthHistory?: NetWorthSnapshot[];
+  goals?: Goal[];
 }
 
 function clone<T>(v: T): T {
@@ -369,4 +371,24 @@ export function saveNetWorthSnapshot(snapshot: NetWorthSnapshot) {
   } else {
     state.netWorthHistory = [...list, snapshot];
   }
+}
+
+// Goals -------------------------------------------------------------------
+
+export function listGoals(): Goal[] {
+  return [...(state.goals || [])];
+}
+
+export function addGoal(data: Omit<Goal, 'id'>): Goal {
+  const goal: Goal = { id: rid('goal'), ...data };
+  state.goals = [...(state.goals || []), goal];
+  return goal;
+}
+
+export function updateGoal(id: string, patch: Partial<Goal>) {
+  state.goals = (state.goals || []).map(g => g.id === id ? { ...g, ...patch } : g);
+}
+
+export function deleteGoal(id: string) {
+  state.goals = (state.goals || []).filter(g => g.id !== id);
 }
