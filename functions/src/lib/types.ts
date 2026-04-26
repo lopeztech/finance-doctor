@@ -77,6 +77,10 @@ export interface Investment {
   couponRate?: number;
   maturityDate?: string;
   monthlyRepayment?: number;
+  ticker?: string;
+  lastPrice?: number;
+  lastPriceCurrency?: string;
+  lastPriceUpdate?: string;
 }
 
 export interface ChatMessage {

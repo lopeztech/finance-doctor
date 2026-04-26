@@ -5,6 +5,7 @@ export { investmentsAdvice } from './handlers/investments-advice';
 export { expensesAdvice } from './handlers/expenses-advice';
 export { expensesImport } from './handlers/expenses-import';
 export { expensesReceiptScan } from './handlers/receipt-scan';
+export { investmentsRefreshPrices } from './handlers/investments-refresh-prices';
 export { expensesMigrate } from './handlers/expenses-migrate';
 export { expensesReanalyse } from './handlers/expenses-reanalyse';
 export { expensesCategoriseWorker } from './handlers/expenses-categorise-worker';

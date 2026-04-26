@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { Investment, FamilyMember, Expense } from '@/lib/types';
-import { adviceChatGet, adviceChatPut, streamInvestmentsAdvice } from '@/lib/functions-client';
+import { adviceChatGet, adviceChatPut, streamInvestmentsAdvice, refreshInvestmentPrices, type RefreshPricesResponse } from '@/lib/functions-client';
 import { listInvestments, addInvestment, updateInvestment, deleteInvestment } from '@/lib/investments-repo';
 import { listExpenses, updateExpense } from '@/lib/expenses-repo';
 import AllocationChart from '@/components/allocation-chart';
@@ -104,6 +104,7 @@ interface FormState {
   units: string;
   buyPricePerUnit: string;
   currentValue: string;
+  ticker: string;
   // Property
   propertyType: string;
   purchasePrice: string;
@@ -125,11 +126,18 @@ interface FormState {
 
 const EMPTY_FORM: FormState = {
   name: '', type: INVESTMENT_TYPES[0], owner: '',
-  units: '', buyPricePerUnit: '', currentValue: '',
+  units: '', buyPricePerUnit: '', currentValue: '', ticker: '',
   propertyType: 'Investment', purchasePrice: '', address: '', rentalIncomeMonthly: '', liability: '', monthlyRepayment: '',
   amount: '', interestRate: '',
   faceValue: '', couponRate: '', maturityDate: '',
   balance: '', employerContribution: '',
+};
+
+const TICKER_PLACEHOLDERS: Record<string, string> = {
+  'Australian Shares': 'e.g. CBA.AX',
+  'International Shares': 'e.g. AAPL',
+  'ETFs': 'e.g. VAS.AX, VTI',
+  'Cryptocurrency': 'e.g. BTC-AUD',
 };
 
 function buildInvestment(form: FormState): Investment {
@@ -138,7 +146,15 @@ function buildInvestment(form: FormState): Investment {
   if (TRADED_TYPES.includes(form.type)) {
     const units = parseFloat(form.units);
     const buyPrice = parseFloat(form.buyPricePerUnit);
-    return { ...base, units, buyPricePerUnit: buyPrice, costBasis: units * buyPrice, currentValue: parseFloat(form.currentValue) };
+    const ticker = form.ticker.trim().toUpperCase();
+    return {
+      ...base,
+      units,
+      buyPricePerUnit: buyPrice,
+      costBasis: units * buyPrice,
+      currentValue: parseFloat(form.currentValue),
+      ...(ticker ? { ticker } : {}),
+    };
   }
   if (form.type === 'Property') {
     const pp = parseFloat(form.purchasePrice);
@@ -208,6 +224,19 @@ function TypeSpecificFields({ form, setForm }: { form: FormState; setForm: (f: F
         <div className="col-12">
           <label className="form-label text-muted small mb-1">Current total value</label>
           <CurrencyInput placeholder="0.00" value={form.currentValue} onChange={v => setForm({ ...form, currentValue: v })} required />
+        </div>
+        <div className="col-12">
+          <label className="form-label text-muted small mb-1">Ticker (optional)</label>
+          <input
+            type="text"
+            className="form-control"
+            placeholder={TICKER_PLACEHOLDERS[type] || 'e.g. AAPL'}
+            value={form.ticker}
+            onChange={e => setForm({ ...form, ticker: e.target.value })}
+            autoCapitalize="characters"
+            autoComplete="off"
+          />
+          <div className="form-text small">Yahoo Finance symbol — ASX needs <code>.AX</code>, crypto uses <code>BTC-AUD</code>. Set this to refresh the price live.</div>
         </div>
       </>
     );
@@ -370,6 +399,22 @@ function estimateCgt(inv: Investment, familyMembers: FamilyMember[]): { amount: 
   return { amount: cgt, label: `$${cgt.toLocaleString('en-AU', { minimumFractionDigits: 2 })}` };
 }
 
+function formatRelative(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (!Number.isFinite(then)) return '';
+  const diffMs = Date.now() - then;
+  if (diffMs < 0) return 'just now';
+  const sec = Math.floor(diffMs / 1000);
+  if (sec < 45) return 'just now';
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const day = Math.floor(hr / 24);
+  if (day < 30) return `${day}d ago`;
+  return new Date(iso).toLocaleDateString('en-AU');
+}
+
 function formatDetail(inv: Investment): string {
   if (TRADED_TYPES.includes(inv.type) && inv.units) return `${inv.units} units @ $${inv.buyPricePerUnit?.toFixed(2)}`;
   if (inv.type === 'Property') {
@@ -403,6 +448,9 @@ export default function InvestmentsPage() {
   const [expandedInvCategories, setExpandedInvCategories] = useState<Set<string>>(new Set());
   const [expandedInvSubs, setExpandedInvSubs] = useState<Set<string>>(new Set());
   const [mode, setMode] = useViewMode('viewMode.investments');
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshSummary, setRefreshSummary] = useState<RefreshPricesResponse | null>(null);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
 
   const toggleInvestmentExpanded = (key: string) => {
     setExpandedInvestmentIds(prev => {
@@ -496,6 +544,7 @@ export default function InvestmentsPage() {
       f.units = String(inv.units || '');
       f.buyPricePerUnit = String(inv.buyPricePerUnit || '');
       f.currentValue = String(inv.currentValue);
+      f.ticker = inv.ticker || '';
     } else if (inv.type === 'Property') {
       f.propertyType = inv.propertyType || 'Investment';
       f.address = inv.address || '';
@@ -534,6 +583,36 @@ export default function InvestmentsPage() {
     await deleteInvestment(id);
     setInvestments(prev => prev.filter(i => i.id !== id));
   };
+
+  const refreshPrices = async (id?: string) => {
+    setRefreshing(true);
+    setRefreshError(null);
+    setRefreshSummary(null);
+    try {
+      const res = await refreshInvestmentPrices(id ? [id] : undefined);
+      setRefreshSummary(res);
+      if (res.updated > 0) {
+        const byId = new Map(res.results.filter(r => r.ok).map(r => [r.id, r]));
+        setInvestments(prev => prev.map(inv => {
+          const r = byId.get(inv.id);
+          if (!r) return inv;
+          return {
+            ...inv,
+            currentValue: r.currentValue ?? inv.currentValue,
+            lastPrice: r.price,
+            lastPriceCurrency: r.currency,
+            lastPriceUpdate: r.updatedAt,
+          };
+        }));
+      }
+    } catch (err) {
+      setRefreshError(err instanceof Error ? err.message : 'Could not refresh prices.');
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const tickerCount = investments.filter(i => i.ticker && TRADED_TYPES.includes(i.type) && (i.units || 0) > 0).length;
 
   const streamAdvice = async (history: { role: 'user' | 'model'; text: string }[], followUp?: string) => {
     setAdviceLoading(true);
@@ -1017,12 +1096,45 @@ export default function InvestmentsPage() {
             <PanelHeader noButton>
               <div className="d-flex flex-wrap align-items-center gap-2">
                 <span>Investments</span>
-                <button className="btn btn-success btn-sm ms-sm-auto" onClick={() => { if (showForm) cancelEdit(); else setShowForm(true); }}>
+                {tickerCount > 0 && (
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-primary ms-sm-auto"
+                    onClick={() => refreshPrices()}
+                    disabled={refreshing}
+                    title={`Refresh live prices for ${tickerCount} ticker${tickerCount === 1 ? '' : 's'}`}
+                  >
+                    {refreshing
+                      ? <><i className="fa fa-spinner fa-spin me-1"></i>Refreshing...</>
+                      : <><i className="fa fa-arrows-rotate me-1"></i>Refresh Prices</>}
+                  </button>
+                )}
+                <button
+                  className="btn btn-success btn-sm"
+                  style={tickerCount === 0 ? { marginLeft: 'auto' } : undefined}
+                  onClick={() => { if (showForm) cancelEdit(); else setShowForm(true); }}
+                >
                   {showForm ? <><i className="fa fa-times me-1"></i>Cancel</> : <><i className="fa fa-plus me-1"></i>Add Investment</>}
                 </button>
               </div>
             </PanelHeader>
             <PanelBody>
+              {refreshError && (
+                <div className="alert alert-danger alert-dismissible py-2 small mb-3" role="alert">
+                  <i className="fa fa-triangle-exclamation me-1"></i>{refreshError}
+                  <button type="button" className="btn-close btn-sm" aria-label="Dismiss" onClick={() => setRefreshError(null)}></button>
+                </div>
+              )}
+              {refreshSummary && (
+                <div className={`alert ${refreshSummary.failed === 0 ? 'alert-success' : 'alert-warning'} alert-dismissible py-2 small mb-3`} role="alert">
+                  <i className="fa fa-circle-info me-1"></i>
+                  Refreshed <strong>{refreshSummary.updated}</strong> of {refreshSummary.total} holdings.
+                  {refreshSummary.failed > 0 && (
+                    <> Failed: {refreshSummary.results.filter(r => !r.ok).map(r => `${r.ticker} (${r.error || 'unknown'})`).join(', ')}.</>
+                  )}
+                  <button type="button" className="btn-close btn-sm" aria-label="Dismiss" onClick={() => setRefreshSummary(null)}></button>
+                </div>
+              )}
               {showForm && (
                 <form onSubmit={handleSubmit} className="mb-3 p-3 bg-light rounded" style={{ maxWidth: '400px' }}>
                   <div className="mb-3">
@@ -1087,7 +1199,14 @@ export default function InvestmentsPage() {
                         const cgt = estimateCgt(inv, familyMembers);
                         return (
                           <tr key={inv.id}>
-                            <td className="fw-bold">{inv.name}</td>
+                            <td className="fw-bold">
+                              {inv.name}
+                              {inv.ticker && (
+                                <div className="text-muted small fw-normal">
+                                  <i className="fa fa-tag me-1" style={{ fontSize: '0.7rem' }}></i>{inv.ticker}
+                                </div>
+                              )}
+                            </td>
                             <td className="text-muted small">{inv.owner || '—'}</td>
                             <td>
                               <span className={`badge ${TYPE_COLORS[inv.type] || 'bg-secondary'}`}>
@@ -1098,7 +1217,15 @@ export default function InvestmentsPage() {
                             <td className="text-muted small">{formatDetail(inv)}</td>
                             <td className="text-end">${inv.costBasis.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</td>
                             <td className="text-end">{inv.type === 'Property' && inv.liability ? `$${inv.liability.toLocaleString('en-AU', { minimumFractionDigits: 2 })}` : '—'}</td>
-                            <td className="text-end">${inv.currentValue.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</td>
+                            <td className="text-end">
+                              ${inv.currentValue.toLocaleString('en-AU', { minimumFractionDigits: 2 })}
+                              {inv.lastPriceUpdate && (
+                                <div className="text-muted small" title={`Last refreshed ${new Date(inv.lastPriceUpdate).toLocaleString('en-AU')}`}>
+                                  <i className="fa fa-clock me-1" style={{ fontSize: '0.7rem' }}></i>
+                                  {formatRelative(inv.lastPriceUpdate)}
+                                </div>
+                              )}
+                            </td>
                             <td className={`text-end fw-bold ${gainLoss >= 0 ? 'text-success' : 'text-danger'}`}>
                               {gainLoss >= 0 ? '+' : ''}{gainLoss.toLocaleString('en-AU', { minimumFractionDigits: 2 })}
                               <small className="ms-1">({returnPct >= 0 ? '+' : ''}{returnPct.toFixed(1)}%)</small>
@@ -1107,6 +1234,16 @@ export default function InvestmentsPage() {
                               {cgt ? cgt.label : '—'}
                             </td>
                             <td className="text-nowrap">
+                              {inv.ticker && TRADED_TYPES.includes(inv.type) && (inv.units || 0) > 0 && (
+                                <button
+                                  className="btn btn-xs btn-outline-primary me-1"
+                                  onClick={() => refreshPrices(inv.id)}
+                                  disabled={refreshing}
+                                  title="Refresh price"
+                                >
+                                  <i className={`fa fa-arrows-rotate ${refreshing ? 'fa-spin' : ''}`}></i>
+                                </button>
+                              )}
                               <button className="btn btn-xs btn-primary me-1" onClick={() => startEdit(inv)} title="Edit">
                                 <i className="fa fa-pencil-alt"></i>
                               </button>
