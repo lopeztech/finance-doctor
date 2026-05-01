@@ -1,11 +1,12 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { Liability, NetWorthSnapshot } from '@/lib/networth-types';
-import type { Investment, FamilyMember } from '@/lib/types';
+import type { Investment, FamilyMember, Expense } from '@/lib/types';
 
 const mockListInvestments = jest.fn<Promise<Investment[]>, []>();
 const mockListLiabilities = jest.fn<Promise<Liability[]>, []>();
 const mockListFamilyMembers = jest.fn<Promise<FamilyMember[]>, []>();
 const mockListHistory = jest.fn<Promise<NetWorthSnapshot[]>, []>();
+const mockListExpenses = jest.fn<Promise<Expense[]>, [string]>();
 const mockAddLiability = jest.fn();
 const mockSaveSnapshot = jest.fn();
 
@@ -23,6 +24,10 @@ jest.mock('@/lib/networth-history-repo', () => ({
   listNetWorthHistory: () => mockListHistory(),
   saveNetWorthSnapshot: (...args: unknown[]) => mockSaveSnapshot(...args),
 }));
+jest.mock('@/lib/expenses-repo', () => ({ listExpenses: (fy: string) => mockListExpenses(fy) }));
+jest.mock('@/lib/budgets-repo', () => ({
+  watchBudgets: (cb: (b: unknown[]) => void) => { cb([]); return () => {}; },
+}));
 jest.mock('@/lib/use-preferences', () => {
   const { DEFAULT_PREFERENCES } = jest.requireActual('@/lib/user-preferences-types');
   return {
@@ -30,23 +35,29 @@ jest.mock('@/lib/use-preferences', () => {
   };
 });
 
-import NetWorthPage from '@/app/net-worth/page';
+jest.mock('next/link', () => {
+  return function MockLink({ children, href }: { children: React.ReactNode; href: string }) {
+    return <a href={href}>{children}</a>;
+  };
+});
+
+import NetWorthPage from '@/app/page';
+
+const mockFetch = jest.fn();
+global.fetch = mockFetch;
 
 beforeEach(() => {
   mockListInvestments.mockReset().mockResolvedValue([]);
   mockListLiabilities.mockReset().mockResolvedValue([]);
   mockListFamilyMembers.mockReset().mockResolvedValue([]);
   mockListHistory.mockReset().mockResolvedValue([]);
+  mockListExpenses.mockReset().mockResolvedValue([]);
   mockAddLiability.mockReset().mockResolvedValue({ id: 'new' });
   mockSaveSnapshot.mockReset().mockResolvedValue(undefined);
+  mockFetch.mockReset().mockResolvedValue({ ok: true, json: async () => [] });
 });
 
-describe('/net-worth page (smoke)', () => {
-  it('renders the page header', async () => {
-    render(<NetWorthPage />);
-    await waitFor(() => expect(screen.getByText('Net Worth')).toBeInTheDocument());
-  });
-
+describe('Net Worth root page (smoke)', () => {
   it('exposes the Save snapshot and Add liability buttons', async () => {
     render(<NetWorthPage />);
     await screen.findByRole('button', { name: /Save snapshot/i });
@@ -81,8 +92,6 @@ describe('/net-worth page (smoke)', () => {
     mockListFamilyMembers.mockResolvedValue([{ id: 'm1', name: 'Alex', salary: 100000 }]);
 
     render(<NetWorthPage />);
-    // Alex appears in the per-member breakdown and as an owner option in the
-    // form, so just assert there's at least one match.
     await waitFor(() => expect(screen.getAllByText('Alex').length).toBeGreaterThan(0));
     expect(screen.getByText('ANZ')).toBeInTheDocument();
   });

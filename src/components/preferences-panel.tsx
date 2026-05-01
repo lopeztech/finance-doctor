@@ -154,7 +154,7 @@ export default function PreferencesPanel() {
                       <option key={fy} value={fy}>FY {fy}</option>
                     ))}
                   </select>
-                  <small className="text-muted">Used by the Dashboard and Tax filters on first load.</small>
+                  <small className="text-muted">Used by the Net Worth and Tax filters on first load.</small>
                 </div>
                 <div className="col-md-6">
                   <label className="form-label small text-muted">Default member (expense / investment owner)</label>
