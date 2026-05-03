@@ -181,7 +181,8 @@ interface FinancialYearFilterProps {
   onChange: (p: Period) => void;
   /** FY strings ("YYYY-YYYY") found in the page's data — current and last FY are always included. */
   availableFys: string[];
-  defaultFy?: 'current' | 'last';
+  /** 'current' / 'last' / explicit FY string ("YYYY-YYYY"). Overridden by localStorage if storageKey hits. */
+  defaultFy?: 'current' | 'last' | string;
   storageKey?: string;
   className?: string;
 }
@@ -215,7 +216,11 @@ export function FinancialYearFilter({
       .sort((a, b) => b.localeCompare(a));
   }, [currentFy, lastFy, availableFys]);
 
-  const initialFy = defaultFy === 'current' ? currentFy : lastFy;
+  const initialFy = useMemo(() => {
+    if (defaultFy === 'last') return lastFy;
+    if (defaultFy && defaultFy !== 'current' && /^\d{4}-\d{4}$/.test(defaultFy)) return defaultFy;
+    return currentFy;
+  }, [defaultFy, currentFy, lastFy]);
   const [selectedFy, setSelectedFy] = useState<string>(initialFy);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;

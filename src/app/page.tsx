@@ -33,7 +33,8 @@ import {
 } from '@/lib/networth-types';
 import { formatCurrency } from '@/lib/format';
 import { monthKey } from '@/lib/budgets-calc';
-import { PageFilters, type FilterGroup } from '@/components/page-filters';
+import { FinancialYearFilter } from '@/components/period-filter';
+import { getFinancialYear, type Period } from '@/lib/period';
 import { currentFinancialYear, maybeEmitEofyReminder } from '@/lib/tax-deadline';
 import { usePreferences } from '@/lib/use-preferences';
 import BudgetsWidget from '@/components/budgets-widget';
@@ -110,8 +111,8 @@ export default function NetWorthPage() {
   const initialFy = prefs.defaults.defaultFinancialYear === 'current'
     ? currentFinancialYear()
     : prefs.defaults.defaultFinancialYear;
-  const [financialYear, setFinancialYear] = useState(initialFy);
-  const [fyLockedFromPrefs, setFyLockedFromPrefs] = useState(false);
+  const [period, setPeriod] = useState<Period>(null);
+  const financialYear = period ? getFinancialYear(period.fromYmd) : initialFy;
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
@@ -126,15 +127,6 @@ export default function NetWorthPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!prefsReady || fyLockedFromPrefs) return;
-    const desired = prefs.defaults.defaultFinancialYear === 'current'
-      ? currentFinancialYear()
-      : prefs.defaults.defaultFinancialYear;
-    setFinancialYear(desired);
-    setFyLockedFromPrefs(true);
-  }, [prefsReady, fyLockedFromPrefs, prefs.defaults.defaultFinancialYear]);
 
   const fetchExpenses = useCallback(async () => {
     setExpenses(await listExpenses(financialYear));
@@ -369,21 +361,16 @@ export default function NetWorthPage() {
         <h1 className="page-header mb-0">Net Worth</h1>
       </div>
 
-      {(() => {
-        const groups: FilterGroup[] = [{
-          id: 'fy',
-          icon: 'fa-calendar',
-          label: 'Financial Year',
-          value: financialYear,
-          onChange: (v: string) => setFinancialYear(v),
-          options: [
-            { value: '2025-2026', label: 'FY 2025-2026' },
-            { value: '2024-2025', label: 'FY 2024-2025' },
-            { value: '2023-2024', label: 'FY 2023-2024' },
-          ],
-        }];
-        return <PageFilters groups={groups} className="mb-3" />;
-      })()}
+      <div className="mb-3">
+        {prefsReady && (
+          <FinancialYearFilter
+            onChange={setPeriod}
+            availableFys={[]}
+            defaultFy={prefs.defaults.defaultFinancialYear}
+            storageKey="period.networth"
+          />
+        )}
+      </div>
 
       <Panel className="mb-3">
         <PanelHeader noButton>

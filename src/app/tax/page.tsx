@@ -2,15 +2,16 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
-import type { Expense, FamilyMember } from '@/lib/types';
+import type { Expense } from '@/lib/types';
 import { adviceChatGet, adviceChatPut, reanalyseExpenses, streamTaxAdvice } from '@/lib/functions-client';
 import { listExpenses, updateExpense } from '@/lib/expenses-repo';
-import { listFamilyMembers } from '@/lib/family-members-repo';
 import { upsertCategoryRule } from '@/lib/category-rules-repo';
 import DeductionsChart from '@/components/deductions-chart';
 import YoyChart from '@/components/yoy-chart';
 import { ViewToggle, useViewMode } from '@/components/view-toggle';
-import { PageFilters, type FilterGroup } from '@/components/page-filters';
+import { FinancialYearFilter } from '@/components/period-filter';
+import { dateInRange, getFinancialYear, currentFinancialYear, type Period } from '@/lib/period';
+import { useMember } from '@/lib/use-member';
 
 const CATEGORIES = [
   'Clothing & Laundry',
@@ -56,24 +57,15 @@ const CATEGORY_COLORS: Record<string, string> = {
   'Other Deductions': '#6c757d',
 };
 
-function getFinancialYear(date: string): string {
-  const [yearStr, monthStr] = date.split('-');
-  const year = parseInt(yearStr);
-  const month = parseInt(monthStr);
-  if (month >= 7) return `${year}-${year + 1}`;
-  return `${year - 1}-${year}`;
-}
-
 export default function TaxPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
-  const [financialYear, setFinancialYear] = useState('all');
+  const [period, setPeriod] = useState<Period>(null);
+  const { memberId } = useMember();
   const [adviceHistory, setAdviceHistory] = useState<{ role: 'user' | 'model'; text: string }[]>([]);
   const [adviceLoading, setAdviceLoading] = useState(false);
   const [followUpInput, setFollowUpInput] = useState('');
   const [adviceCollapsed, setAdviceCollapsed] = useState(false);
-  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
-  const [selectedOwner, setSelectedOwner] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [expandedNonDeductible, setExpandedNonDeductible] = useState<Set<string>>(new Set());
   const [reanalysing, setReanalysing] = useState(false);
@@ -90,11 +82,15 @@ export default function TaxPage() {
   }, []);
 
   useEffect(() => {
-    listFamilyMembers().then(setFamilyMembers).catch(() => setFamilyMembers([]));
     adviceChatGet('tax')
       .then(history => { if (history.length) setAdviceHistory(history); })
       .catch(() => {});
   }, []);
+
+  // FY-only filter, so the period always corresponds to a single FY string we
+  // can pass to the tax AI calls below. Fall back to the current FY before the
+  // FinancialYearFilter has had a chance to fire its first onChange.
+  const selectedFy = period ? getFinancialYear(period.fromYmd) : currentFinancialYear();
 
   const fetchExpenses = useCallback(async () => {
     setLoading(true);
@@ -156,7 +152,7 @@ export default function TaxPage() {
   const reanalyseOther = async () => {
     setReanalysing(true);
     try {
-      await reanalyseExpenses({ financialYear });
+      await reanalyseExpenses({ financialYear: selectedFy });
       await fetchExpenses();
     } catch {}
     setReanalysing(false);
@@ -166,7 +162,7 @@ export default function TaxPage() {
     setAdviceLoading(true);
     let handle;
     try {
-      handle = await streamTaxAdvice({ financialYear, history, followUp });
+      handle = await streamTaxAdvice({ financialYear: selectedFy, history, followUp });
     } catch (err) {
       const errorMsg = `Unable to generate advice: ${err instanceof Error ? err.message : 'Unknown error'}`;
       const updated = [...history, ...(followUp ? [{ role: 'user' as const, text: followUp }] : []), { role: 'model' as const, text: errorMsg }];
@@ -249,8 +245,8 @@ export default function TaxPage() {
   const getExpenseFY = (e: Expense) => e.date ? getFinancialYear(e.date) : (e.financialYear || '');
 
   const filteredExpenses = expenses.filter(e => {
-    if (selectedOwner && e.owner !== selectedOwner) return false;
-    if (financialYear !== 'all' && getExpenseFY(e) !== financialYear) return false;
+    if (memberId && e.owner !== memberId) return false;
+    if (!dateInRange(e.date, period)) return false;
     return true;
   });
 
@@ -287,9 +283,9 @@ export default function TaxPage() {
     return acc;
   }, {} as Record<string, Expense[]>);
 
-  // YoY uses all expenses regardless of FY filter (but respects owner filter)
+  // YoY uses all expenses regardless of FY filter (but respects member filter)
   const allDeductibleExpenses = expenses.filter(e => {
-    if (selectedOwner && e.owner !== selectedOwner) return false;
+    if (memberId && e.owner !== memberId) return false;
     return !e.nonDeductible && e.category !== 'Other Deductions';
   });
   const yoyByFy = allDeductibleExpenses.reduce((acc, e) => {
@@ -312,35 +308,14 @@ export default function TaxPage() {
         <ViewToggle value={mode} onChange={setMode} className="ms-sm-auto" showDoctor />
       </div>
 
-      {(() => {
-        const fys = [...new Set(expenses.map(e => getExpenseFY(e)).filter(Boolean))].sort().reverse();
-        const groups: FilterGroup[] = [];
-        if (familyMembers.length > 0) {
-          groups.push({
-            id: 'owner',
-            icon: 'fa-user',
-            label: 'Member',
-            value: selectedOwner,
-            onChange: (v: string) => setSelectedOwner(v),
-            options: [
-              { value: '', label: 'All' },
-              ...familyMembers.map(m => ({ value: m.name, label: m.name })),
-            ],
-          });
-        }
-        groups.push({
-          id: 'fy',
-          icon: 'fa-calendar',
-          label: 'Financial Year',
-          value: financialYear,
-          onChange: (v: string) => setFinancialYear(v),
-          options: [
-            { value: 'all', label: 'All' },
-            ...fys.map(fy => ({ value: fy, label: `FY ${fy}` })),
-          ],
-        });
-        return <PageFilters groups={groups} className="mb-3" />;
-      })()}
+      <div className="mb-3">
+        <FinancialYearFilter
+          onChange={setPeriod}
+          availableFys={[...new Set(expenses.map(e => getExpenseFY(e)).filter(Boolean))]}
+          defaultFy="current"
+          storageKey="period.tax"
+        />
+      </div>
 
       {mode === 'summary' && <>
       <div className="row mb-3">
@@ -383,7 +358,7 @@ export default function TaxPage() {
           <PanelHeader noButton>
             <div className="d-flex align-items-center">
               <i className="fa fa-chart-column me-2"></i>Deductions breakdown
-              {selectedOwner && <span className="badge bg-primary ms-2">{selectedOwner}</span>}
+              {memberId && <span className="badge bg-primary ms-2">{memberId}</span>}
             </div>
           </PanelHeader>
           <PanelBody>
@@ -397,7 +372,7 @@ export default function TaxPage() {
           <PanelHeader noButton>
             <div className="d-flex align-items-center">
               <i className="fa fa-chart-bar me-2"></i>Year-over-Year Comparison
-              {selectedOwner && <span className="badge bg-primary ms-2">{selectedOwner}</span>}
+              {memberId && <span className="badge bg-primary ms-2">{memberId}</span>}
               <span className="ms-auto text-muted small">{yoyFys.length} financial years</span>
             </div>
           </PanelHeader>
@@ -506,7 +481,7 @@ export default function TaxPage() {
           <PanelHeader noButton>
             <div className="d-flex align-items-center">
               <i className="fa fa-receipt me-2"></i>Deductions by Category
-              {selectedOwner && <span className="badge bg-primary ms-2">{selectedOwner}</span>}
+              {memberId && <span className="badge bg-primary ms-2">{memberId}</span>}
             </div>
           </PanelHeader>
             <PanelBody>
