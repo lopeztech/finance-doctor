@@ -2,10 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
-import type { Expense, FamilyMember } from '@/lib/types';
+import type { Expense } from '@/lib/types';
 import { adviceChatGet, adviceChatPut, reanalyseExpenses, streamExpensesAdvice } from '@/lib/functions-client';
 import { listExpenses, updateExpense, addExpenses, deleteExpense } from '@/lib/expenses-repo';
-import { listFamilyMembers } from '@/lib/family-members-repo';
 import { upsertCategoryRule } from '@/lib/category-rules-repo';
 import { getCategorySettings, setCategoryType, resolveType, type CategorySettings, type SpendingCategoryType } from '@/lib/category-settings-repo';
 import RecurringModal from '@/components/recurring-modal';
@@ -13,7 +12,9 @@ import { notify } from '@/lib/notifications-repo';
 import BulkActionsBar from '@/components/bulk-actions-bar';
 import { MonthlyTrend, TopVendorsChart } from '@/components/spending-charts';
 import { ViewToggle, useViewMode } from '@/components/view-toggle';
-import { PageFilters, type FilterGroup } from '@/components/page-filters';
+import { PeriodFilter } from '@/components/period-filter';
+import { dateInRange, type Period } from '@/lib/period';
+import { useMember } from '@/lib/use-member';
 
 const TYPE_META: Record<SpendingCategoryType, { label: string; color: string; bg: string; description: string }> = {
   essential: { label: 'Essential', color: '#198754', bg: 'bg-success', description: 'Unavoidable — floor of your cashflow' },
@@ -85,11 +86,9 @@ type SortDir = 'asc' | 'desc';
 
 export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedYear, setSelectedYear] = useState('all');
-  const [selectedMonth, setSelectedMonth] = useState('all');
-  const [selectedOwner, setSelectedOwner] = useState('');
+  const [period, setPeriod] = useState<Period>(null);
+  const { memberId } = useMember();
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [expandedSubs, setExpandedSubs] = useState<Set<string>>(new Set());
 
@@ -165,7 +164,6 @@ export default function ExpensesPage() {
 
   useEffect(() => {
     fetchExpenses();
-    listFamilyMembers().then(setFamilyMembers).catch(() => setFamilyMembers([]));
   }, [fetchExpenses]);
 
   // All spending categories: defaults + custom + any from data
@@ -254,9 +252,6 @@ export default function ExpensesPage() {
     upsertCategoryRule({ pattern: expense.description, spendingSubCategory: value }).catch(() => {});
   };
 
-  const getExpenseYear = (e: Expense) => e.date ? e.date.substring(0, 4) : '';
-  const getExpenseMonthNum = (e: Expense) => e.date ? e.date.substring(5, 7) : '';
-
   const hasSubCategory = (e: Expense) => Boolean(e.spendingSubCategory?.trim());
 
   const excludedSet = new Set(categorySettings.excluded);
@@ -264,9 +259,8 @@ export default function ExpensesPage() {
   const excludedTotal = excludedExpenses.reduce((s, e) => s + e.amount, 0);
   const baseFilteredExpenses = expenses.filter(e => {
     if (excludedSet.has(e.spendingCategory || 'Other')) return false;
-    if (selectedOwner && e.owner !== selectedOwner) return false;
-    if (selectedYear !== 'all' && getExpenseYear(e) !== selectedYear) return false;
-    if (selectedMonth !== 'all' && getExpenseMonthNum(e) !== selectedMonth) return false;
+    if (memberId && e.owner !== memberId) return false;
+    if (!dateInRange(e.date, period)) return false;
     return true;
   });
   const uncategorisedCount = baseFilteredExpenses.filter(e => !hasSubCategory(e)).length;
@@ -509,49 +503,13 @@ export default function ExpensesPage() {
         <ViewToggle value={mode} onChange={setMode} className="ms-sm-auto" showDoctor />
       </div>
 
-      {(() => {
-        const years = [...new Set(expenses.map(e => getExpenseYear(e)).filter(Boolean))].sort().reverse();
-        const groups: FilterGroup[] = [];
-        if (familyMembers.length > 0) {
-          groups.push({
-            id: 'owner',
-            icon: 'fa-user',
-            label: 'Member',
-            value: selectedOwner,
-            onChange: (v: string) => setSelectedOwner(v),
-            options: [
-              { value: '', label: 'All' },
-              ...familyMembers.map(m => ({ value: m.name, label: m.name })),
-            ],
-          });
-        }
-        groups.push({
-          id: 'year',
-          icon: 'fa-calendar',
-          label: 'Year',
-          value: selectedYear,
-          onChange: (v: string) => setSelectedYear(v),
-          options: [
-            { value: 'all', label: 'All' },
-            ...years.map(y => ({ value: y, label: y })),
-          ],
-        });
-        groups.push({
-          id: 'month',
-          icon: 'fa-calendar-day',
-          label: 'Month',
-          value: selectedMonth,
-          onChange: (v: string) => setSelectedMonth(v),
-          options: [
-            { value: 'all', label: 'All' },
-            ...['01','02','03','04','05','06','07','08','09','10','11','12'].map(m => ({
-              value: m,
-              label: new Date(`2000-${m}-01`).toLocaleDateString('en-AU', { month: 'short' }),
-            })),
-          ],
-        });
-        return <PageFilters groups={groups} className="mb-3" />;
-      })()}
+      <div className="mb-3">
+        <PeriodFilter
+          onChange={setPeriod}
+          defaultPreset="last-6m"
+          storageKey="period.expenses"
+        />
+      </div>
 
       {mode === 'summary' && <>
       <div className="row mb-3">
