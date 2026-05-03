@@ -12,7 +12,9 @@ import { listIncome, deleteIncome, updateIncome } from '@/lib/income-repo';
 import { getCategorySettings, type CategorySettings, type SpendingCategoryType } from '@/lib/category-settings-repo';
 import { computeCashflow, type CashflowSnapshot } from '@/lib/cashflow-calc';
 import { ViewToggle, useViewMode } from '@/components/view-toggle';
-import { PageFilters, type FilterGroup } from '@/components/page-filters';
+import { PeriodFilter } from '@/components/period-filter';
+import { dateInRange, type Period } from '@/lib/period';
+import { useMember } from '@/lib/use-member';
 
 const INCOME_TYPES: { value: IncomeSourceType; label: string; icon: string }[] = [
   { value: 'dividend', label: 'Dividend', icon: 'fa-chart-line' },
@@ -62,9 +64,8 @@ export default function CashflowPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [incomeSources, setIncomeSources] = useState<IncomeSource[]>([]);
   const [income, setIncome] = useState<Income[]>([]);
-  const [selectedOwner, setSelectedOwner] = useState('');
-  const [selectedYear, setSelectedYear] = useState('all');
-  const [selectedMonth, setSelectedMonth] = useState('all');
+  const [period, setPeriod] = useState<Period>(null);
+  const { memberId } = useMember();
   const [expandedIncomeTypes, setExpandedIncomeTypes] = useState<Set<string>>(new Set());
 
   const toggleIncomeType = (t: string) => {
@@ -208,15 +209,14 @@ export default function CashflowPage() {
   }
 
   const matchesFilters = (date: string, owner: string | undefined): boolean => {
-    if (selectedYear !== 'all' && date.substring(0, 4) !== selectedYear) return false;
-    if (selectedMonth !== 'all' && date.substring(5, 7) !== selectedMonth) return false;
-    if (selectedOwner && owner !== selectedOwner) return false;
+    if (!dateInRange(date, period)) return false;
+    if (memberId && owner !== memberId) return false;
     return true;
   };
 
   const filteredExpenses = expenses.filter(e => matchesFilters(e.date, e.owner));
   const filteredIncome = income.filter(r => matchesFilters(r.date, r.owner));
-  const anyFilterActive = selectedOwner !== '' || selectedYear !== 'all' || selectedMonth !== 'all';
+  const anyFilterActive = memberId !== '' || period !== null;
 
   const snap: CashflowSnapshot = computeCashflow({ members, investments, expenses: filteredExpenses, incomeSources, categorySettings, income: filteredIncome });
 
@@ -259,43 +259,13 @@ export default function CashflowPage() {
         </div>
       </div>
 
-      {(() => {
-        const years = [...new Set([
-          ...income.map(r => r.date?.substring(0, 4)),
-          ...expenses.map(e => e.date?.substring(0, 4)),
-        ].filter(Boolean) as string[])].sort().reverse();
-        const groups: FilterGroup[] = [];
-        if (members.length > 0) {
-          groups.push({
-            id: 'owner', icon: 'fa-user', label: 'Member',
-            value: selectedOwner, onChange: (v: string) => setSelectedOwner(v),
-            options: [
-              { value: '', label: 'All' },
-              ...members.map(m => ({ value: m.name, label: m.name })),
-            ],
-          });
-        }
-        groups.push({
-          id: 'year', icon: 'fa-calendar', label: 'Year',
-          value: selectedYear, onChange: (v: string) => setSelectedYear(v),
-          options: [
-            { value: 'all', label: 'All' },
-            ...years.map(y => ({ value: y, label: y })),
-          ],
-        });
-        groups.push({
-          id: 'month', icon: 'fa-calendar-day', label: 'Month',
-          value: selectedMonth, onChange: (v: string) => setSelectedMonth(v),
-          options: [
-            { value: 'all', label: 'All' },
-            ...['01','02','03','04','05','06','07','08','09','10','11','12'].map(m => ({
-              value: m,
-              label: new Date(`2000-${m}-01`).toLocaleDateString('en-AU', { month: 'short' }),
-            })),
-          ],
-        });
-        return <PageFilters groups={groups} className="mb-3" />;
-      })()}
+      <div className="mb-3">
+        <PeriodFilter
+          onChange={setPeriod}
+          defaultPreset="last-6m"
+          storageKey="period.cashflow"
+        />
+      </div>
 
       {hasData && mode === 'summary' && (
         <div className="row mb-3">

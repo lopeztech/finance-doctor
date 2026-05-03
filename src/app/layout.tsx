@@ -17,6 +17,8 @@ import Sidebar from '@/components/sidebar/sidebar';
 import SidebarRight from '@/components/sidebar-right/sidebar-right';
 import { AppSettingsProvider, useAppSettings } from '@/config/app-settings';
 import { PreferencesProvider } from '@/lib/use-preferences';
+import { MemberProvider } from '@/lib/use-member';
+import MemberSwitcher from '@/components/header/member-switcher';
 import { Open_Sans } from 'next/font/google';
 
 const openSans = Open_Sans({
@@ -78,7 +80,7 @@ function Layout({ children }: { children: React.ReactNode }) {
 			{settings.appTopMenu && (<TopMenu />)}
 			{!settings.appHeaderNone && (<Header />)}
 			{!settings.appSidebarNone && (<Sidebar />)}
-			{!settings.appContentNone && (<div className={'app-content '+ settings.appContentClass }><GuestBanner /><ErrorBoundary>{children}</ErrorBoundary></div>)}
+			{!settings.appContentNone && (<div className={'app-content '+ settings.appContentClass }><MemberSwitcher variant="subbar" className="d-md-none" /><GuestBanner /><ErrorBoundary>{children}</ErrorBoundary></div>)}
 			{settings.appSidebarTwo && (<SidebarRight />)}
 			{settings.appContentNone && (<ErrorBoundary>{children}</ErrorBoundary>)}
 			    </div>
@@ -120,7 +122,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
 				<AppSettingsProvider>
 					<PreferencesProvider>
 						<AuthGate>
-							<Layout>{children}</Layout>
+							<MemberProvider>
+								<Layout>{children}</Layout>
+							</MemberProvider>
 						</AuthGate>
 					</PreferencesProvider>
 				</AppSettingsProvider>

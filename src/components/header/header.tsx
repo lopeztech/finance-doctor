@@ -4,6 +4,7 @@ import Link from 'next/link';
 import DropdownNotification from './dropdown/notification';
 import DropdownLanguage from './dropdown/language';
 import DropdownProfile from './dropdown/profile';
+import MemberSwitcher from './member-switcher';
 import SearchForm from './search/form';
 import DropdownMegaMenu from './dropdown/mega';
 import { useAppSettings } from '@/config/app-settings';
@@ -92,6 +93,8 @@ export default function Header() {
         <DropdownNotification />
 
         {settings.appHeaderLanguageBar && <DropdownLanguage />}
+
+        <MemberSwitcher variant="header" className="d-none d-md-block" />
 
         <DropdownProfile />
 
