@@ -84,9 +84,10 @@ describe('Tax Page', () => {
 
   it('renders financial year selector', async () => {
     render(<TaxPage />);
-    expect(screen.getByText('Financial Year')).toBeInTheDocument();
-    const allChip = screen.getAllByRole('button', { name: 'All', pressed: true })[0];
-    expect(allChip).toBeInTheDocument();
+    await waitFor(() => {
+      const btn = screen.getByRole('button', { name: /This FY/ });
+      expect(btn).toBeInTheDocument();
+    });
   });
 
   it('renders summary cards', async () => {

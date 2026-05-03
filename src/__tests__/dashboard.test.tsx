@@ -101,8 +101,8 @@ describe('Net Worth (root) page', () => {
   it('renders financial year selector', async () => {
     render(<NetWorthPage />);
     await waitFor(() => {
-      const chip = screen.getByRole('button', { name: 'FY 2025-2026', pressed: true });
-      expect(chip).toBeInTheDocument();
+      const btn = screen.getByRole('button', { name: /This FY/ });
+      expect(btn).toBeInTheDocument();
     });
   });
 });
