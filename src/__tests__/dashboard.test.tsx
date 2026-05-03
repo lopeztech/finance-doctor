@@ -101,8 +101,9 @@ describe('Net Worth (root) page', () => {
   it('renders financial year selector', async () => {
     render(<NetWorthPage />);
     await waitFor(() => {
-      const btn = screen.getByRole('button', { name: /This FY/ });
-      expect(btn).toBeInTheDocument();
+      // The label appears on both the dropdown toggle and the active menu item.
+      const matches = screen.getAllByRole('button', { name: /This FY/ });
+      expect(matches.length).toBeGreaterThan(0);
     });
   });
 });

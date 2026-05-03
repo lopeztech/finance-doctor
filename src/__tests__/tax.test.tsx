@@ -85,8 +85,8 @@ describe('Tax Page', () => {
   it('renders financial year selector', async () => {
     render(<TaxPage />);
     await waitFor(() => {
-      const btn = screen.getByRole('button', { name: /This FY/ });
-      expect(btn).toBeInTheDocument();
+      const matches = screen.getAllByRole('button', { name: /This FY/ });
+      expect(matches.length).toBeGreaterThan(0);
     });
   });
 
