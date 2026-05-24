@@ -6,6 +6,7 @@ import { GUEST_DASHBOARD_TIPS, mockTaxAdviceStream, mockInvestmentsAdviceStream,
 import { isAiAdviceAllowed, isAiContextOptOut } from './preferences-cache';
 
 type ChatMessage = { role: 'user' | 'model'; text: string };
+type AdviceChatType = 'tax' | 'investments' | 'cashflow' | 'expenses' | 'custom-spending-categories';
 
 function assertFunctions() {
   if (!functions) throw new Error('Firebase Functions is not initialised');
@@ -23,20 +24,20 @@ function assertAiAllowed() {
   if (!isAiAdviceAllowed()) throw new AiDisabledError();
 }
 
-export async function adviceChatGet<T = ChatMessage>(type: 'tax' | 'investments' | 'expenses' | 'custom-spending-categories'): Promise<T[]> {
+export async function adviceChatGet<T = ChatMessage>(type: AdviceChatType): Promise<T[]> {
   if (guest.isGuest()) return guest.getAdviceChat<T>(type);
   const fn = httpsCallable<{ action: 'get'; type: string }, { history: T[] }>(assertFunctions(), 'adviceChat');
   const res = await fn({ action: 'get', type });
   return res.data.history ?? [];
 }
 
-export async function adviceChatPut<T = ChatMessage>(type: 'tax' | 'investments' | 'expenses' | 'custom-spending-categories', history: T[]): Promise<void> {
+export async function adviceChatPut<T = ChatMessage>(type: AdviceChatType, history: T[]): Promise<void> {
   if (guest.isGuest()) { guest.setAdviceChat<T>(type, history); return; }
   const fn = httpsCallable<{ action: 'put'; type: string; history: T[] }, { ok: boolean }>(assertFunctions(), 'adviceChat');
   await fn({ action: 'put', type, history });
 }
 
-export async function adviceChatDelete(type: 'tax' | 'investments' | 'expenses' | 'custom-spending-categories'): Promise<void> {
+export async function adviceChatDelete(type: AdviceChatType): Promise<void> {
   if (guest.isGuest()) { guest.setAdviceChat(type, []); return; }
   const fn = httpsCallable<{ action: 'delete'; type: string }, { ok: boolean }>(assertFunctions(), 'adviceChat');
   await fn({ action: 'delete', type });

@@ -51,9 +51,9 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
 };
 
 export const HOMEPAGE_OPTIONS: { value: Homepage; label: string }[] = [
-  { value: '/', label: 'Net Worth' },
-  { value: '/cashflow', label: 'Cashflow' },
-  { value: '/tax', label: 'Tax' },
+  { value: '/', label: 'Financial Advisor' },
+  { value: '/cashflow', label: 'Cashflow Advisor' },
+  { value: '/tax', label: 'Tax Advisor' },
   { value: '/expenses', label: 'Expenses' },
   { value: '/investments', label: 'Investments' },
 ];

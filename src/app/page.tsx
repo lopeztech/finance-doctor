@@ -349,7 +349,7 @@ export default function NetWorthPage() {
   if (loading) {
     return (
       <>
-        <h1 className="page-header">Net Worth</h1>
+        <h1 className="page-header">Financial Advisor</h1>
         <div className="text-center py-5"><i className="fa fa-spinner fa-spin fa-2x"></i></div>
       </>
     );
@@ -358,7 +358,8 @@ export default function NetWorthPage() {
   return (
     <>
       <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
-        <h1 className="page-header mb-0">Net Worth</h1>
+        <h1 className="page-header mb-0">Financial Advisor</h1>
+        <span className="badge bg-light text-dark border">Net worth, liabilities, tax position, and portfolio signals</span>
       </div>
 
       <div className="mb-3">
@@ -482,8 +483,8 @@ export default function NetWorthPage() {
         <Panel className="mb-3">
           <PanelHeader noButton>
             <div className="d-flex align-items-center">
-              <i className="fa fa-stethoscope me-2"></i>Dr Finance Says
-              <span className="badge bg-teal ms-auto">Daily Tips</span>
+              <i className="fa fa-stethoscope me-2"></i>Today&apos;s Financial Checkup
+              <span className="badge bg-teal ms-auto">Advisor Signals</span>
             </div>
           </PanelHeader>
           <PanelBody>

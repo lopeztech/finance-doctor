@@ -304,7 +304,7 @@ export default function TaxPage() {
   return (
     <>
       <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
-        <h1 className="page-header mb-0">Tax Health Check</h1>
+        <h1 className="page-header mb-0">Tax Advisor</h1>
         <ViewToggle value={mode} onChange={setMode} className="ms-sm-auto" showDoctor />
       </div>
 
@@ -420,7 +420,7 @@ export default function TaxPage() {
         <Panel>
           <PanelHeader noButton>
             <div className="d-flex flex-wrap align-items-center gap-2">
-              <span><i className="fa fa-stethoscope me-2"></i>Tax Health Assessment</span>
+              <span><i className="fa fa-stethoscope me-2"></i>Tax Advisor Assessment</span>
               <button className="btn btn-sm btn-success ms-sm-auto" onClick={getAdvice} disabled={adviceLoading}>
                 {adviceLoading && adviceHistory.length <= 1 ? <><i className="fa fa-spinner fa-spin me-1"></i>Analysing...</> : <><i className="fa fa-robot me-1"></i>{adviceHistory.length > 0 ? 'New Assessment' : 'Get AI Advice'}</>}
               </button>

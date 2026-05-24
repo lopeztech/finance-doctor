@@ -65,7 +65,7 @@ beforeEach(() => {
 describe('Net Worth (root) page', () => {
   it('renders the page header', async () => {
     render(<NetWorthPage />);
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Net Worth' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Financial Advisor' })).toBeInTheDocument());
   });
 
   it('renders the current snapshot panel', async () => {

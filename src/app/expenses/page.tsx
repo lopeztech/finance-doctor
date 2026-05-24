@@ -490,7 +490,7 @@ export default function ExpensesPage() {
   if (loading) {
     return (
       <>
-        <h1 className="page-header">Expenses</h1>
+        <h1 className="page-header">Spending Data</h1>
         <div className="text-center py-5"><i className="fa fa-spinner fa-spin fa-2x"></i></div>
       </>
     );
@@ -499,7 +499,7 @@ export default function ExpensesPage() {
   return (
     <>
       <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
-        <h1 className="page-header mb-0">Expenses</h1>
+        <h1 className="page-header mb-0">Spending Data</h1>
         <ViewToggle value={mode} onChange={setMode} className="ms-sm-auto" showDoctor />
       </div>
 
@@ -648,7 +648,7 @@ export default function ExpensesPage() {
       <Panel>
         <PanelHeader noButton>
           <div className="d-flex flex-wrap align-items-center gap-2">
-            <span><i className="fa fa-stethoscope me-2"></i>Expenses Doctor</span>
+            <span><i className="fa fa-stethoscope me-2"></i>Spending Doctor</span>
             <button className="btn btn-sm btn-success ms-sm-auto" onClick={getExpensesAdvice} disabled={adviceLoading || filteredExpenses.length === 0}>
               {adviceLoading && adviceHistory.length <= 1 ? <><i className="fa fa-spinner fa-spin me-1"></i>Analysing...</> : <><i className="fa fa-robot me-1"></i>{adviceHistory.length > 0 ? 'New Assessment' : 'Get AI Advice'}</>}
             </button>

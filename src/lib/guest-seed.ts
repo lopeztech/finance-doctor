@@ -140,6 +140,26 @@ const ADVICE_CHATS: Record<string, ChatMessage[] | string[]> = {
 <p><em>General advice only. Not personal financial advice — consult a licensed adviser for your circumstances.</em></p>`,
     },
   ],
+  cashflow: [
+    {
+      role: 'model',
+      text: `<h4>Diagnosis</h4>
+<p>Your household is running a positive cashflow, but the margin is being diluted by repeat discretionary spend. The biggest near-term opportunity is not income; it is leakage control.</p>
+<h5>Pressure points</h5>
+<ul>
+<li><strong>Subscriptions</strong> and streaming overlap are the fastest cuts because they do not affect tax deductions or household essentials.</li>
+<li><strong>Dining and takeaway</strong> has enough volume to change the savings rate without touching mortgage, insurance, or health costs.</li>
+<li><strong>Investment-property costs</strong> should stay visible in Tax and Financial Advisor before cutting anything that affects deductions.</li>
+</ul>
+<h4>Prescription</h4>
+<ol>
+<li><strong>Set a $500/mo discretionary reduction target</strong> across subscriptions and takeaway first.</li>
+<li><strong>Move recurring bills into Budgets</strong> so alerts fire before the month is already gone.</li>
+<li><strong>Keep tax-deductible work and investment expenses separate</strong> from lifestyle cuts so cashflow decisions do not accidentally worsen tax position.</li>
+</ol>
+<p><em>General advice only. Not personal financial advice.</em></p>`,
+    },
+  ],
   'custom-spending-categories': ['Date Night', 'Vet'],
 };
 

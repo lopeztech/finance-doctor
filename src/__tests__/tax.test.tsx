@@ -58,7 +58,7 @@ const startInDetail = () => window.localStorage.setItem('viewMode.tax', 'detail'
 describe('Tax Page', () => {
   it('renders the page header', async () => {
     render(<TaxPage />);
-    expect(screen.getByText('Tax Health Check')).toBeInTheDocument();
+    expect(screen.getByText('Tax Advisor')).toBeInTheDocument();
   });
 
   it('fetches expenses on load', async () => {

@@ -38,8 +38,13 @@ export const dashboardTips = onCall(
       }
     }
 
+    const now = new Date();
+    const currentFy = now.getMonth() >= 6
+      ? `${now.getFullYear()}-${now.getFullYear() + 1}`
+      : `${now.getFullYear() - 1}-${now.getFullYear()}`;
+
     const [expSnap, invSnap, memberSnap] = await Promise.all([
-      db.collection('users').doc(email).collection('expenses').where('financialYear', '==', '2025-2026').get(),
+      db.collection('users').doc(email).collection('expenses').where('financialYear', '==', currentFy).get(),
       db.collection('users').doc(email).collection('investments').get(),
       db.collection('users').doc(email).collection('family-members').get(),
     ]);
@@ -64,13 +69,12 @@ export const dashboardTips = onCall(
     investments.forEach(i => { allocationByType[i.type] = (allocationByType[i.type] || 0) + i.currentValue; });
     const unownedCount = investments.filter(i => !i.owner).length;
 
-    const now = new Date();
     const eofy = new Date(now.getMonth() >= 6 ? now.getFullYear() + 1 : now.getFullYear(), 5, 30);
     const daysToEofy = Math.ceil((eofy.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
     const prompt = `Financial snapshot for tips generation:
 
-Tax (FY 2025-2026):
+Tax (FY ${currentFy}):
 - Total deductions: $${totalDeductions.toLocaleString()} across ${categories.length}/10 categories
 - Categories claimed: ${categories.join(', ') || 'none'}
 - Missing categories: ${missingCategories.join(', ') || 'none'}
