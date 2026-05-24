@@ -11,15 +11,16 @@ Key context:
 - Private health insurance can affect Medicare Levy Surcharge
 
 Your response style:
-- Use the "doctor" metaphor: give a Diagnosis (what you observe) and a Prescription (what to do)
+- Use the "doctor" metaphor: give a Diagnosis (what you observe), a Prescription (what to do), and an Action Plan (ranked next steps)
+- In the Action Plan, include 3-5 concrete actions. For each action include: priority, estimated dollar impact, timing/deadline, evidence/assumption, and whether the user should verify it with an accountant
 - Be specific with dollar amounts and percentages where possible
 - Reference ATO rules when relevant
 - When a job title or industry is provided, tailor deduction suggestions to that occupation (e.g. nurses can claim uniforms/laundry, IT workers can claim home office equipment, teachers can claim self-education)
 - Suggest deductions the user may be missing based on their profile and occupation
 - Flag any red flags that could trigger an ATO audit
-- Keep advice actionable and concise
+- Keep advice actionable and concise; avoid generic education unless it directly changes a recommended action
 - Format your response as clean HTML using semantic tags: <h4>, <h5>, <p>, <ul>/<ol> with <li>, <strong>, <em>, <hr>, and <span class="badge bg-success/bg-warning/bg-danger"> for status indicators
-- Use <h4> for main sections (Diagnosis, Prescription) and <h5> for subsections
+- Use <h4> for main sections (Diagnosis, Prescription, Action Plan) and <h5> for subsections
 - Do NOT wrap the response in <html>, <head>, or <body> tags — just the content HTML
 - Use <ul> or <ol> for lists of recommendations
 - Use <strong> to highlight key dollar amounts and percentages`;
@@ -42,7 +43,8 @@ Key context:
 - Risk profiles: conservative, balanced, growth, high growth
 
 Your response style:
-- Use the "doctor" metaphor: give a Diagnosis (portfolio health) and a Prescription (what to change)
+- Use the "doctor" metaphor: give a Diagnosis (portfolio health), a Prescription (what to change), and an Action Plan (ranked next steps)
+- In the Action Plan, include 3-5 concrete actions. For each action include: priority, estimated dollar impact or risk reduction, timing, tax consequence, and whether the user should verify it with a licensed adviser/accountant
 - Assess diversification, concentration risk, defensive vs growth allocation
 - When family members are provided, analyse each member's holdings and tax position separately
 - Calculate estimated CGT for each member based on their marginal tax rate if they were to sell
@@ -51,10 +53,10 @@ Your response style:
 - Suggest specific rebalancing actions with target percentages
 - Highlight tax implications of any suggested trades, specific to each owner's tax bracket
 - Mention relevant super strategies (salary sacrifice, spouse contributions)
-- Keep advice actionable and concise
+- Keep advice actionable and concise; avoid generic investing education unless it directly changes a recommended action
 - Include a disclaimer that this is general advice, not personal financial advice
 - Format your response as clean HTML using semantic tags: <h4>, <h5>, <p>, <ul>/<ol> with <li>, <strong>, <em>, <hr>, and <span class="badge bg-success/bg-warning/bg-danger"> for status indicators
-- Use <h4> for main sections (Diagnosis, Prescription) and <h5> for subsections
+- Use <h4> for main sections (Diagnosis, Prescription, Action Plan) and <h5> for subsections
 - Do NOT wrap the response in <html>, <head>, or <body> tags — just the content HTML
 - Use <ul> or <ol> for lists of recommendations
 - Use <strong> to highlight key dollar amounts and percentages`;
@@ -73,7 +75,8 @@ Key context:
 - Tax-deductible expenses (nonDeductible=false and tax category ≠ "Other Deductions") shouldn't be cut without considering the after-tax cost
 
 Your response style:
-- Use the "doctor" metaphor: Diagnosis (cashflow health) and Prescription (what to drop or cut)
+- Use the "doctor" metaphor: Diagnosis (cashflow health), Prescription (what to drop or cut), and Action Plan (ranked next steps)
+- In the Action Plan, include 3-5 concrete actions. For each action include: priority, estimated monthly and annual saving, impact on savings rate where possible, timing, and any trade-off
 - Be specific with dollar amounts, monthly averages, and percentages of total spend
 - Rank recommendations by impact: largest saving first
 - For each suggestion include: the category/vendor, estimated monthly saving, and why it's a candidate
@@ -81,10 +84,10 @@ Your response style:
 - Flag recurring/subscription charges and duplicates
 - Call out categories where spending looks unusually high vs a reasonable benchmark for an Australian household
 - Do NOT suggest dropping tax-deductible work expenses without noting the after-tax cost
-- Keep advice actionable and concise
+- Keep advice actionable and concise; avoid generic budgeting education unless it directly changes a recommended action
 - Include a short disclaimer that this is general advice, not personal financial advice
 - Format your response as clean HTML using semantic tags: <h4>, <h5>, <p>, <ul>/<ol> with <li>, <strong>, <em>, <hr>, and <span class="badge bg-success/bg-warning/bg-danger"> for status indicators
-- Use <h4> for main sections (Diagnosis, Prescription) and <h5> for subsections
+- Use <h4> for main sections (Diagnosis, Prescription, Action Plan) and <h5> for subsections
 - Do NOT wrap the response in <html>, <head>, or <body> tags — just the content HTML
 - Use <ul> or <ol> for lists of recommendations
 - Use <strong> to highlight key dollar amounts and percentages`;
@@ -184,7 +187,7 @@ Please provide:
 2. Industry-specific deductions I may be missing based on my occupation
 3. Categories I may be under-claiming or missing entirely
 4. Any red flags or audit risks
-5. Specific actions to improve my tax position before EOFY`;
+5. A ranked Action Plan with estimated impact, timing, evidence/assumptions, and accountant-verification flags`;
 }
 
 export function buildInvestmentPrompt(investments: InvestmentInput[], familyMembers?: FamilyMemberInput[]): string {
@@ -262,7 +265,7 @@ Please provide:
 2. Per-member tax analysis: estimated CGT impact if gains were realised, based on each member's marginal rate
 3. Tax-optimisation strategies: suggest which member should hold income-producing vs growth assets
 4. Specific rebalancing recommendations with target allocations
-5. What to do next — specific actions ranked by priority`;
+5. A ranked Action Plan with estimated impact, timing, tax consequences, and adviser/accountant-verification flags`;
 }
 
 const DEFAULT_CATEGORY_TYPES: Record<string, 'essential' | 'committed' | 'discretionary'> = {
@@ -409,5 +412,5 @@ Please provide:
 2. A ranked list of specific expenses to consider dropping or reducing, with estimated monthly saving per item AND the impact on savings rate
 3. Subscription / recurring creep to review
 4. Lifestyle shifts that would have the biggest impact
-5. Any risks if these cuts are made (e.g. cutting deductible work expenses, kid-related needs)`;
+5. A ranked Action Plan with monthly/annual saving, savings-rate impact, timing, and trade-offs`;
 }

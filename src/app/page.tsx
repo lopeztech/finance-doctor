@@ -163,7 +163,7 @@ export default function NetWorthPage() {
   const totalPortfolio = investments.reduce((sum, i) => sum + i.currentValue, 0);
   const totalCost = investments.reduce((sum, i) => sum + i.costBasis, 0);
   const totalGainLoss = investments.reduce((sum, i) => {
-    return sum + ((i as any).liability ? i.currentValue - (i as any).liability : i.currentValue - i.costBasis);
+    return sum + (i.liability ? i.currentValue - i.liability : i.currentValue - i.costBasis);
   }, 0);
   const totalReturnPct = totalCost > 0 ? ((totalGainLoss / totalCost) * 100) : 0;
 

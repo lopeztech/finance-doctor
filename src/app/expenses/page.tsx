@@ -73,14 +73,6 @@ const SPENDING_COLORS: Record<string, string> = {
 
 const DEFAULT_SPENDING_CATEGORIES = Object.keys(SPENDING_ICONS);
 
-function getFinancialYear(date: string): string {
-  const [yearStr, monthStr] = date.split('-');
-  const year = parseInt(yearStr);
-  const month = parseInt(monthStr);
-  if (month >= 7) return `${year}-${year + 1}`;
-  return `${year - 1}-${year}`;
-}
-
 type SortField = 'date' | 'description' | 'amount';
 type SortDir = 'asc' | 'desc';
 
@@ -118,7 +110,6 @@ export default function ExpensesPage() {
   const [adviceHistory, setAdviceHistory] = useState<{ role: 'user' | 'model'; text: string }[]>([]);
   const [adviceLoading, setAdviceLoading] = useState(false);
   const [followUpInput, setFollowUpInput] = useState('');
-  const [adviceCollapsed, setAdviceCollapsed] = useState(false);
   const adviceAnchorRef = useRef<HTMLDivElement | null>(null);
   const [mode, setMode] = useViewMode('viewMode.expenses');
 
@@ -426,7 +417,6 @@ export default function ExpensesPage() {
 
   const streamAdvice = async (history: { role: 'user' | 'model'; text: string }[], followUp?: string) => {
     setAdviceLoading(true);
-    setAdviceCollapsed(false);
     let handle;
     try {
       handle = await streamExpensesAdvice({ history, followUp });
@@ -458,7 +448,6 @@ export default function ExpensesPage() {
 
   const getExpensesAdvice = async () => {
     setAdviceHistory([]);
-    setAdviceCollapsed(false);
     adviceAnchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     await streamAdvice([]);
   };

@@ -65,7 +65,6 @@ export default function TaxPage() {
   const [adviceHistory, setAdviceHistory] = useState<{ role: 'user' | 'model'; text: string }[]>([]);
   const [adviceLoading, setAdviceLoading] = useState(false);
   const [followUpInput, setFollowUpInput] = useState('');
-  const [adviceCollapsed, setAdviceCollapsed] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [expandedNonDeductible, setExpandedNonDeductible] = useState<Set<string>>(new Set());
   const [reanalysing, setReanalysing] = useState(false);
@@ -192,7 +191,6 @@ export default function TaxPage() {
 
   const getAdvice = async () => {
     setAdviceHistory([]);
-    setAdviceCollapsed(false);
     await streamAdvice([]);
   };
 

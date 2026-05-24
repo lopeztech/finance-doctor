@@ -440,7 +440,6 @@ export default function InvestmentsPage() {
   const [adviceHistory, setAdviceHistory] = useState<{ role: 'user' | 'model'; text: string }[]>([]);
   const [adviceLoading, setAdviceLoading] = useState(false);
   const [followUpInput, setFollowUpInput] = useState('');
-  const [adviceCollapsed, setAdviceCollapsed] = useState(false);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [investmentRelatedExpenses, setInvestmentRelatedExpenses] = useState<Expense[]>([]);
   const [categorySettings, setCategorySettings] = useState<CategorySettings>({ types: {}, excluded: [] });
@@ -526,7 +525,8 @@ export default function InvestmentsPage() {
     setSaving(true);
     const inv = buildInvestment(form);
 
-    const { id: _unusedId, ...data } = inv;
+    const { id, ...data } = inv;
+    void id;
     if (editingId) {
       await updateInvestment(editingId, data);
       setInvestments(prev => prev.map(i => i.id === editingId ? { id: editingId, ...data } : i));
@@ -648,7 +648,6 @@ export default function InvestmentsPage() {
 
   const getAdvice = async () => {
     setAdviceHistory([]);
-    setAdviceCollapsed(false);
     await streamAdvice([]);
   };
 

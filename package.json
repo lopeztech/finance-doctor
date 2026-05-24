@@ -1,12 +1,12 @@
 {
-  "name": "color-admin",
-  "version": "5.5.2",
+  "name": "finance-doctor",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint src next.config.ts jest.config.ts jest.setup.ts",
     "test": "jest"
   },
   "dependencies": {

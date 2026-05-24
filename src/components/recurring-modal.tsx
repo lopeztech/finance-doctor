@@ -45,7 +45,8 @@ export default function RecurringModal({ expense, onClose, onConfirm }: Props) {
     setBusy(true);
     const groupId = expense.recurrenceGroupId || expense.id;
     const occurrences: Omit<Expense, 'id'>[] = preview.map(p => {
-      const { id: _id, ...rest } = expense;
+      const { id, ...rest } = expense;
+      void id;
       return {
         ...rest,
         date: p.date,

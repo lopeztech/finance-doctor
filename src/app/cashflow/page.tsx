@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { FamilyMember, Investment, Expense, IncomeSource, IncomeSourceType, IncomeCadence, Income, EmploymentType } from '@/lib/types';
-import { effectiveSalary } from '@/lib/types';
 import { listFamilyMembers, addFamilyMember, updateFamilyMember, deleteFamilyMember } from '@/lib/family-members-repo';
 import { listInvestments } from '@/lib/investments-repo';
 import { listExpenses } from '@/lib/expenses-repo';
@@ -291,7 +290,8 @@ export default function CashflowPage() {
     const patch: Partial<Income> = nextOwner ? { owner: nextOwner } : { owner: undefined };
     setIncome(prev => prev.map(r => {
       if (r.id !== id) return r;
-      const { owner: _drop, ...rest } = r;
+      const rest = { ...r };
+      delete rest.owner;
       return nextOwner ? { ...rest, owner: nextOwner } : (rest as Income);
     }));
     try {
