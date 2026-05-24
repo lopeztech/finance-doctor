@@ -52,6 +52,8 @@ const CATEGORY_ICONS: Record<string, string> = {
   'Other Deductions': 'fa-receipt',
 };
 
+const DEDUCTION_CATEGORIES = Object.keys(CATEGORY_ICONS).filter(c => c !== 'Other Deductions');
+
 const TYPE_ICONS: Record<string, string> = {
   'Australian Shares': 'fa-chart-bar',
   'International Shares': 'fa-globe',
@@ -99,6 +101,17 @@ const EMPTY_LIABILITY_FORM: LiabilityFormState = {
   interestRate: '',
   minMonthlyPayment: '',
 };
+
+interface AdvisorAction {
+  pillar: 'Financial' | 'Tax' | 'Cashflow';
+  priority: 'High' | 'Medium' | 'Low';
+  title: string;
+  detail: string;
+  impact: string;
+  href: string;
+  icon: string;
+  color: string;
+}
 
 function deltaBadge(delta: number): { className: string; arrow: string } {
   if (delta > 0) return { className: 'text-success', arrow: '▲' };
@@ -276,6 +289,109 @@ export default function NetWorthPage() {
       .map(([cls, value]) => ({ cls, value, pct: (value / total) * 100 }))
       .sort((a, b) => b.value - a.value);
   }, [summary.assetsByClass, summary.totalAssets]);
+
+  const advisorActions = useMemo<AdvisorAction[]>(() => {
+    const actions: AdvisorAction[] = [];
+    const unassignedInvestments = investments.filter(i => !i.owner).length;
+    const uncategorisedTax = expenses.filter(e => !e.nonDeductible && e.category === 'Other Deductions').length;
+    const missingTaxCategories = Math.max(0, DEDUCTION_CATEGORIES.length - Object.keys(categoryTotals).length);
+    const hasCurrentSnapshot = history.some(h => h.id === month);
+    const hasSalaryData = familyMembers.length > 0;
+
+    if (!hasSalaryData) {
+      actions.push({
+        pillar: 'Cashflow',
+        priority: 'High',
+        title: 'Add household income',
+        detail: 'Salary data powers cashflow, tax estimates, and more precise advice across the app.',
+        impact: 'Unlocks after-tax income, savings rate, and member-level tax position',
+        href: '/cashflow',
+        icon: 'fa-users',
+        color: 'teal',
+      });
+    }
+
+    if (uncategorisedTax > 0) {
+      actions.push({
+        pillar: 'Tax',
+        priority: 'High',
+        title: 'Review uncategorised deductions',
+        detail: `${uncategorisedTax} expense${uncategorisedTax === 1 ? '' : 's'} still sit in Other Deductions.`,
+        impact: 'Improves deduction accuracy before EOFY',
+        href: '/tax',
+        icon: 'fa-file-circle-question',
+        color: 'warning',
+      });
+    }
+
+    if (unassignedInvestments > 0) {
+      actions.push({
+        pillar: 'Financial',
+        priority: 'Medium',
+        title: 'Assign investment ownership',
+        detail: `${unassignedInvestments} holding${unassignedInvestments === 1 ? '' : 's'} are missing an owner.`,
+        impact: 'Improves CGT and family tax analysis',
+        href: '/investments',
+        icon: 'fa-user-tag',
+        color: 'indigo',
+      });
+    }
+
+    if (summary.netWorth !== 0 && !hasCurrentSnapshot) {
+      actions.push({
+        pillar: 'Financial',
+        priority: 'Medium',
+        title: 'Save this month\'s net worth snapshot',
+        detail: 'A snapshot gives the Financial Advisor a baseline for monthly and yearly trend checks.',
+        impact: 'Starts trend tracking from this month',
+        href: '/',
+        icon: 'fa-camera',
+        color: 'primary',
+      });
+    }
+
+    if (investments.length > 0 && maxPct >= 60) {
+      actions.push({
+        pillar: 'Financial',
+        priority: 'Medium',
+        title: 'Review concentration risk',
+        detail: `Largest asset class is ${maxPct.toFixed(0)}% of tracked portfolio value.`,
+        impact: 'Highlights diversification and rebalancing risk',
+        href: '/investments',
+        icon: 'fa-chart-pie',
+        color: 'danger',
+      });
+    }
+
+    if (expenses.length > 0 && missingTaxCategories >= 4) {
+      actions.push({
+        pillar: 'Tax',
+        priority: 'Low',
+        title: 'Check missing deduction categories',
+        detail: `${missingTaxCategories} standard deduction categor${missingTaxCategories === 1 ? 'y is' : 'ies are'} unused this financial year.`,
+        impact: 'May reveal missed work, education, donation, or investment claims',
+        href: '/tax',
+        icon: 'fa-magnifying-glass-dollar',
+        color: 'teal',
+      });
+    }
+
+    if (actions.length === 0) {
+      actions.push({
+        pillar: 'Financial',
+        priority: 'Low',
+        title: 'Run the advisor checkups',
+        detail: 'Your core setup looks healthy. Refresh the Tax, Cashflow, and Investment Doctor assessments for deeper recommendations.',
+        impact: 'Keeps advice current as new data arrives',
+        href: '/cashflow',
+        icon: 'fa-stethoscope',
+        color: 'success',
+      });
+    }
+
+    const priorityRank: Record<AdvisorAction['priority'], number> = { High: 0, Medium: 1, Low: 2 };
+    return actions.sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority]).slice(0, 5);
+  }, [investments, expenses, categoryTotals, history, month, familyMembers.length, summary.netWorth, maxPct]);
 
   const handleSnapshot = async () => {
     setSnapshotting(true);
@@ -478,6 +594,40 @@ export default function NetWorthPage() {
       </div>
 
       <BudgetsWidget />
+
+      <Panel className="mb-3">
+        <PanelHeader noButton>
+          <div className="d-flex align-items-center">
+            <i className="fa fa-list-check me-2"></i>Advisor Action Plan
+            <span className="badge bg-dark ms-auto">{advisorActions.length} next step{advisorActions.length === 1 ? '' : 's'}</span>
+          </div>
+        </PanelHeader>
+        <PanelBody>
+          <div className="list-group list-group-flush">
+            {advisorActions.map(action => (
+              <Link key={`${action.pillar}-${action.title}`} href={action.href} className="list-group-item list-group-item-action px-0">
+                <div className="d-flex align-items-start gap-3">
+                  <span className={`badge bg-${action.color} mt-1`}>
+                    <i className={`fa ${action.icon}`}></i>
+                  </span>
+                  <div className="flex-grow-1">
+                    <div className="d-flex flex-wrap align-items-center gap-2">
+                      <strong>{action.title}</strong>
+                      <span className="badge bg-light text-dark border">{action.pillar}</span>
+                      <span className={`badge ${action.priority === 'High' ? 'bg-danger' : action.priority === 'Medium' ? 'bg-warning text-dark' : 'bg-secondary'}`}>
+                        {action.priority}
+                      </span>
+                    </div>
+                    <div className="small text-muted mt-1">{action.detail}</div>
+                    <div className="small mt-1"><i className="fa fa-bullseye me-1 text-muted"></i>{action.impact}</div>
+                  </div>
+                  <i className="fa fa-arrow-right text-muted mt-2"></i>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </PanelBody>
+      </Panel>
 
       {(tips.length > 0 || tipsLoading) && (
         <Panel className="mb-3">
