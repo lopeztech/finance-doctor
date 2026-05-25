@@ -108,7 +108,8 @@ interface AdvisorAction {
   title: string;
   detail: string;
   impact: string;
-  href: string;
+  href?: string;
+  action?: 'save-snapshot';
   icon: string;
   color: string;
 }
@@ -344,7 +345,7 @@ export default function NetWorthPage() {
         title: 'Save this month\'s net worth snapshot',
         detail: 'A snapshot gives the Financial Advisor a baseline for monthly and yearly trend checks.',
         impact: 'Starts trend tracking from this month',
-        href: '/',
+        action: 'save-snapshot',
         icon: 'fa-camera',
         color: 'primary',
       });
@@ -604,8 +605,8 @@ export default function NetWorthPage() {
         </PanelHeader>
         <PanelBody>
           <div className="list-group list-group-flush">
-            {advisorActions.map(action => (
-              <Link key={`${action.pillar}-${action.title}`} href={action.href} className="list-group-item list-group-item-action px-0">
+            {advisorActions.map(action => {
+              const content = (
                 <div className="d-flex align-items-start gap-3">
                   <span className={`badge bg-${action.color} mt-1`}>
                     <i className={`fa ${action.icon}`}></i>
@@ -621,10 +622,35 @@ export default function NetWorthPage() {
                     <div className="small text-muted mt-1">{action.detail}</div>
                     <div className="small mt-1"><i className="fa fa-bullseye me-1 text-muted"></i>{action.impact}</div>
                   </div>
-                  <i className="fa fa-arrow-right text-muted mt-2"></i>
+                  {action.action === 'save-snapshot' ? (
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-primary mt-1 text-nowrap"
+                      onClick={handleSnapshot}
+                      disabled={snapshotting}
+                    >
+                      {snapshotting ? <><i className="fa fa-spinner fa-spin me-1"></i>Saving...</> : <><i className="fa fa-camera me-1"></i>Save</>}
+                    </button>
+                  ) : (
+                    <i className="fa fa-arrow-right text-muted mt-2"></i>
+                  )}
                 </div>
-              </Link>
-            ))}
+              );
+
+              if (action.action === 'save-snapshot') {
+                return (
+                  <div key={`${action.pillar}-${action.title}`} className="list-group-item px-0">
+                    {content}
+                  </div>
+                );
+              }
+
+              return (
+                <Link key={`${action.pillar}-${action.title}`} href={action.href || '/'} className="list-group-item list-group-item-action px-0">
+                  {content}
+                </Link>
+              );
+            })}
           </div>
         </PanelBody>
       </Panel>
