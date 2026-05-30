@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { Expense, Investment, FamilyMember } from '@/lib/types';
-import { fetchDashboardTips, type DashboardTip } from '@/lib/functions-client';
+import { fetchDashboardTips, adviceChatGet, type DashboardTip } from '@/lib/functions-client';
+import { type DoctorSummaryItem } from '@/lib/doctor-summary';
 import { listExpenses } from '@/lib/expenses-repo';
 import { listInvestments } from '@/lib/investments-repo';
 import { listFamilyMembers } from '@/lib/family-members-repo';
@@ -141,6 +142,7 @@ export default function NetWorthPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [doctorSummaries, setDoctorSummaries] = useState<{ tax: DoctorSummaryItem[]; cashflow: DoctorSummaryItem[]; investments: DoctorSummaryItem[] }>({ tax: [], cashflow: [], investments: [] });
 
   const fetchExpenses = useCallback(async () => {
     setExpenses(await listExpenses(financialYear));
@@ -158,6 +160,12 @@ export default function NetWorthPage() {
     fetchDashboardTips()
       .then(result => { setTips(result); setTipsLoading(false); })
       .catch(() => setTipsLoading(false));
+
+    Promise.all([
+      adviceChatGet<DoctorSummaryItem>('tax-summary'),
+      adviceChatGet<DoctorSummaryItem>('cashflow-summary'),
+      adviceChatGet<DoctorSummaryItem>('investments-summary'),
+    ]).then(([tax, cashflow, investments]) => setDoctorSummaries({ tax, cashflow, investments })).catch(() => {});
 
     maybeEmitEofyReminder().catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -377,6 +385,27 @@ export default function NetWorthPage() {
       });
     }
 
+    const doctorConfig: Array<{ key: keyof typeof doctorSummaries; pillar: AdvisorAction['pillar']; href: string; color: string }> = [
+      { key: 'tax', pillar: 'Tax', href: '/tax', color: 'warning' },
+      { key: 'cashflow', pillar: 'Cashflow', href: '/cashflow', color: 'teal' },
+      { key: 'investments', pillar: 'Financial', href: '/investments', color: 'indigo' },
+    ];
+    for (const { key, pillar, href, color } of doctorConfig) {
+      const item = doctorSummaries[key][0];
+      if (item) {
+        actions.push({
+          pillar,
+          priority: 'Low',
+          title: item.title,
+          detail: item.detail,
+          impact: `From last ${pillar} Doctor assessment`,
+          href,
+          icon: 'fa-stethoscope',
+          color,
+        });
+      }
+    }
+
     if (actions.length === 0) {
       actions.push({
         pillar: 'Financial',
@@ -392,7 +421,7 @@ export default function NetWorthPage() {
 
     const priorityRank: Record<AdvisorAction['priority'], number> = { High: 0, Medium: 1, Low: 2 };
     return actions.sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority]).slice(0, 5);
-  }, [investments, expenses, categoryTotals, history, month, familyMembers.length, summary.netWorth, maxPct]);
+  }, [investments, expenses, categoryTotals, history, month, familyMembers.length, summary.netWorth, maxPct, doctorSummaries]);
 
   const handleSnapshot = async () => {
     setSnapshotting(true);

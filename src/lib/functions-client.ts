@@ -6,7 +6,7 @@ import { GUEST_DASHBOARD_TIPS, mockTaxAdviceStream, mockInvestmentsAdviceStream,
 import { isAiAdviceAllowed, isAiContextOptOut } from './preferences-cache';
 
 type ChatMessage = { role: 'user' | 'model'; text: string };
-type AdviceChatType = 'tax' | 'investments' | 'cashflow' | 'expenses' | 'custom-spending-categories';
+type AdviceChatType = 'tax' | 'investments' | 'cashflow' | 'expenses' | 'custom-spending-categories' | 'tax-summary' | 'cashflow-summary' | 'investments-summary';
 
 function assertFunctions() {
   if (!functions) throw new Error('Firebase Functions is not initialised');

@@ -15,6 +15,7 @@ import { PeriodFilter } from '@/components/period-filter';
 import { dateInRange, type Period } from '@/lib/period';
 import { useMember } from '@/lib/use-member';
 import { adviceChatGet, adviceChatPut, streamExpensesAdvice } from '@/lib/functions-client';
+import { extractDoctorActions, type DoctorSummaryItem } from '@/lib/doctor-summary';
 
 const INCOME_TYPES: { value: IncomeSourceType; label: string; icon: string }[] = [
   { value: 'dividend', label: 'Dividend', icon: 'fa-chart-line' },
@@ -158,6 +159,10 @@ export default function CashflowPage() {
     setAdviceLoading(false);
     const finalHistory = [...history, ...(followUp ? [{ role: 'user' as const, text: followUp }] : []), { role: 'model' as const, text }];
     saveAdviceChat(finalHistory);
+    if (!followUp && history.length === 0) {
+      const items = extractDoctorActions(text);
+      if (items.length > 0) adviceChatPut<DoctorSummaryItem>('cashflow-summary', items).catch(() => {});
+    }
   };
 
   const getCashflowAdvice = async () => {

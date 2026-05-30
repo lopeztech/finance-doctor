@@ -4,7 +4,7 @@ import { requireUserEmail } from '../lib/auth';
 import { auditLog } from '../lib/audit';
 import type { ChatMessage } from '../lib/types';
 
-const VALID_TYPES = ['tax', 'investments', 'cashflow', 'expenses', 'custom-spending-categories'] as const;
+const VALID_TYPES = ['tax', 'investments', 'cashflow', 'expenses', 'custom-spending-categories', 'tax-summary', 'cashflow-summary', 'investments-summary'] as const;
 type AdviceChatType = (typeof VALID_TYPES)[number];
 
 interface AdviceChatData {

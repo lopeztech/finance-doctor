@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { Investment, FamilyMember, Expense } from '@/lib/types';
 import { adviceChatGet, adviceChatPut, streamInvestmentsAdvice, refreshInvestmentPrices, type RefreshPricesResponse } from '@/lib/functions-client';
+import { extractDoctorActions, type DoctorSummaryItem } from '@/lib/doctor-summary';
 import { listInvestments, addInvestment, updateInvestment, deleteInvestment } from '@/lib/investments-repo';
 import { listExpenses, updateExpense } from '@/lib/expenses-repo';
 import AllocationChart from '@/components/allocation-chart';
@@ -644,6 +645,10 @@ export default function InvestmentsPage() {
     setAdviceLoading(false);
     const finalHistory = [...history, ...(followUp ? [{ role: 'user' as const, text: followUp }] : []), { role: 'model' as const, text }];
     saveChat(finalHistory);
+    if (!followUp && history.length === 0) {
+      const items = extractDoctorActions(text);
+      if (items.length > 0) adviceChatPut<DoctorSummaryItem>('investments-summary', items).catch(() => {});
+    }
   };
 
   const getAdvice = async () => {

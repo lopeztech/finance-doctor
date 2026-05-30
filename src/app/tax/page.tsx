@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { Expense } from '@/lib/types';
 import { adviceChatGet, adviceChatPut, reanalyseExpenses, streamTaxAdvice } from '@/lib/functions-client';
+import { extractDoctorActions, type DoctorSummaryItem } from '@/lib/doctor-summary';
 import { listExpenses, updateExpense } from '@/lib/expenses-repo';
 import { upsertCategoryRule } from '@/lib/category-rules-repo';
 import DeductionsChart from '@/components/deductions-chart';
@@ -187,6 +188,10 @@ export default function TaxPage() {
     setAdviceLoading(false);
     const finalHistory = [...history, ...(followUp ? [{ role: 'user' as const, text: followUp }] : []), { role: 'model' as const, text }];
     saveChat(finalHistory);
+    if (!followUp && history.length === 0) {
+      const items = extractDoctorActions(text);
+      if (items.length > 0) adviceChatPut<DoctorSummaryItem>('tax-summary', items).catch(() => {});
+    }
   };
 
   const getAdvice = async () => {
