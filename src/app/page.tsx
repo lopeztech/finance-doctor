@@ -109,6 +109,7 @@ export default function NetWorthPage() {
   const [doctorSummaries, setDoctorSummaries] = useState<{
     tax: DoctorSummaryItem[]; cashflow: DoctorSummaryItem[]; investments: DoctorSummaryItem[];
   }>({ tax: [], cashflow: [], investments: [] });
+  const [selectedFyIdx, setSelectedFyIdx] = useState(0);
 
   const showToast = useCallback((msg: string) => {
     setToastMsg(msg);
@@ -379,8 +380,6 @@ export default function NetWorthPage() {
     );
   }
 
-  // FY filter state — just track which button is "on"
-  const [selectedFyIdx, setSelectedFyIdx] = useState(0);
   const fyOptions = ['FY 25–26', 'FY 24–25', 'FY 23–24'];
 
   return (
@@ -752,7 +751,7 @@ export default function NetWorthPage() {
               <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
                 <button type="submit" className="btn btn-fill btn-sm" disabled={saving}>
                   <i className={`fa ${saving ? 'fa-spinner fa-spin' : 'fa-plus'}`}></i>
-                  {saving ? ' Saving…' : editingId ? ' Save' : ' Add'}
+                  {saving ? ' Saving…' : editingId ? ' Save changes' : ' Add liability'}
                 </button>
                 {editingId && (
                   <button type="button" className="btn btn-sm" onClick={resetForm}>Cancel</button>

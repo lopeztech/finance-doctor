@@ -172,7 +172,10 @@ export default function BudgetsPage() {
               <div key={p.budget.id} className="bg">
                 <div className="bg-top">
                   <span className="ic"><i className={`fa ${spendingIcon(p.budget.category)}`} style={{ color: levelColor(p.level) }}></i></span>
-                  <span className="nm">{describeBudget(p.budget)}</span>
+                  <span className="nm">
+                    {describeBudget(p.budget)}
+                    {p.budget.rolloverUnused && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.3px', color: 'var(--fd-cyan)', border: '1px solid var(--fd-cyan)', borderRadius: 999, padding: '1px 7px' }}>rollover</span>}
+                  </span>
                   <span className="sp" style={{ color: levelColor(p.level) }}>
                     {formatCurrency(p.spent, prefs)} <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}>/ {formatCurrency(p.effectiveCap, prefs)}</span>
                   </span>
