@@ -4,8 +4,10 @@
 // Finance Doctor design tokens & utilities
 // -------------------------------------------------------
 
-// Header brand
+// Header brand — override Color Admin's font-weight: 100 / font-size: 18px
 .navbar-brand {
+  font-weight: 600 !important;
+  font-size: 16px !important;
   .brand-icon {
     width: 26px;
     height: 26px;
@@ -21,6 +23,15 @@
   .brand-dot {
     color: var(--bs-success); // teal
   }
+}
+
+// Active sidebar item — teal left border accent (Color Admin doesn't add this by default)
+.app-sidebar .menu-item > .menu-link {
+  border-left: 3px solid transparent;
+  transition: border-color 0.15s;
+}
+.app-sidebar .menu-item.active > .menu-link {
+  border-left-color: var(--bs-success) !important; // teal
 }
 
 // Sidebar household profile
