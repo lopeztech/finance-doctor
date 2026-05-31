@@ -1,51 +1,21 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import { addBudget, deleteBudget, updateBudget, watchBudgets } from '@/lib/budgets-repo';
 import { listExpenses } from '@/lib/expenses-repo';
-import {
-  computeProgress,
-  describeBudget,
-  monthKey,
-  thresholdLabel,
-} from '@/lib/budgets-calc';
-import {
-  DEFAULT_THRESHOLDS,
-  type Budget,
-  type BudgetScope,
-} from '@/lib/budgets-types';
+import { computeProgress, describeBudget, monthKey, thresholdLabel } from '@/lib/budgets-calc';
+import { DEFAULT_THRESHOLDS, type Budget, type BudgetScope } from '@/lib/budgets-types';
 import { DEFAULT_SPENDING_CATEGORIES, spendingIcon } from '@/lib/spending-categories';
 import { formatCurrency } from '@/lib/format';
 import { usePreferences } from '@/lib/use-preferences';
 import type { Expense } from '@/lib/types';
 
-const LEVEL_BG: Record<'green' | 'amber' | 'red', string> = {
-  green: 'bg-success',
-  amber: 'bg-warning',
-  red: 'bg-danger',
-};
-
-const LEVEL_TEXT: Record<'green' | 'amber' | 'red', string> = {
-  green: 'text-success',
-  amber: 'text-warning',
-  red: 'text-danger',
-};
-
 interface FormState {
-  scope: BudgetScope;
-  category: string;
-  subCategory: string;
-  amount: string;
-  rolloverUnused: boolean;
+  scope: BudgetScope; category: string; subCategory: string;
+  amount: string; rolloverUnused: boolean;
 }
-
 const EMPTY_FORM: FormState = {
-  scope: 'spending-category',
-  category: 'Groceries',
-  subCategory: '',
-  amount: '500',
-  rolloverUnused: false,
+  scope: 'spending-category', category: 'Groceries', subCategory: '', amount: '500', rolloverUnused: false,
 };
 
 export default function BudgetsPage() {
@@ -62,75 +32,37 @@ export default function BudgetsPage() {
 
   useEffect(() => {
     const off = watchBudgets(setBudgets);
-    listExpenses('all')
-      .then(setExpenses)
-      .catch(() => setExpenses([]))
-      .finally(() => setLoading(false));
+    listExpenses('all').then(setExpenses).catch(() => setExpenses([])).finally(() => setLoading(false));
     return () => off();
   }, []);
 
-  const progress = useMemo(
-    () => budgets.map(b => computeProgress(b, expenses, month)),
-    [budgets, expenses, month],
-  );
-
-  const sorted = useMemo(
-    () => [...progress].sort((a, b) => b.ratio - a.ratio),
-    [progress],
-  );
+  const progress = useMemo(() => budgets.map(b => computeProgress(b, expenses, month)), [budgets, expenses, month]);
+  const sorted   = useMemo(() => [...progress].sort((a, b) => b.ratio - a.ratio), [progress]);
 
   const resetForm = () => { setForm(EMPTY_FORM); setEditingId(null); setError(null); };
-
   const beginEdit = (b: Budget) => {
     setEditingId(b.id);
-    setForm({
-      scope: b.scope,
-      category: b.category || 'Groceries',
-      subCategory: b.subCategory || '',
-      amount: String(b.amount),
-      rolloverUnused: b.rolloverUnused,
-    });
+    setForm({ scope: b.scope, category: b.category || 'Groceries', subCategory: b.subCategory || '', amount: String(b.amount), rolloverUnused: b.rolloverUnused });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
+    e.preventDefault(); setError(null);
     const amount = parseFloat(form.amount);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      setError('Amount must be a positive number.');
-      return;
-    }
-    if (form.scope !== 'overall' && !form.category) {
-      setError('Pick a category.');
-      return;
-    }
-    if (form.scope === 'spending-sub-category' && !form.subCategory.trim()) {
-      setError('Sub-category cannot be blank for that scope.');
-      return;
-    }
+    if (!Number.isFinite(amount) || amount <= 0) { setError('Amount must be a positive number.'); return; }
+    if (form.scope !== 'overall' && !form.category) { setError('Pick a category.'); return; }
     setSaving(true);
     try {
       const data: Omit<Budget, 'id'> = {
-        scope: form.scope,
-        amount,
-        period: 'monthly',
-        startMonth: month,
-        rolloverUnused: form.rolloverUnused,
-        alertThresholds: [...DEFAULT_THRESHOLDS],
+        scope: form.scope, amount, period: 'monthly', startMonth: month,
+        rolloverUnused: form.rolloverUnused, alertThresholds: [...DEFAULT_THRESHOLDS],
         ...(form.scope !== 'overall' ? { category: form.category } : {}),
         ...(form.scope === 'spending-sub-category' ? { subCategory: form.subCategory.trim() } : {}),
       };
-      if (editingId) {
-        await updateBudget(editingId, data);
-      } else {
-        await addBudget(data);
-      }
+      if (editingId) await updateBudget(editingId, data);
+      else await addBudget(data);
       resetForm();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Save failed.');
-    } finally {
-      setSaving(false);
-    }
+    } catch (err) { setError(err instanceof Error ? err.message : 'Save failed.'); }
+    finally { setSaving(false); }
   };
 
   const handleDelete = async (id: string) => {
@@ -139,181 +71,188 @@ export default function BudgetsPage() {
     if (editingId === id) resetForm();
   };
 
-  const totalCap = sorted.reduce((sum, p) => sum + p.budget.amount, 0);
-  const totalSpent = sorted.reduce((sum, p) => sum + p.spent, 0);
-  const overall = totalCap > 0 ? Math.min(1.5, totalSpent / totalCap) : 0;
+  const totalCap   = sorted.reduce((s, p) => s + p.budget.amount, 0);
+  const totalSpent = sorted.reduce((s, p) => s + p.spent, 0);
+  const overCount  = sorted.filter(p => p.ratio >= 1).length;
+  const overBudget = sorted.filter(p => p.ratio >= 1).map(p => describeBudget(p.budget)).join(' · ');
+
+  const levelColor = (level: 'green' | 'amber' | 'red') =>
+    level === 'red' ? 'var(--fd-red)' : level === 'amber' ? 'var(--fd-amber)' : 'var(--fd-green)';
+  const barClass = (level: 'green' | 'amber' | 'red') =>
+    level === 'red' ? 'bg-red' : level === 'amber' ? 'bg-amber' : 'bg-green';
+
+  const today = new Date().toLocaleDateString('en-AU', { month: 'long', year: 'numeric' });
 
   return (
-    <>
-      <h1 className="page-header">Budgets</h1>
-
-      <div className="row">
-        <div className="col-lg-7 mb-3">
-          <Panel>
-            <PanelHeader noButton>
-              <i className="fa fa-gauge-high me-2"></i>Live Progress · {month}
-            </PanelHeader>
-            <PanelBody>
-              {loading ? (
-                <div className="text-muted small"><i className="fa fa-spinner fa-spin me-1"></i>Loading…</div>
-              ) : sorted.length === 0 ? (
-                <div className="text-muted text-center py-4">
-                  <i className="fa fa-bullseye fa-2x d-block mb-2 text-muted"></i>
-                  No budgets yet — add one on the right to start tracking.
-                </div>
-              ) : (
-                <>
-                  <div className="mb-4">
-                    <div className="d-flex justify-content-between mb-1">
-                      <strong>All budgets combined</strong>
-                      <span>
-                        {formatCurrency(totalSpent, prefs)} / {formatCurrency(totalCap, prefs)}
-                      </span>
-                    </div>
-                    <div className="progress" style={{ height: 10 }}>
-                      <div
-                        className={`progress-bar ${overall >= 1 ? 'bg-danger' : overall >= 0.8 ? 'bg-warning' : 'bg-success'}`}
-                        style={{ width: `${Math.min(100, (overall / 1.5) * 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                  <ul className="list-group list-group-flush">
-                    {sorted.map(p => (
-                      <li key={p.budget.id} className="list-group-item px-0">
-                        <div className="d-flex align-items-start gap-2">
-                          <i className={`fa ${spendingIcon(p.budget.category)} fa-fw mt-1 ${LEVEL_TEXT[p.level]}`}></i>
-                          <div className="flex-grow-1">
-                            <div className="d-flex justify-content-between">
-                              <span>
-                                <strong>{describeBudget(p.budget)}</strong>
-                                {p.budget.rolloverUnused && (
-                                  <span className="badge bg-info ms-2">rollover</span>
-                                )}
-                              </span>
-                              <span className={LEVEL_TEXT[p.level]}>
-                                {formatCurrency(p.spent, prefs)} / {formatCurrency(p.effectiveCap, prefs)}
-                                {p.rolloverIn > 0 && (
-                                  <small className="text-muted ms-1">(+{formatCurrency(p.rolloverIn, prefs)} rollover)</small>
-                                )}
-                              </span>
-                            </div>
-                            <div className="progress mt-1" style={{ height: 8 }}>
-                              <div
-                                className={`progress-bar ${LEVEL_BG[p.level]}`}
-                                style={{ width: `${Math.min(100, (p.ratio / 1.5) * 100)}%` }}
-                              />
-                            </div>
-                            <div className="d-flex justify-content-between mt-1 small text-muted">
-                              <span>
-                                Alerts at {p.budget.alertThresholds.map(thresholdLabel).join(' · ')}
-                              </span>
-                              <span>
-                                <button className="btn btn-link btn-sm p-0 me-2" onClick={() => beginEdit(p.budget)}>Edit</button>
-                                <button className="btn btn-link btn-sm p-0 text-danger" onClick={() => handleDelete(p.budget.id)}>Delete</button>
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              )}
-            </PanelBody>
-          </Panel>
+    <main className="report">
+      {/* ── Report head ── */}
+      <div className="report-head">
+        <div className="lead">
+          <div className="eyebrow">Budgets · {today}</div>
+          <h1>Budgets</h1>
+          <p className="dek">
+            {sorted.length > 0
+              ? <>{totalCap > 0 ? `${Math.round((totalSpent / totalCap) * 100)}% spent overall` : 'Tracking'} across <b>{sorted.length} budget{sorted.length !== 1 ? 's' : ''}</b>.{overCount > 0 ? ` ${overCount} over cap: ${overBudget}.` : ' All on track.'}</>
+              : <>Add your first budget cap to start tracking spending against targets.</>}
+          </p>
         </div>
-
-        <div className="col-lg-5 mb-3">
-          <Panel>
-            <PanelHeader noButton>
-              <i className={`fa ${editingId ? 'fa-pen-to-square' : 'fa-plus'} me-2`}></i>
-              {editingId ? 'Edit budget' : 'New budget'}
-            </PanelHeader>
-            <PanelBody>
-              <form onSubmit={handleSubmit}>
-                <div className="mb-3">
-                  <label className="form-label small text-muted">Scope</label>
-                  <select
-                    className="form-select form-select-sm"
-                    value={form.scope}
-                    onChange={e => setForm(f => ({ ...f, scope: e.target.value as BudgetScope }))}
-                  >
-                    <option value="overall">Overall (all spending)</option>
-                    <option value="spending-category">Category</option>
-                    <option value="spending-sub-category">Sub-category</option>
-                  </select>
-                </div>
-                {form.scope !== 'overall' && (
-                  <div className="mb-3">
-                    <label className="form-label small text-muted">Category</label>
-                    <select
-                      className="form-select form-select-sm"
-                      value={form.category}
-                      onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-                    >
-                      {DEFAULT_SPENDING_CATEGORIES.map(c => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-                {form.scope === 'spending-sub-category' && (
-                  <div className="mb-3">
-                    <label className="form-label small text-muted">Sub-category</label>
-                    <input
-                      type="text"
-                      className="form-control form-control-sm"
-                      placeholder="e.g. Coffee, Streaming"
-                      value={form.subCategory}
-                      onChange={e => setForm(f => ({ ...f, subCategory: e.target.value }))}
-                    />
-                  </div>
-                )}
-                <div className="mb-3">
-                  <label className="form-label small text-muted">Monthly cap (AUD)</label>
-                  <input
-                    type="number"
-                    min={1}
-                    step="0.01"
-                    className="form-control form-control-sm"
-                    value={form.amount}
-                    onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
-                  />
-                </div>
-                <div className="form-check form-switch mb-3">
-                  <input
-                    className="form-check-input"
-                    id="rollover"
-                    type="checkbox"
-                    checked={form.rolloverUnused}
-                    onChange={e => setForm(f => ({ ...f, rolloverUnused: e.target.checked }))}
-                  />
-                  <label className="form-check-label small" htmlFor="rollover">
-                    Roll unused budget into next month (capped at 1× cap)
-                  </label>
-                </div>
-                {error && <div className="text-danger small mb-2">{error}</div>}
-                <div className="d-flex gap-2">
-                  <button type="submit" className="btn btn-primary btn-sm" disabled={saving}>
-                    {saving ? <><i className="fa fa-spinner fa-spin me-1"></i>Saving</> : editingId ? 'Save changes' : 'Add budget'}
-                  </button>
-                  {editingId && (
-                    <button type="button" className="btn btn-outline-secondary btn-sm" onClick={resetForm}>
-                      Cancel
-                    </button>
-                  )}
-                </div>
-              </form>
-              <hr className="my-4" />
-              <div className="small text-muted">
-                Alerts fire at 80%, 100% and 120% of the effective cap. They route through your in-app
-                bell using the per-kind preference for <strong>Budget alerts</strong> (configurable in
-                Settings → Notifications).
-              </div>
-            </PanelBody>
-          </Panel>
+        <div className="meta">
+          <div className="big">{today}</div>
+          Alerts at 80 · 100 · 120%<br />
+          {sorted.length} active budget{sorted.length !== 1 ? 's' : ''}
         </div>
       </div>
-    </>
+
+      {/* ── 01 This Month ── */}
+      <section className="section">
+        <div className="sec-head">
+          <span className="no">01</span>
+          <h2>This Month</h2>
+          <div className="agg">
+            {totalCap > 0 ? `${Math.round((totalSpent / totalCap) * 100)}% of caps used` : ''}
+          </div>
+        </div>
+
+        {totalCap > 0 && (
+          <>
+            <div className="alloc-bar" style={{ height: 24, marginBottom: 8 }}>
+              <span style={{ width: `${Math.min(100, (totalSpent / totalCap) * 100)}%`,
+                background: totalSpent > totalCap ? 'var(--fd-red)' : totalSpent / totalCap > 0.8 ? 'var(--fd-amber)' : 'var(--fd-teal)' }}></span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: 'var(--ink-3)', marginBottom: 22 }}>
+              <span>Spent: {formatCurrency(totalSpent, prefs)}</span>
+              <span>Cap: {formatCurrency(totalCap, prefs)}</span>
+            </div>
+          </>
+        )}
+
+        <div className="ledger">
+          <div className="cell">
+            <div className="k">Total caps</div>
+            <div className="v num">{formatCurrency(totalCap, prefs)}</div>
+            <div className="sub">Across {sorted.length} budget{sorted.length !== 1 ? 's' : ''}</div>
+          </div>
+          <div className="cell">
+            <div className="k">Spent so far</div>
+            <div className="v num" style={{ color: totalSpent > totalCap ? 'var(--fd-red)' : 'var(--fd-amber)' }}>{formatCurrency(totalSpent, prefs)}</div>
+            <div className="sub">{totalCap > 0 ? `${Math.round((totalSpent / totalCap) * 100)}% of caps` : '—'}</div>
+          </div>
+          <div className="cell">
+            <div className="k">Remaining</div>
+            <div className={`v num ${totalCap - totalSpent >= 0 ? 'pos' : 'neg'}`}>{formatCurrency(Math.abs(totalCap - totalSpent), prefs)}</div>
+            <div className="sub">{totalCap - totalSpent >= 0 ? 'Under cap' : 'Over cap'}</div>
+          </div>
+          <div className="cell">
+            <div className="k">Over budget</div>
+            <div className="v num" style={{ color: overCount > 0 ? 'var(--fd-red)' : 'var(--ink-2)' }}>{overCount}</div>
+            <div className="sub">{overCount > 0 ? overBudget.slice(0, 30) : 'All on track'}</div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── 02 Live Progress ── */}
+      <section className="section">
+        <div className="sec-head">
+          <span className="no">02</span>
+          <h2>Live Progress</h2>
+          <div className="agg">Ranked by % of cap used</div>
+        </div>
+
+        {loading ? (
+          <div style={{ color: 'var(--ink-3)', fontSize: 13 }}>
+            <i className="fa fa-spinner fa-spin" style={{ marginRight: 8 }}></i>Loading…
+          </div>
+        ) : sorted.length === 0 ? (
+          <div style={{ color: 'var(--ink-3)', fontSize: 13, padding: '16px 0' }}>
+            No budgets yet — add one in the section below to start tracking.
+          </div>
+        ) : (
+          <div className="budgets">
+            {sorted.map(p => (
+              <div key={p.budget.id} className="bg">
+                <div className="bg-top">
+                  <span className="ic"><i className={`fa ${spendingIcon(p.budget.category)}`} style={{ color: levelColor(p.level) }}></i></span>
+                  <span className="nm">{describeBudget(p.budget)}</span>
+                  <span className="sp" style={{ color: levelColor(p.level) }}>
+                    {formatCurrency(p.spent, prefs)} <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}>/ {formatCurrency(p.effectiveCap, prefs)}</span>
+                  </span>
+                </div>
+                <div className="bg-bar">
+                  <span className={barClass(p.level)} style={{ width: `${Math.min(100, (p.ratio / 1.5) * 100)}%` }}></span>
+                </div>
+                <div className="bg-meta">
+                  <span className={`lvl-${p.level}`}>
+                    {p.ratio >= 1.2 ? '120%+ — over budget' : p.ratio >= 1 ? '100%+ — cap reached' : p.ratio >= 0.8 ? '80%+ — approaching cap' : 'On track'}
+                    {p.rolloverIn > 0 && ` · +${formatCurrency(p.rolloverIn, prefs)} rollover`}
+                  </span>
+                  <span style={{ display: 'flex', gap: 12 }}>
+                    <button style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--fd-teal)', fontSize: 11.5, fontWeight: 700 }} onClick={() => beginEdit(p.budget)}>Edit</button>
+                    <button style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--fd-red)', fontSize: 11.5, fontWeight: 700 }} onClick={() => handleDelete(p.budget.id)}>Delete</button>
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="disclaimer">
+          <i className="fa fa-bell"></i> Alerts fire at 80%, 100%, and 120% of each cap, routed through in-app notifications. Budgets with rollover carry unused funds into next month (capped at 1× cap).
+        </p>
+      </section>
+
+      {/* ── 03 New/Edit Budget ── */}
+      <section className="section">
+        <div className="sec-head">
+          <span className="no">03</span>
+          <h2>{editingId ? 'Edit Budget' : 'New Budget'}</h2>
+          <div className="agg">Set a monthly cap</div>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="qform" style={{ gridTemplateColumns: 'repeat(4,1fr) auto' }}>
+            <div className="fld">
+              <label>Scope</label>
+              <select value={form.scope} onChange={e => setForm(f => ({ ...f, scope: e.target.value as BudgetScope }))}>
+                <option value="spending-category">Category</option>
+                <option value="spending-sub-category">Sub-category</option>
+                <option value="overall">Overall (all spending)</option>
+              </select>
+            </div>
+            {form.scope !== 'overall' && (
+              <div className="fld">
+                <label>Category</label>
+                <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
+                  {DEFAULT_SPENDING_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+            )}
+            <div className="fld">
+              <label>Monthly cap (AUD)</label>
+              <input type="number" min={1} step="0.01" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
+            </div>
+            <div className="fld">
+              <label>Rollover unused</label>
+              <select value={form.rolloverUnused ? 'yes' : 'no'} onChange={e => setForm(f => ({ ...f, rolloverUnused: e.target.value === 'yes' }))}>
+                <option value="no">No</option>
+                <option value="yes">Yes — carry into next month</option>
+              </select>
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              <button type="submit" className="btn btn-fill btn-sm" disabled={saving}>
+                <i className={`fa ${saving ? 'fa-spinner fa-spin' : editingId ? 'fa-check' : 'fa-plus'}`}></i>
+                {saving ? ' Saving…' : editingId ? ' Save' : ' Add budget'}
+              </button>
+              {editingId && <button type="button" className="btn btn-sm" onClick={resetForm}>Cancel</button>}
+            </div>
+          </div>
+          {error && <div style={{ color: 'var(--fd-red)', fontSize: 12, marginTop: 8 }}>{error}</div>}
+        </form>
+      </section>
+
+      {/* ── Footer ── */}
+      <footer className="report-footer">
+        <span className="rf-brand"><i className="fa fa-user-doctor"></i> Finance Doctor</span>
+        <span>Budgets · {today}</span>
+        <span className="rf-end">General information only — not financial advice.</span>
+      </footer>
+    </main>
   );
 }

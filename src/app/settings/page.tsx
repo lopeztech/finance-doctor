@@ -1,50 +1,105 @@
 'use client';
 
-import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import DataManagement from '@/components/data-management';
 import ExpensesExclusionSettings from '@/components/expenses-exclusion-settings';
 import CategoryReference from '@/components/category-reference';
 import CashflowReference from '@/components/cashflow-reference';
 import NotificationPreferencesPanel from '@/components/notification-preferences';
 import PreferencesPanel from '@/components/preferences-panel';
+import { useAuthUser } from '@/lib/use-auth-user';
+import { useGuestMode } from '@/lib/use-guest-mode';
 
 export default function SettingsPage() {
+  const { user } = useAuthUser();
+  const { guest } = useGuestMode();
+
+  const name = guest ? 'Guest' : (user?.displayName || user?.email || 'Your account');
+  const email = guest ? 'Demo mode' : (user?.email || '');
+  const today = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
+
   return (
-    <>
-      <h1 className="page-header">Settings</h1>
+    <main className="report">
+      {/* ── Report head ── */}
+      <div className="report-head">
+        <div className="lead">
+          <div className="eyebrow">Account · Settings</div>
+          <h1>Settings</h1>
+          <p className="dek">Preferences, privacy, notifications, and your data — all in one place.</p>
+        </div>
+        <div className="meta">
+          <div className="big">{name}</div>
+          {email && <>{email}<br /></>}
+          {today}
+        </div>
+      </div>
 
-      <h2 className="h4 mt-4 mb-3"><i className="fa fa-sliders me-2"></i>Preferences</h2>
-      <PreferencesPanel />
+      {/* ── 01 Display & Defaults ── */}
+      <section className="section">
+        <div className="sec-head">
+          <span className="no">01</span>
+          <h2>Display &amp; Defaults</h2>
+          <div className="agg">How figures, dates, and pages appear</div>
+        </div>
+        <PreferencesPanel />
+      </section>
 
-      <h2 className="h4 mt-4 mb-3"><i className="fa fa-wallet me-2"></i>Expenses</h2>
-      <ExpensesExclusionSettings />
-      <CategoryReference />
+      {/* ── 02 Expenses ── */}
+      <section className="section">
+        <div className="sec-head">
+          <span className="no">02</span>
+          <h2>Expenses</h2>
+          <div className="agg">Exclusions and category mappings</div>
+        </div>
+        <ExpensesExclusionSettings />
+        <div style={{ marginTop: 24 }}>
+          <CategoryReference />
+        </div>
+      </section>
 
-      <h2 className="h4 mt-4 mb-3"><i className="fa fa-sack-dollar me-2"></i>Cashflow</h2>
-      <CashflowReference />
+      {/* ── 03 Cashflow ── */}
+      <section className="section">
+        <div className="sec-head">
+          <span className="no">03</span>
+          <h2>Cashflow</h2>
+          <div className="agg">Income sources and member configuration</div>
+        </div>
+        <CashflowReference />
+      </section>
 
-      <h2 className="h4 mt-4 mb-3"><i className="fa fa-bell me-2"></i>Notifications</h2>
-      <NotificationPreferencesPanel />
+      {/* ── 04 Notifications ── */}
+      <section className="section">
+        <div className="sec-head">
+          <span className="no">04</span>
+          <h2>Notifications</h2>
+          <div className="agg">How each alert reaches you</div>
+        </div>
+        <NotificationPreferencesPanel />
+      </section>
 
-      <h2 className="h4 mt-4 mb-3"><i className="fa fa-database me-2"></i>Data Management</h2>
-      <DataManagement />
+      {/* ── 05 Data ── */}
+      <section className="section">
+        <div className="sec-head">
+          <span className="no">05</span>
+          <h2>Your Data</h2>
+          <div className="agg">Export, import, or reset</div>
+        </div>
+        <DataManagement />
+        <div style={{ marginTop: 22, paddingTop: 18, borderTop: '1px solid var(--rule-2)', display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: 'var(--ink-3)' }}>
+          <i className="fa fa-clock"></i>
+          <span>
+            Last build · {process.env.NEXT_PUBLIC_BUILD_TIME
+              ? new Date(process.env.NEXT_PUBLIC_BUILD_TIME).toLocaleString('en-AU')
+              : 'Development mode'}
+          </span>
+        </div>
+      </section>
 
-      <Panel className="mt-4">
-        <PanelHeader noButton>Build Info</PanelHeader>
-        <PanelBody>
-          <div className="d-flex align-items-center">
-            <i className="fa fa-clock text-muted me-2"></i>
-            <div>
-              <small className="text-muted d-block">Last Successful Build</small>
-              <span>
-                {process.env.NEXT_PUBLIC_BUILD_TIME
-                  ? new Date(process.env.NEXT_PUBLIC_BUILD_TIME).toLocaleString()
-                  : 'Development mode'}
-              </span>
-            </div>
-          </div>
-        </PanelBody>
-      </Panel>
-    </>
+      {/* ── Footer ── */}
+      <footer className="report-footer">
+        <span className="rf-brand"><i className="fa fa-user-doctor"></i> Finance Doctor</span>
+        <span>Settings · {today}</span>
+        <span className="rf-end">General information only — not financial advice.</span>
+      </footer>
+    </main>
   );
 }

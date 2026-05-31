@@ -1,34 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { useAppSettings } from '@/config/app-settings';
 import { auth } from '@/lib/firebase';
 import { enableGuest } from '@/lib/guest-store';
 
 export default function LoginPage() {
-  const { updateSettings } = useAppSettings();
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    updateSettings({
-      appHeaderNone: true,
-      appSidebarNone: true,
-      appContentNone: true,
-    });
-
-    return () => {
-      updateSettings({
-        appHeaderNone: false,
-        appSidebarNone: false,
-        appContentNone: false,
-      });
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const handleLogin = async () => {
     if (!auth) {

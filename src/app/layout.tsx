@@ -1,133 +1,62 @@
 'use client';
 
-// css
-import 'bootstrap-icons/font/bootstrap-icons.css';
 import '@fortawesome/fontawesome-free/css/all.css';
 import 'react-perfect-scrollbar/dist/css/styles.css';
 import '@/styles/nextjs.scss';
 
-import { useEffect, useCallback } from 'react';
+import { useEffect } from 'react';
 import '@/lib/firebase';
 import AuthGate from '@/components/auth-gate';
 import ErrorBoundary from '@/components/error-boundary';
 import GuestBanner from '@/components/guest-banner';
-import Header from '@/components/header/header';
-import TopMenu from '@/components/top-menu/top-menu';
-import Sidebar from '@/components/sidebar/sidebar';
-import SidebarRight from '@/components/sidebar-right/sidebar-right';
-import { AppSettingsProvider, useAppSettings } from '@/config/app-settings';
+import Masthead from '@/components/ledger/Masthead';
+import { AppSettingsProvider } from '@/config/app-settings';
 import { PreferencesProvider } from '@/lib/use-preferences';
 import { MemberProvider } from '@/lib/use-member';
-import MemberSwitcher from '@/components/header/member-switcher';
 import { Open_Sans } from 'next/font/google';
+import { Source_Serif_4 } from 'next/font/google';
 
 const openSans = Open_Sans({
   subsets: ['latin'],
-  weight: ['300', '400', '600', '700'],
-  display: 'swap'
+  weight: ['300', '400', '600', '700', '800'],
+  display: 'swap',
+  variable: '--font-open-sans',
 });
 
-function Layout({ children }: { children: React.ReactNode }) {
-  const { settings } = useAppSettings();
-  
-  const handleScroll = useCallback(() => {
-		if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-    	const totalScroll = window.scrollY;
-			const elm = document.querySelector('.app');
-			
-			if (elm) {
-				if (totalScroll > 0) {
-					elm.classList.add('has-scroll');
-				} else {
-					elm.classList.remove('has-scroll');
-				}
-			}
-		}
-  }, []);
-	
-	useEffect(() => {
-    if (typeof window !== 'undefined') {
-      window.addEventListener('scroll', handleScroll);
-    }
+const sourceSerif = Source_Serif_4({
+  subsets: ['latin'],
+  weight: ['400', '600', '700'],
+  display: 'swap',
+  variable: '--font-source-serif',
+});
 
-    return () => {
-      window.removeEventListener('scroll', handleScroll);
-    };
-  }, [handleScroll]);
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      import('bootstrap').then(bootstrap => {
+        (window as Window & { bootstrap?: unknown }).bootstrap = bootstrap;
+      }).catch(() => {});
+    }
+  }, []);
 
   return (
-    <div className={
-    	'app ' +
-    	(settings.appClass ? settings.appClass + ' ' : '') + 
-			(settings.appBoxedLayout ? 'app-boxed-layout ' : '') + 
-			(settings.appContentFullHeight ? 'app-content-full-height ' : '') + 
-			(settings.appHeaderNone ? 'app-without-header ' : '') +  
-			(settings.appHeaderFixed && !settings.appHeaderNone ? 'app-header-fixed ' : '') + 
-			(settings.appSidebarWide ? 'app-with-wide-sidebar ' : '') + 
-			(settings.appSidebarTwo ? 'app-with-two-sidebar ' : '') + 
-			(settings.appSidebarEnd ? 'app-with-end-sidebar ' : '') + 
-			(settings.appSidebarHover ? 'app-with-hover-sidebar ' : '') + 
-			(settings.appSidebarEndToggled ? 'app-sidebar-end-toggled ' : '') + 
-			(settings.appSidebarEndMobileToggled ? 'app-sidebar-end-mobile-toggled ' : '') + 
-			(settings.appSidebarNone ? 'app-without-sidebar ' : '') + 
-			(settings.appSidebarFixed ? 'app-sidebar-fixed ' : '') + 
-			(settings.appSidebarMinified ? 'app-sidebar-minified ' : '') + 
-			(settings.appSidebarMobileToggled ? 'app-sidebar-mobile-toggled' : '') +
-			(settings.appFooter ? 'app-footer-fixed ' : '') + 
-			(settings.appTopMenu ? 'app-with-top-menu ' : '') + 
-			(settings.appGradientEnabled ? 'app-gradient-enabled ' : '')
-    }>
-			{settings.appTopMenu && (<TopMenu />)}
-			{!settings.appHeaderNone && (<Header />)}
-			{!settings.appSidebarNone && (<Sidebar />)}
-			{!settings.appContentNone && (<div className={'app-content '+ settings.appContentClass }><MemberSwitcher variant="subbar" className="d-md-none" /><GuestBanner /><ErrorBoundary>{children}</ErrorBoundary></div>)}
-			{settings.appSidebarTwo && (<SidebarRight />)}
-			{settings.appContentNone && (<ErrorBoundary>{children}</ErrorBoundary>)}
-			    </div>
-  );
-}
-
-
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode; }>) {
-	useEffect(() => {
-  	let isMounted = true;
-
-		const loadBootstrap = async () => {
-			try {
-				const bootstrap = await import('bootstrap');
-				if (isMounted) {
-					window.bootstrap = bootstrap;
-				}
-			} catch (error) {
-				console.error('Error loading Bootstrap:', error);
-			}
-		};
-	
-		if (typeof window !== 'undefined') {
-			loadBootstrap();
-		}
-	
-		return () => {
-			isMounted = false;
-		};
-  }, []);
-  
-	return (
-    <html lang="en" className={openSans.className}>
-    	<head>
-    		<title>Finance Doctor</title>
-    		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    	</head>
+    <html lang="en" className={`${openSans.variable} ${sourceSerif.variable} ${openSans.className}`}>
+      <head>
+        <title>Finance Doctor</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+      </head>
       <body>
-				<AppSettingsProvider>
-					<PreferencesProvider>
-						<AuthGate>
-							<MemberProvider>
-								<Layout>{children}</Layout>
-							</MemberProvider>
-						</AuthGate>
-					</PreferencesProvider>
-				</AppSettingsProvider>
+        <AppSettingsProvider>
+          <PreferencesProvider>
+            <AuthGate>
+              <MemberProvider>
+                <Masthead />
+                <GuestBanner />
+                <ErrorBoundary>{children}</ErrorBoundary>
+              </MemberProvider>
+            </AuthGate>
+          </PreferencesProvider>
+        </AppSettingsProvider>
       </body>
     </html>
   );
