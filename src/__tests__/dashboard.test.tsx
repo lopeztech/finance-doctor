@@ -1,40 +1,21 @@
 import { render, screen, waitFor } from '@testing-library/react';
 
-jest.mock('@/lib/firebase', () => ({
-  auth: null,
-  db: null,
-  app: null,
-  functions: null,
-}));
+jest.mock('@/lib/firebase', () => ({ auth: null, db: null, app: null, functions: null }));
 
-jest.mock('@/lib/expenses-repo', () => ({
-  listExpenses: jest.fn().mockResolvedValue([]),
-}));
-
-jest.mock('@/lib/investments-repo', () => ({
-  listInvestments: jest.fn().mockResolvedValue([]),
-}));
-
-jest.mock('@/lib/family-members-repo', () => ({
-  listFamilyMembers: jest.fn().mockResolvedValue([]),
-}));
-
-jest.mock('@/lib/liabilities-repo', () => ({
+jest.mock('@/lib/expenses-repo',       () => ({ listExpenses: jest.fn().mockResolvedValue([]) }));
+jest.mock('@/lib/investments-repo',    () => ({ listInvestments: jest.fn().mockResolvedValue([]) }));
+jest.mock('@/lib/family-members-repo', () => ({ listFamilyMembers: jest.fn().mockResolvedValue([]) }));
+jest.mock('@/lib/liabilities-repo',    () => ({
   listLiabilities: jest.fn().mockResolvedValue([]),
-  addLiability: jest.fn(),
-  updateLiability: jest.fn(),
-  deleteLiability: jest.fn(),
+  addLiability: jest.fn(), updateLiability: jest.fn(), deleteLiability: jest.fn(),
 }));
-
 jest.mock('@/lib/networth-history-repo', () => ({
   listNetWorthHistory: jest.fn().mockResolvedValue([]),
   saveNetWorthSnapshot: jest.fn(),
 }));
-
 jest.mock('@/lib/budgets-repo', () => ({
   watchBudgets: (cb: (b: unknown[]) => void) => { cb([]); return () => {}; },
 }));
-
 jest.mock('@/lib/use-preferences', () => {
   const { DEFAULT_PREFERENCES } = jest.requireActual('@/lib/user-preferences-types');
   return {
@@ -58,52 +39,49 @@ const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
 beforeEach(() => {
-  mockFetch.mockReset();
-  mockFetch.mockResolvedValue({ ok: true, json: async () => [] });
+  mockFetch.mockReset().mockResolvedValue({ ok: true, json: async () => [] });
 });
 
 describe('Net Worth (root) page', () => {
   it('renders the page header', async () => {
     render(<NetWorthPage />);
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Financial Advisor' })).toBeInTheDocument());
+    await screen.findByRole('heading', { name: /Financial Advisor/i });
   });
 
-  it('renders the current snapshot panel', async () => {
+  it('renders the Vitals section with net-worth display', async () => {
     render(<NetWorthPage />);
-    await waitFor(() => expect(screen.getByText('Current snapshot')).toBeInTheDocument());
-    expect(screen.getByText('Save snapshot')).toBeInTheDocument();
+    await screen.findByRole('heading', { name: /Financial Advisor/i });
+    // Ledger: section 01 is "Vitals" with a Save snapshot button
+    expect(screen.getByRole('button', { name: /Save snapshot/i })).toBeInTheDocument();
   });
 
-  it('renders summary cards after loading', async () => {
+  it('renders Ledger vitals ledger cells', async () => {
     render(<NetWorthPage />);
-    await waitFor(() => expect(screen.getByText('Portfolio Value')).toBeInTheDocument());
-    expect(screen.getByText('Tax Deductions YTD')).toBeInTheDocument();
+    await screen.findByRole('heading', { name: /Financial Advisor/i });
+    expect(screen.getByText(/Assets/i)).toBeInTheDocument();
+    expect(screen.getByText(/Liabilities/i)).toBeInTheDocument();
+    expect(screen.getByText(/Super held/i)).toBeInTheDocument();
   });
 
-  it('renders Investment Health panel', async () => {
+  it('renders the Prescriptions section', async () => {
     render(<NetWorthPage />);
-    await waitFor(() => expect(screen.getByText('Investment Health')).toBeInTheDocument());
+    await screen.findByRole('heading', { name: /Prescriptions/i });
   });
 
-  it('renders Tax Health panel', async () => {
+  it('renders the FY picker buttons', async () => {
     render(<NetWorthPage />);
-    await waitFor(() => expect(screen.getByText('Tax Health')).toBeInTheDocument());
+    await screen.findByRole('heading', { name: /Financial Advisor/i });
+    // Ledger: FY picker uses abbreviated labels
+    expect(screen.getByRole('button', { name: /FY 25/i })).toBeInTheDocument();
   });
 
-  it('links to /investments and /tax', async () => {
+  it('renders the Add liability form', async () => {
     render(<NetWorthPage />);
-    await waitFor(() => {
-      const investLink = screen.getByText('Add Investments');
-      expect(investLink.closest('a')).toHaveAttribute('href', '/investments');
-    });
+    await screen.findByRole('button', { name: /Add liability/i });
   });
 
-  it('renders financial year selector', async () => {
+  it('renders the Details section', async () => {
     render(<NetWorthPage />);
-    await waitFor(() => {
-      // The label appears on both the dropdown toggle and the active menu item.
-      const matches = screen.getAllByRole('button', { name: /This FY/ });
-      expect(matches.length).toBeGreaterThan(0);
-    });
+    await screen.findByRole('heading', { name: /Details/i });
   });
 });

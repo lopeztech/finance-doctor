@@ -1,11 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 
-jest.mock('@/lib/firebase', () => ({
-  auth: null,
-  db: null,
-  app: null,
-  functions: null,
-}));
+jest.mock('@/lib/firebase', () => ({ auth: null, db: null, app: null, functions: null }));
 
 const mockListExpenses = jest.fn();
 jest.mock('@/lib/expenses-repo', () => ({
@@ -21,21 +16,10 @@ jest.mock('@/lib/category-rules-repo', () => ({
   upsertCategoryRule: jest.fn().mockResolvedValue({}),
 }));
 
-jest.mock('@/components/deductions-chart', () => ({
-  __esModule: true,
-  default: () => null,
-}));
-
-jest.mock('@/components/yoy-chart', () => ({
-  __esModule: true,
-  default: () => null,
-}));
+jest.mock('@/components/deductions-chart', () => ({ __esModule: true, default: () => null }));
+jest.mock('@/components/yoy-chart',         () => ({ __esModule: true, default: () => null }));
 
 import TaxPage from '@/app/tax/page';
-
-jest.mock('@/config/app-settings', () => ({
-  useAppSettings: () => ({ settings: {}, updateSettings: jest.fn() }),
-}));
 
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
@@ -48,17 +32,15 @@ beforeEach(() => {
     }
     return Promise.resolve({ ok: true, json: async () => [] });
   });
-  mockListExpenses.mockReset();
-  mockListExpenses.mockResolvedValue([]);
+  mockListExpenses.mockReset().mockResolvedValue([]);
   window.localStorage.clear();
 });
-
-const startInDetail = () => window.localStorage.setItem('viewMode.tax', 'detail');
 
 describe('Tax Page', () => {
   it('renders the page header', async () => {
     render(<TaxPage />);
-    expect(screen.getByText('Tax Advisor')).toBeInTheDocument();
+    // Ledger: heading is inside the report, rendered after loading resolves
+    await screen.findByRole('heading', { name: /Tax Advisor/i });
   });
 
   it('fetches expenses on load', async () => {
@@ -66,14 +48,14 @@ describe('Tax Page', () => {
     await waitFor(() => expect(mockListExpenses).toHaveBeenCalledWith('all'));
   });
 
-  it('shows empty state after loading', async () => {
-    startInDetail();
+  it('shows empty state message after loading with no expenses', async () => {
     render(<TaxPage />);
-    await waitFor(() => expect(screen.getByText(/No deductions found/)).toBeInTheDocument());
+    await screen.findByRole('heading', { name: /Tax Advisor/i });
+    // Ledger dek text mentions adding expenses
+    expect(screen.getByText(/No expenses tracked/i)).toBeInTheDocument();
   });
 
   it('shows expenses grouped by category', async () => {
-    startInDetail();
     mockListExpenses.mockResolvedValue([
       { id: '1', date: '2025-09-15', description: 'Office chair', amount: 450, category: 'Work from Home', financialYear: '2025-2026' },
       { id: '2', date: '2025-10-01', description: 'Desk lamp', amount: 80, category: 'Work from Home', financialYear: '2025-2026' },
@@ -82,20 +64,19 @@ describe('Tax Page', () => {
     await waitFor(() => expect(screen.getByText('Work from Home')).toBeInTheDocument());
   });
 
-  it('renders financial year selector', async () => {
+  it('renders Ledger vitals cells', async () => {
     render(<TaxPage />);
-    await waitFor(() => {
-      const matches = screen.getAllByRole('button', { name: /This FY/ });
-      expect(matches.length).toBeGreaterThan(0);
-    });
+    await screen.findByRole('heading', { name: /Tax Advisor/i });
+    // Ledger vitals: uppercase labels in .cell .k
+    expect(screen.getByText(/Total deductions/i)).toBeInTheDocument();
+    expect(screen.getByText(/Categories used/i)).toBeInTheDocument();
+    expect(screen.getByText(/Uncategorised/i)).toBeInTheDocument();
   });
 
-  it('renders summary cards', async () => {
+  it('shows the Dr Finance assessment block', async () => {
     render(<TaxPage />);
-    await waitFor(() => {
-      expect(screen.getByText('Total Deductions')).toBeInTheDocument();
-      expect(screen.getByText('Categories Used')).toBeInTheDocument();
-      expect(screen.getByText('Uncategorised')).toBeInTheDocument();
-    });
+    await screen.findByRole('heading', { name: /Tax Advisor/i });
+    expect(screen.getByText('Dr Finance')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Run assessment/i })).toBeInTheDocument();
   });
 });
