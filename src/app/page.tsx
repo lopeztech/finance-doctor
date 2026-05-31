@@ -554,7 +554,7 @@ export default function NetWorthPage() {
           <div className="row align-items-center mb-3">
             <div className="col-md-5">
               <div className="text-muted small">Net worth</div>
-              <div className="display-5 fw-bold">{formatCurrency(summary.netWorth, prefs)}</div>
+              <div className="display-5 fw-bold num">{formatCurrency(summary.netWorth, prefs)}</div>
               <div className="d-flex gap-3 mt-1 small">
                 <span className={monthDeltaClasses.className}>
                   {monthDeltaClasses.arrow} {formatCurrency(monthDelta.delta, prefs)} vs last month
@@ -592,38 +592,38 @@ export default function NetWorthPage() {
       </Panel>
 
       <div className="row mb-3">
-        <div className="col-lg-3">
-          <div className="card border-0 bg-teal text-white mb-3">
+        <div className="col-lg-3 col-sm-6">
+          <div className="card stat-card bg-teal text-white mb-3">
             <div className="card-body">
-              <div className="text-white text-opacity-75 mb-1">Portfolio Value</div>
-              <h3 className="text-white mb-0">${totalPortfolio.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</h3>
+              <div className="text-white text-opacity-75 stat-label mb-1">Portfolio Value</div>
+              <h3 className="text-white num">${totalPortfolio.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</h3>
             </div>
           </div>
         </div>
-        <div className="col-lg-3">
-          <div className={`card border-0 ${totalGainLoss >= 0 ? 'bg-success' : 'bg-danger'} text-white mb-3`}>
+        <div className="col-lg-3 col-sm-6">
+          <div className={`card stat-card ${totalGainLoss >= 0 ? 'bg-success' : 'bg-danger'} text-white mb-3`}>
             <div className="card-body">
-              <div className="text-white text-opacity-75 mb-1">Total Gain / Loss</div>
-              <h3 className="text-white mb-0">
+              <div className="text-white text-opacity-75 stat-label mb-1">Total Gain / Loss</div>
+              <h3 className="text-white num">
                 {totalGainLoss >= 0 ? '+' : ''}{totalGainLoss.toLocaleString('en-AU', { minimumFractionDigits: 2 })}
                 <small className="ms-2 fs-6">({totalReturnPct >= 0 ? '+' : ''}{totalReturnPct.toFixed(1)}%)</small>
               </h3>
             </div>
           </div>
         </div>
-        <div className="col-lg-3">
-          <div className="card border-0 bg-dark text-white mb-3">
+        <div className="col-lg-3 col-sm-6">
+          <div className="card stat-card bg-dark text-white mb-3">
             <div className="card-body">
-              <div className="text-white text-opacity-75 mb-1">Tax Deductions YTD</div>
-              <h3 className="text-white mb-0">${totalDeductions.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</h3>
+              <div className="text-white text-opacity-75 stat-label mb-1">Tax Deductions YTD</div>
+              <h3 className="text-white num">${totalDeductions.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</h3>
             </div>
           </div>
         </div>
-        <div className="col-lg-3">
-          <div className="card border-0 bg-indigo text-white mb-3">
+        <div className="col-lg-3 col-sm-6">
+          <div className="card stat-card bg-indigo text-white mb-3">
             <div className="card-body">
-              <div className="text-white text-opacity-75 mb-1">Expense Categories</div>
-              <h3 className="text-white mb-0">{Object.keys(categoryTotals).length} / 10</h3>
+              <div className="text-white text-opacity-75 stat-label mb-1">Expense Categories</div>
+              <h3 className="text-white num">{Object.keys(categoryTotals).length} / 10</h3>
             </div>
           </div>
         </div>
@@ -643,7 +643,7 @@ export default function NetWorthPage() {
             {advisorActions.map(action => {
               const content = (
                 <div className="d-flex align-items-start gap-3">
-                  <span className={`badge bg-${action.color} mt-1`}>
+                  <span className={`badge bg-${action.color} action-icon mt-1`}>
                     <i className={`fa ${action.icon}`}></i>
                   </span>
                   <div className="flex-grow-1">
@@ -711,7 +711,7 @@ export default function NetWorthPage() {
                   const color = colors[tip.type] || 'secondary';
                   return (
                     <div key={i} className="col-md-4 mb-2 mb-md-0">
-                      <div className={`d-flex align-items-start p-3 rounded bg-light h-100`}>
+                      <div className="d-flex align-items-start p-3 tip-card h-100">
                         <div className={`text-${color} me-3 mt-1`}>
                           <i className={`fa ${tip.icon} fa-lg`}></i>
                         </div>
@@ -798,8 +798,8 @@ export default function NetWorthPage() {
                 )}
               </table>
             </div>
-            <p className="text-muted small mt-2 mb-0">
-              <i className="fa fa-info-circle me-1"></i>
+            <p className="disclaimer mt-2 mb-0">
+              <i className="fa fa-circle-info me-1"></i>
               Estimate based on FY {financialYear} tax rates. PAYG assumes standard withholding on gross salary. Deductions split evenly across members. This is not tax advice — consult your accountant.
             </p>
           </PanelBody>

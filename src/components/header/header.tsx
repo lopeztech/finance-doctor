@@ -51,7 +51,8 @@ export default function Header() {
           </button>
         )}
         <Link href="/" className="navbar-brand">
-          <b>Finance</b> Doctor
+          <span className="brand-icon"><i className="fa fa-user-doctor"></i></span>
+          <b>Finance</b><span className="brand-dot">.</span>Doctor
         </Link>
 
         {settings.appHeaderMegaMenu && (
