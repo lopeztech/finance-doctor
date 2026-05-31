@@ -58,8 +58,9 @@ describe('Net Worth (root) page', () => {
   it('renders Ledger vitals ledger cells', async () => {
     render(<NetWorthPage />);
     await screen.findByRole('heading', { name: /Financial Advisor/i });
-    expect(screen.getByText(/Assets/i)).toBeInTheDocument();
-    expect(screen.getByText(/Liabilities/i)).toBeInTheDocument();
+    // "Liabilities" appears in both the vitals cell and the details subhead — use getAllByText
+    expect(screen.getAllByText(/Liabilities/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Assets/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Super held/i)).toBeInTheDocument();
   });
 

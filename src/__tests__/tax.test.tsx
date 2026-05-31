@@ -61,7 +61,8 @@ describe('Tax Page', () => {
       { id: '2', date: '2025-10-01', description: 'Desk lamp', amount: 80, category: 'Work from Home', financialYear: '2025-2026' },
     ]);
     render(<TaxPage />);
-    await waitFor(() => expect(screen.getByText('Work from Home')).toBeInTheDocument());
+    // 'Work from Home' appears in both the breakdown dlist and itemised sections
+    await waitFor(() => expect(screen.getAllByText('Work from Home').length).toBeGreaterThan(0));
   });
 
   it('renders Ledger vitals cells', async () => {
@@ -76,7 +77,8 @@ describe('Tax Page', () => {
   it('shows the Dr Finance assessment block', async () => {
     render(<TaxPage />);
     await screen.findByRole('heading', { name: /Tax Advisor/i });
-    expect(screen.getByText('Dr Finance')).toBeInTheDocument();
+    // 'Dr Finance' can appear in multiple nodes (name + agg text) — check at least one exists
+    expect(screen.getAllByText('Dr Finance').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: /Run assessment/i })).toBeInTheDocument();
   });
 });

@@ -74,7 +74,8 @@ describe('Investments Page', () => {
       { id: '1', name: 'VAS', type: 'Australian Shares', currentValue: 10000, costBasis: 9000, units: 100, buyPricePerUnit: 90 },
     ]);
     render(<InvestmentsPage />);
-    await waitFor(() => expect(screen.getByText('VAS')).toBeInTheDocument());
+    // VAS appears in both the holdings table and the movers section
+    await waitFor(() => expect(screen.getAllByText('VAS').length).toBeGreaterThan(0));
   });
 
   it('shows the add holding form when toggle is clicked', async () => {
