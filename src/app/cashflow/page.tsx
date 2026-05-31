@@ -161,7 +161,10 @@ export default function CashflowPage() {
     saveAdviceChat(finalHistory);
     if (!followUp && history.length === 0) {
       const items = extractDoctorActions(text);
-      if (items.length > 0) adviceChatPut<DoctorSummaryItem>('cashflow-summary', items).catch(() => {});
+      if (items.length > 0) {
+        items[0] = { ...items[0], savedAt: new Date().toISOString() };
+        adviceChatPut<DoctorSummaryItem>('cashflow-summary', items).catch(() => {});
+      }
     }
   };
 

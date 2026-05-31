@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Panel, PanelHeader, PanelBody } from '@/components/panel/panel';
 import type { Expense, Investment, FamilyMember } from '@/lib/types';
 import { fetchDashboardTips, adviceChatGet, type DashboardTip } from '@/lib/functions-client';
-import { type DoctorSummaryItem } from '@/lib/doctor-summary';
+import { assessmentAge, type DoctorSummaryItem } from '@/lib/doctor-summary';
 import { listExpenses } from '@/lib/expenses-repo';
 import { listInvestments } from '@/lib/investments-repo';
 import { listFamilyMembers } from '@/lib/family-members-repo';
@@ -393,15 +393,21 @@ export default function NetWorthPage() {
     for (const { key, pillar, href, color } of doctorConfig) {
       const item = doctorSummaries[key][0];
       if (item) {
+        const age = item.savedAt ? assessmentAge(item.savedAt) : null;
+        const stale = age?.stale ?? false;
         actions.push({
           pillar,
-          priority: 'Low',
+          priority: stale ? 'Medium' : 'Low',
           title: item.title,
-          detail: item.detail,
-          impact: `From last ${pillar} Doctor assessment`,
+          detail: stale
+            ? `Assessment is ${age!.days} days old — consider a fresh run for current advice.`
+            : item.detail,
+          impact: age
+            ? `From last ${pillar} Doctor assessment · ${age.label}`
+            : `From last ${pillar} Doctor assessment`,
           href,
           icon: 'fa-stethoscope',
-          color,
+          color: stale ? 'secondary' : color,
         });
       }
     }

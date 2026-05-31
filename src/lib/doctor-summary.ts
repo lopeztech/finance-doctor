@@ -1,6 +1,13 @@
 export interface DoctorSummaryItem {
   title: string;
   detail: string;
+  savedAt?: string;
+}
+
+export function assessmentAge(savedAt: string): { days: number; label: string; stale: boolean } {
+  const days = Math.floor((Date.now() - new Date(savedAt).getTime()) / 86_400_000);
+  const label = days === 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`;
+  return { days, label, stale: days > 30 };
 }
 
 // Parse the "Action Plan" <ol> from an HTML doctor response and return up to 2 items.

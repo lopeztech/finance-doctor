@@ -647,7 +647,10 @@ export default function InvestmentsPage() {
     saveChat(finalHistory);
     if (!followUp && history.length === 0) {
       const items = extractDoctorActions(text);
-      if (items.length > 0) adviceChatPut<DoctorSummaryItem>('investments-summary', items).catch(() => {});
+      if (items.length > 0) {
+        items[0] = { ...items[0], savedAt: new Date().toISOString() };
+        adviceChatPut<DoctorSummaryItem>('investments-summary', items).catch(() => {});
+      }
     }
   };
 
