@@ -45,7 +45,7 @@
     "react-countdown": "^2.3.6",
     "react-datepicker": "^9.1.0",
     "react-datetime": "^3.3.1",
-    "react-dom": "^19.1.0",
+    "react-dom": "^19.2.6",
     "react-highlight": "^0.15.0",
     "react-notifications-component": "^4.0.1",
     "react-perfect-scrollbar": "^1.5.8",
